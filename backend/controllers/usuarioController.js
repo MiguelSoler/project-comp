@@ -32,16 +32,7 @@ exports.getUsuarioById = async (req, res) => {
  * @returns {Object} Usuario creado.
  */
 exports.createUsuario = async (data) => {
-    const {
-        nombre,
-        email,
-        telefono,
-        limpieza,
-        ruido,
-        puntualidad_pagos,
-        password_hash,
-        rol
-    } = data;
+    const {nombre,email,telefono,limpieza,ruido,puntualidad_pagos,password_hash,rol} = data;
 
     const result = await pool.query(
         `INSERT INTO usuario (nombre, email, telefono, limpieza, ruido, puntualidad_pagos, password_hash, rol)
