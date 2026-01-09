@@ -1,0 +1,41 @@
+/* Reset básico */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Tipografía global */
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background-color: #ffffff; /* Fondo blanco por defecto */
+  color: #333; /* Texto gris oscuro para buena legibilidad */
+  line-height: 1.5;
+}
+
+/* Enlaces */
+a {
+  color: #3498db; /* Azul coherente con la app */
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Botones */
+button {
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Imágenes */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Listas */
+ul {
+  list-style: none;
+}
