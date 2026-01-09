@@ -19,10 +19,7 @@ CREATE TABLE usuario (
     password_hash VARCHAR(255) NOT NULL,
     rol VARCHAR(50) DEFAULT 'usuario', -- Ej: 'usuario', 'admin'
     telefono VARCHAR(20),
-    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    limpieza INT CHECK (limpieza BETWEEN 1 AND 5),
-    ruido INT CHECK (ruido BETWEEN 1 AND 5),
-    puntualidad_pagos INT CHECK (puntualidad_pagos BETWEEN 1 AND 5)
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP    
 );
 
 -- =========================
@@ -51,19 +48,42 @@ CREATE TABLE usuario_piso (
 );
 
 -- =========================
+-- CREAR TABLA VOTO_USUARIO
+-- =========================
+CREATE TABLE voto_usuario (
+    id SERIAL PRIMARY KEY,
+    votante_id INT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+    votado_id INT NOT NULL REFERENCES usuario(id) ON DELETE CASCADE,
+    limpieza INT NOT NULL CHECK (limpieza BETWEEN 1 AND 5),
+    ruido INT NOT NULL CHECK (ruido BETWEEN 1 AND 5),
+    puntualidad_pagos INT NOT NULL CHECK (puntualidad_pagos BETWEEN 1 AND 5),
+    fecha TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CHECK (votante_id <> votado_id), -- Evitar que un usuario se vote a sí mismo
+    UNIQUE (votante_id, votado_id)
+);
+
+-- =================================
+-- Índices para optimizar búsquedas
+-- =================================
+CREATE INDEX idx_voto_usuario_votado ON voto_usuario(votado_id);
+CREATE INDEX idx_voto_usuario_votante ON voto_usuario(votante_id);
+CREATE INDEX idx_usuario_piso_usuario ON usuario_piso(usuario_id);
+CREATE INDEX idx_usuario_piso_piso ON usuario_piso(piso_id);
+
+-- =========================
 -- INSERTS USUARIO
 -- =========================
 INSERT INTO usuario (nombre, email, telefono, limpieza, ruido, puntualidad_pagos) VALUES
-('Juan Pérez', 'juan.perez@example.com', '600111111', 5, 2, 4),
-('María López', 'maria.lopez@example.com', '600222222', 4, 3, 5),
-('Carlos García', 'carlos.garcia@example.com', '600333333', 3, 4, 3),
-('Ana Torres', 'ana.torres@example.com', '600444444', 5, 1, 5),
-('Luis Fernández', 'luis.fernandez@example.com', '600555555', 2, 5, 2),
-('Marta Martínez', 'marta.martinez@example.com', '600666666', 4, 2, 4),
-('Pedro Sánchez', 'pedro.sanchez@example.com', '600777777', 3, 3, 3),
-('Laura Gómez', 'laura.gomez@example.com', '600888888', 5, 4, 5),
-('Sergio Ruiz', 'sergio.ruiz@example.com', '600999999', 1, 5, 1),
-('Elena Díaz', 'elena.diaz@example.com', '601000000', 4, 3, 4);
+('Juan Pérez', 'juan.perez@example.com', '600111111'),
+('María López', 'maria.lopez@example.com', '600222222'),
+('Carlos García', 'carlos.garcia@example.com', '600333333'),
+('Ana Torres', 'ana.torres@example.com', '600444444'),
+('Luis Fernández', 'luis.fernandez@example.com', '600555555'),
+('Marta Martínez', 'marta.martinez@example.com', '600666666'),
+('Pedro Sánchez', 'pedro.sanchez@example.com', '600777777'),
+('Laura Gómez', 'laura.gomez@example.com', '600888888'),
+('Sergio Ruiz', 'sergio.ruiz@example.com', '600999999'),
+('Elena Díaz', 'elena.diaz@example.com', '601000000');
 
 -- =========================
 -- INSERTS PISO (usuario_id del 1 al 10)
