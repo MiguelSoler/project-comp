@@ -1,5 +1,5 @@
 -- Crear base de datos (ejecutar solo si no existe)
-CREATE DATABASE companeros_piso;
+CREATE DATABASE project_comp;
 -- \c companeros_piso;
 
 -- =========================
