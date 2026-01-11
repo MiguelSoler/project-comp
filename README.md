@@ -31,6 +31,7 @@ Los usuarios pueden:
   - `usuario`
   - `piso`
   - `usuario_piso` (relación entre usuarios y pisos)
+  - `voto_usuario` (relación entre votos y usuarios)
 - Script de inicialización: `backend/db/init.sql`
 
 ---
