@@ -26,6 +26,7 @@ frontend/build
 .env.local
 .env.development
 .env.production
+*.env
 
 # Editor directories and files
 .vscode/*
