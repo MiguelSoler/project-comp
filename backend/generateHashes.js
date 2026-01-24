@@ -1,12 +1,14 @@
-const bcrypt = require('bcrypt');
+const bcrypt = require("bcrypt");
 
-async function generateHash(password) {
-    const saltRounds = 10;
-    const hash = await bcrypt.hash(password, saltRounds);
-    console.log(`Contraseña: ${password} → Hash: ${hash}`);
-}
+const passwords = {
+  admin: "Admin123!",
+  user: "User123!",
+  advertiser: "Advertiser123!"
+};
 
 (async () => {
-    await generateHash('admin123'); // ejemplo para admin
-    await generateHash('usuario123'); // ejemplo para usuario
+  for (const [role, pass] of Object.entries(passwords)) {
+    const hash = await bcrypt.hash(pass, 10);
+    console.log(`${role}: ${hash}`);
+  }
 })();
