@@ -373,7 +373,7 @@ INSERT INTO foto_habitacion (habitacion_id, url, orden, created_at) VALUES
 (17, '/uploads/habitaciones/17/01.jpg', 0, CURRENT_TIMESTAMP),
 (17, '/uploads/habitaciones/17/02.jpg', 1, CURRENT_TIMESTAMP),
 (18, '/uploads/habitaciones/18/01.jpg', 0, CURRENT_TIMESTAMP),
-(18, '/uploads/habitaciones/18/02.jpg', 1, CURRENT_TIMESTAMP);
+(18, '/uploads/habitaciones/18/02.jpg', 1, CURRENT_TIMESTAMP),
 (19, '/uploads/habitaciones/19/01.jpg', 0, CURRENT_TIMESTAMP),
 (19, '/uploads/habitaciones/19/02.jpg', 1, CURRENT_TIMESTAMP),
 (20, '/uploads/habitaciones/20/01.jpg', 0, CURRENT_TIMESTAMP),
