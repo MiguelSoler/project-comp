@@ -1,18 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const usuarioPisoController = require('../controllers/usuarioPisoController');
-const { verifyToken } = require('../middleware/authMiddleware');
+const { requireAuth } = require('../middleware/authMiddleware');
 
-router.get('/', verifyToken, usuarioPisoController.getAllUsuarioPiso);
-router.get('/:id', verifyToken, usuarioPisoController.getUsuarioPisoById);
+router.get('/', requireAuth, usuarioPisoController.getAllUsuarioPiso);
+router.get('/:id', requireAuth, usuarioPisoController.getUsuarioPisoById);
 
 // Unirse a un piso (requiere login)
-router.post('/', verifyToken, usuarioPisoController.createUsuarioPiso);
+router.post('/', requireAuth, usuarioPisoController.createUsuarioPiso);
 
 // Actualizar relación (solo admin)
-router.put('/:id', verifyToken, usuarioPisoController.updateUsuarioPiso);
+router.put('/:id', requireAuth, usuarioPisoController.updateUsuarioPiso);
 
 // Eliminar relación (solo admin)
-router.delete('/:id', verifyToken, usuarioPisoController.deleteUsuarioPiso);
+router.delete('/:id', requireAuth, usuarioPisoController.deleteUsuarioPiso);
 
 module.exports = router;
