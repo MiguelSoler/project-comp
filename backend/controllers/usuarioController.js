@@ -35,6 +35,65 @@ const me = async (req, res) => {
   }
 };
 
+// PATCH /api/usuario/me
+const patchMe = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const nombre = typeof req.body?.nombre === "string" ? req.body.nombre.trim() : undefined;
+    const telefono = typeof req.body?.telefono === "string" ? req.body.telefono.trim() : undefined;
+    const fotoPerfilUrl = typeof req.body?.foto_perfil_url === "string" ? req.body.foto_perfil_url.trim() : undefined;
+
+    const setClauses = [];
+    const values = [];
+    let i = 1;
+
+    if (nombre !== undefined) {
+      if (!nombre) {
+        return res.status(400).json({ error: "VALIDATION_ERROR", details: ["nombre"] });
+      }
+      setClauses.push(`nombre = $${i++}`);
+      values.push(nombre);
+    }
+
+    if (telefono !== undefined) {
+      // permitimos string vacío -> lo convertimos a NULL
+      const telValue = telefono === "" ? null : telefono;
+      setClauses.push(`telefono = $${i++}`);
+      values.push(telValue);
+    }
+
+    if (fotoPerfilUrl !== undefined) {
+      const urlValue = fotoPerfilUrl === "" ? null : fotoPerfilUrl;
+      setClauses.push(`foto_perfil_url = $${i++}`);
+      values.push(urlValue);
+    }
+
+    if (setClauses.length === 0) {
+      return res.status(400).json({ error: "NO_FIELDS_TO_UPDATE" });
+    }
+
+    values.push(userId);
+
+    const result = await pool.query(
+      `UPDATE usuario
+       SET ${setClauses.join(", ")}
+       WHERE id = $${i}
+       RETURNING id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    return res.status(200).json({ user: sanitizeUser(result.rows[0]) });
+  } catch (error) {
+    console.error("Patch me error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+};
+
 // GET /api/usuario/me/estancia
 const meEstancia = async (req, res) => {
   try {
@@ -98,6 +157,6 @@ const meEstancia = async (req, res) => {
 
 module.exports = {
   me,
-  meEstancia
-  // ...otros handlers que ya tengas
+  meEstancia,
+  patchMe
 };
