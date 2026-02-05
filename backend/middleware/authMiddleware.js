@@ -10,8 +10,8 @@ const getBearerToken = (req) => {
   return token;
 };
 
-// 1 - Requiere usuario autenticado
-const requireAuth = (req, res, next) => {
+// 1 - Requiere usuario autenticado + activo en BD
+const requireAuth = async (req, res, next) => {
   try {
     if (!JWT_SECRET) {
       return res.status(500).json({ error: "INVALID_SERVER_CONFIG" });
@@ -22,12 +22,37 @@ const requireAuth = (req, res, next) => {
       return res.status(401).json({ error: "MISSING_OR_INVALID_TOKEN" });
     }
 
+    // 1) Verifica firma/expiración y extrae payload (id, rol, iat, exp...)
     const payload = jwt.verify(token, JWT_SECRET);
 
-    // Contrato fijo del backend
+    if (!payload?.id) {
+      return res.status(401).json({ error: "INVALID_TOKEN" });
+    }
+
+    // 2) Verifica en BD que el usuario existe y está activo
+    const result = await pool.query(
+      `SELECT id, rol, activo
+       FROM usuario
+       WHERE id = $1
+       LIMIT 1`,
+      [payload.id]
+    );
+
+    if (result.rows.length === 0) {
+      // Token válido pero usuario ya no existe -> lo tratamos como no autorizado
+      return res.status(401).json({ error: "INVALID_TOKEN" });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.activo) {
+      return res.status(403).json({ error: "USER_INACTIVE" });
+    }
+
+    // Contrato fijo del backend (rol desde BD para evitar tokens “stale”)
     req.user = {
-      id: payload.id,
-      rol: payload.rol,
+      id: user.id,
+      rol: user.rol,
     };
 
     return next();
