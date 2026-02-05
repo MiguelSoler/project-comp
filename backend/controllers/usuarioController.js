@@ -94,6 +94,37 @@ const patchMe = async (req, res) => {
   }
 };
 
+// DELETE /api/usuario/me  (soft delete => activo=false)
+const deleteMe = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // Idempotente: si ya estaba inactivo, no pasa nada (204 igual)
+    const result = await pool.query(
+      `UPDATE usuario
+       SET activo = false
+       WHERE id = $1 AND activo = true
+       RETURNING id`,
+      [userId]
+    );
+
+    if (result.rows.length > 0) {
+      return res.status(204).send();
+    }
+
+    // Si no actualizó nada, puede ser porque ya estaba inactivo o porque no existe
+    const exists = await pool.query(`SELECT id FROM usuario WHERE id = $1 LIMIT 1`, [userId]);
+    if (exists.rows.length === 0) {
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    console.error("Delete me error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+};
+
 // GET /api/usuario/me/estancia
 const meEstancia = async (req, res) => {
   try {
@@ -158,5 +189,6 @@ const meEstancia = async (req, res) => {
 module.exports = {
   me,
   meEstancia,
-  patchMe
+  patchMe,
+  deleteMe
 };
