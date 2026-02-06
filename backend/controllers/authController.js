@@ -5,7 +5,7 @@ const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 
 const SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS || 10);
-const JWT_SECRET = process.env.JWT_SECRET;
+const getJwtSecret = () => process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 
 const sanitizeUser = (row) => ({
@@ -20,81 +20,99 @@ const sanitizeUser = (row) => ({
 });
 
 const signToken = (user) => {
-  if (!JWT_SECRET) {
+  const secret = getJwtSecret();
+  if (!secret) {
     throw new Error("JWT_SECRET is not set");
   }
-  return jwt.sign({ id: user.id, rol: user.rol }, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
-  });
+  return jwt.sign({ id: user.id, rol: user.rol }, secret, {expiresIn: JWT_EXPIRES_IN,});
 };
 
-// POST /auth/register
+// POST /auth/register  (crea o reactiva si estaba inactivo)
 const register = async (req, res) => {
+  const client = await pool.connect();
+
   try {
     const nombre = (req.body?.nombre || "").trim();
     const email = (req.body?.email || "").trim().toLowerCase();
     const password = req.body?.password || "";
-    const telefono = req.body?.telefono != null ? String(req.body.telefono).trim() : null;
+    const telefono = req.body?.telefono ? String(req.body.telefono).trim() : null;
 
-
-    // Validación mínima (MVP)
     const invalidFields = [];
     if (!nombre) invalidFields.push("nombre");
     if (!email || !email.includes("@")) invalidFields.push("email");
     if (!password || password.length < 8) invalidFields.push("password");
 
     if (invalidFields.length > 0) {
-      return res.status(400).json({
-        error: "VALIDATION_ERROR",
-        details: invalidFields,
-      });
-    }
-
-    // 1) Comprobar email existente (case-insensitive)
-    const existing = await pool.query(
-      `SELECT id FROM usuario WHERE LOWER(email) = LOWER($1) LIMIT 1`,
-      [email]
-    );
-
-    if (existing.rows.length > 0) {
-      return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
-    }
-
-    // 2) Hash password
-    if (Number.isNaN(SALT_ROUNDS) || SALT_ROUNDS < 4) {
-      // 4 es un mínimo razonable para evitar configuración absurda
-      return res.status(500).json({ error: "INVALID_SERVER_CONFIG" });
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: invalidFields });
     }
 
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
-    // 3) Insert usuario y devolverlo (sin password_hash)
-    const inserted = await pool.query(
-      `INSERT INTO usuario (nombre, email, password_hash, telefono)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro`,
-      [nombre, email, passwordHash, telefono]
+    await client.query("BEGIN");
+
+    // Bloquea la fila si existe (evita usuarios con el mismo email)
+    const existing = await client.query(
+      `SELECT id, activo
+       FROM usuario
+       WHERE LOWER(email) = LOWER($1)
+       LIMIT 1
+       FOR UPDATE`,
+      [email]
     );
 
-    const userRow = inserted.rows[0];
+    // 1) No existe -> INSERT
+    if (existing.rows.length === 0) {
+      const inserted = await client.query(
+        `INSERT INTO usuario (nombre, email, password_hash, rol, telefono, activo)
+         VALUES ($1, $2, $3, 'user', $4, true)
+         RETURNING id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro`,
+        [nombre, email, passwordHash, telefono]
+      );
 
-    // 4) Token (autologin)
-    const token = signToken(userRow);
+      await client.query("COMMIT");
 
-    return res.status(201).json({
-      token,
-      user: sanitizeUser(userRow),
-    });
-  } catch (error) {
-    console.error("Register error:", error);
+      const user = inserted.rows[0];
+      const token = signToken(user);
 
-    // Si por lo que sea se coló un duplicado (race condition), el índice único lo detecta:
-    // uq_usuario_email_lower
-    if (error.code === "23505") {
+      return res.status(201).json({ token, user: sanitizeUser(user) });
+    }
+
+    const { id, activo } = existing.rows[0];
+
+    // 2) Existe y está activo -> conflicto
+    if (activo) {
+      await client.query("ROLLBACK");
       return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
     }
 
+    // 3) Existe pero está inactivo -> reactivar + reset password (+ actualizar nombre/telefono)
+    const updated = await client.query(
+      `UPDATE usuario
+       SET activo = true,
+           password_hash = $1,
+           nombre = $2,
+           telefono = $3
+       WHERE id = $4
+       RETURNING id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro`,
+      [passwordHash, nombre, telefono, id]
+    );
+
+    await client.query("COMMIT");
+
+    const user = updated.rows[0];
+    const token = signToken(user);
+
+    return res.status(200).json({ token, user: sanitizeUser(user) });
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {
+      // noop
+    }
+    console.error("Register error:", error);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
+  } finally {
+    client.release();
   }
 };
 
@@ -144,7 +162,6 @@ const login = async (req, res) => {
 
     // 4) Token
     const token = signToken(userRow);
-
     return res.status(200).json({
       token,
       user: sanitizeUser(userRow),
