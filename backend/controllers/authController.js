@@ -21,10 +21,13 @@ const sanitizeUser = (row) => ({
 
 const signToken = (user) => {
   const secret = getJwtSecret();
-  if (!secret) {
-    throw new Error("JWT_SECRET is not set");
-  }
-  return jwt.sign({ id: user.id, rol: user.rol }, secret, {expiresIn: JWT_EXPIRES_IN,});
+  if (!secret) throw new Error("JWT_SECRET is not set");
+
+  return jwt.sign(
+    { id: user.id, rol: user.rol, token_version: user.token_version },
+    secret,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
 };
 
 // POST /auth/register  (crea o reactiva si estaba inactivo)
@@ -65,7 +68,7 @@ const register = async (req, res) => {
       const inserted = await client.query(
         `INSERT INTO usuario (nombre, email, password_hash, rol, telefono, activo)
          VALUES ($1, $2, $3, 'user', $4, true)
-         RETURNING id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro`,
+         RETURNING id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro, token_version`,
         [nombre, email, passwordHash, telefono]
       );
 
@@ -93,7 +96,7 @@ const register = async (req, res) => {
            nombre = $2,
            telefono = $3
        WHERE id = $4
-       RETURNING id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro`,
+       RETURNING id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro, token_version`,
       [passwordHash, nombre, telefono, id]
     );
 
@@ -135,7 +138,7 @@ const login = async (req, res) => {
 
     // 1) Buscar usuario por email (case-insensitive)
     const result = await pool.query(
-      `SELECT id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro, password_hash
+      `SELECT id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro, password_hash, token_version
        FROM usuario
        WHERE LOWER(email) = LOWER($1)
        LIMIT 1`,

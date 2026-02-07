@@ -1,4 +1,7 @@
 const pool = require("../db/pool");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS || 10);
 
 const sanitizeUser = (row) => ({
   id: row.id,
@@ -91,6 +94,102 @@ const patchMe = async (req, res) => {
   } catch (error) {
     console.error("Patch me error:", error);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+};
+
+// PATCH /api/usuario/me/password
+const changeMyPassword = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const userId = req.user.id;
+
+    const currentPassword = req.body?.current_password || "";
+    const newPassword = req.body?.new_password || "";
+
+    const invalidFields = [];
+    if (!currentPassword) invalidFields.push("current_password");
+    if (!newPassword || newPassword.length < 8) invalidFields.push("new_password");
+
+    if (invalidFields.length > 0) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: invalidFields });
+    }
+
+    await client.query("BEGIN");
+
+    // Bloqueamos fila para evitar carreras y para actualizar token_version de forma segura
+    const result = await client.query(
+      `SELECT id, password_hash, activo, token_version
+       FROM usuario
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [userId]
+    );
+
+    if (result.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    const user = result.rows[0];
+
+    if (!user.activo) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "USER_INACTIVE" });
+    }
+
+    const ok = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!ok) {
+      await client.query("ROLLBACK");
+      return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+    }
+
+    // (Opcional pero recomendable) Evitar “cambiar a la misma”
+    const sameAsOld = await bcrypt.compare(newPassword, user.password_hash);
+    if (sameAsOld) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({ error: "PASSWORD_SAME_AS_OLD" });
+    }
+
+    const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+
+    // Subimos token_version => revoca TODOS los tokens antiguos
+    const updated = await client.query(
+      `UPDATE usuario
+       SET password_hash = $1,
+           token_version = token_version + 1
+       WHERE id = $2
+       RETURNING id, rol, token_version`,
+      [newHash, userId]
+    );
+
+    await client.query("COMMIT");
+
+    // Emitimos token nuevo para que el usuario siga logueado
+    // (necesitas signToken accesible aquí o lo firmas en authController)
+    const refreshedUser = updated.rows[0];
+    const getJwtSecret = () => process.env.JWT_SECRET;
+    const secret = getJwtSecret();
+    const expiresIn = process.env.JWT_EXPIRES_IN || "7d";
+
+    if (!secret) {
+      return res.status(500).json({ error: "INVALID_SERVER_CONFIG" });
+    }
+
+    const token = jwt.sign(
+      { id: refreshedUser.id, rol: refreshedUser.rol, token_version: refreshedUser.token_version },
+      secret,
+      { expiresIn }
+    );
+
+    return res.status(200).json({ token });
+  } catch (error) {
+    try { await client.query("ROLLBACK"); } catch (_) {}
+    console.error("changeMyPassword error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  } finally {
+    client.release();
   }
 };
 
@@ -190,5 +289,6 @@ module.exports = {
   me,
   meEstancia,
   patchMe,
-  deleteMe
+  deleteMe,
+  changeMyPassword
 };

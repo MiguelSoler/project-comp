@@ -37,7 +37,7 @@ const requireAuth = async (req, res, next) => {
     }
 
     const result = await pool.query(
-      `SELECT id, rol, activo
+      `SELECT id, rol, activo, token_version
        FROM usuario
        WHERE id = $1
        LIMIT 1`,
@@ -49,6 +49,15 @@ const requireAuth = async (req, res, next) => {
     }
 
     const user = result.rows[0];
+
+    if (payload.token_version === undefined || payload.token_version === null) {
+      return res.status(401).json({ error: "INVALID_TOKEN" });
+    }
+    const tokenVersion = Number(payload.token_version);
+    
+    if (tokenVersion !== Number(user.token_version)) {
+      return res.status(401).json({ error: "INVALID_TOKEN" });
+    }
 
     if (!user.activo) {
       return res.status(403).json({ error: "USER_INACTIVE" });
