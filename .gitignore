@@ -1,4 +1,6 @@
+# ==============================
 # Logs
+# ==============================
 logs
 *.log
 npm-debug.log*
@@ -7,10 +9,14 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# ==============================
 # Dependencias
-node_modules
+# ==============================
+node_modules/
 
+# ==============================
 # Builds
+# ==============================
 dist
 dist-ssr
 build
@@ -18,23 +24,79 @@ backend/build
 backend/dist
 frontend/build
 
+# ==============================
 # Archivos locales
+# ==============================
 *.local
 
+# ==============================
 # Variables de entorno
+# ==============================
 .env
 .env.local
 .env.development
 .env.production
 *.env
 
-# Editor directories and files
+# ==============================
+# Uploads / archivos generados
+# (MUY típico en tu app por fotos)
+# ==============================
+uploads/
+public/uploads/
+storage/
+tmp/
+temp/
+
+# ==============================
+# Backups / dumps DB
+# ==============================
+*.dump
+*.bak
+
+# (Si tu init.sql SÍ debe versionarse,
+# muévelo a /db/init.sql y quita esta regla)
+
+# ==============================
+# Test / coverage
+# ==============================
+coverage/
+.nyc_output/
+
+# ==============================
+# Cache / runtime
+# ==============================
+.cache/
+.parcel-cache/
+.next/
+out/
+
+# ==============================
+# Sistema operativo
+# ==============================
+.DS_Store
+Thumbs.db
+
+# ==============================
+# IDE / editores
+# ==============================
 .vscode/*
 !.vscode/extensions.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# ==============================
+# Docker (si usas en futuro)
+# ==============================
+docker-data/
+*.pid
+
+# ==============================
+# Misc
+# ==============================
+*.seed
+*.pid.lock

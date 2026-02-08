@@ -1,18 +1,20 @@
 const express = require("express");
 const router = express.Router();
-
 const auth = require("../middleware/authMiddleware");
-const { me, meEstancia, patchMe, deleteMe, changeMyPassword } = require("../controllers/usuarioController");
+const { getMe, getMeEstancia, updateMe, deleteMe, changeMePassword } = require("../controllers/usuarioController");
 
+// ======================================================
+// SELF · Endpoints del propio usuario autenticado (/me)
+// ======================================================
 // GET /api/usuario/me
-router.get("/me", auth.requireAuth, me);
-// PATCH /api/usuario/me/
-router.patch("/me", auth.requireAuth, patchMe);
-// PATCH /api/usuario/me/password/
-router.patch("/me/password", auth.requireAuth, changeMyPassword);
+router.get("/me", auth.requireAuth, getMe);
+// PATCH /api/usuario/me
+router.patch("/me", auth.requireAuth, updateMe);
+// PATCH /api/usuario/me/password
+router.patch("/me/password", auth.requireAuth, changeMePassword);
 // GET /api/usuario/me/estancia
-router.get("/me/estancia", auth.requireAuth, meEstancia);
-// DELETE /api/usuario/me/
+router.get("/me/estancia", auth.requireAuth, getMeEstancia);
+// DELETE /api/usuario/me
 router.delete("/me", auth.requireAuth, deleteMe);
 
 

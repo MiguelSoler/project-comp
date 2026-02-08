@@ -15,7 +15,7 @@ const sanitizeUser = (row) => ({
 });
 
 // GET /api/usuario/me
-const me = async (req, res) => {
+const getMe = async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -39,7 +39,7 @@ const me = async (req, res) => {
 };
 
 // PATCH /api/usuario/me
-const patchMe = async (req, res) => {
+const updateMe = async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -98,7 +98,7 @@ const patchMe = async (req, res) => {
 };
 
 // PATCH /api/usuario/me/password
-const changeMyPassword = async (req, res) => {
+const changeMePassword = async (req, res) => {
   const client = await pool.connect();
 
   try {
@@ -224,7 +224,7 @@ const deleteMe = async (req, res) => {
 };
 
 // GET /api/usuario/me/estancia
-const meEstancia = async (req, res) => {
+const getMeEstancia = async (req, res) => {
   try {
     const userId = req.user.id;
 
@@ -285,9 +285,9 @@ const meEstancia = async (req, res) => {
 
 
 module.exports = {
-  me,
-  meEstancia,
-  patchMe,
+  getMe,
+  getMeEstancia,
+  updateMe,
   deleteMe,
-  changeMyPassword
+  changeMePassword
 };

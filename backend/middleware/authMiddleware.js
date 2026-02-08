@@ -79,9 +79,8 @@ const requireAuth = async (req, res, next) => {
 // 2 - Requiere rol específico
 const requireRole = (role) => {
   return (req, res, next) => {
-    if (req.user.rol !== role) {
-      return res.status(403).json({ error: "FORBIDDEN" });
-    }
+    if (!req.user) return res.status(401).json({ error: "UNAUTHORIZED" });
+    if (req.user.rol !== role) return res.status(403).json({ error: "FORBIDDEN" });
     return next();
   };
 };
@@ -89,19 +88,28 @@ const requireRole = (role) => {
 // 3 - Admin o dueño del recurso (por param)
 const adminOrOwner = (paramName = "id") => {
   return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: "UNAUTHORIZED" });
     if (req.user.rol === "admin") return next();
 
     const resourceOwnerId = Number(req.params[paramName]);
-    if (resourceOwnerId !== req.user.id) {
+    if (!Number.isFinite(resourceOwnerId) || resourceOwnerId !== req.user.id) {
       return res.status(403).json({ error: "FORBIDDEN" });
     }
-
     return next();
   };
+};
+
+// 4 - Requiere admin
+const requireAdmin = (req, res, next) => {
+  if (req.user?.rol !== "admin") {
+    return res.status(403).json({ error: "FORBIDDEN" });
+  }
+  return next();
 };
 
 module.exports = {
   requireAuth,
   requireRole,
   adminOrOwner,
+  requireAdmin
 };
