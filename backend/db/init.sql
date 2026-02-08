@@ -28,13 +28,14 @@ CREATE TABLE usuario (
     telefono VARCHAR(20),
     foto_perfil_url TEXT,
     activo BOOLEAN NOT NULL DEFAULT true,
+    token_version INTEGER NOT NULL DEFAULT 0,
     fecha_registro TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Unicidad de email sin distinguir mayúsculas/minúsculas
 CREATE UNIQUE INDEX uq_usuario_email_lower ON usuario (LOWER(email));
 
--- (Opcional) Búsquedas típicas
+-- Búsquedas típicas
 CREATE INDEX idx_usuario_rol ON usuario (rol);
 CREATE INDEX idx_usuario_activo ON usuario (activo);
 

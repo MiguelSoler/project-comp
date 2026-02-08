@@ -145,7 +145,7 @@ const changeMyPassword = async (req, res) => {
       return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     }
 
-    // (Opcional pero recomendable) Evitar “cambiar a la misma”
+    // Evitar cambiar a la misma contraseña
     const sameAsOld = await bcrypt.compare(newPassword, user.password_hash);
     if (sameAsOld) {
       await client.query("ROLLBACK");
@@ -167,7 +167,6 @@ const changeMyPassword = async (req, res) => {
     await client.query("COMMIT");
 
     // Emitimos token nuevo para que el usuario siga logueado
-    // (necesitas signToken accesible aquí o lo firmas en authController)
     const refreshedUser = updated.rows[0];
     const getJwtSecret = () => process.env.JWT_SECRET;
     const secret = getJwtSecret();
