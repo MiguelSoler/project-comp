@@ -7,7 +7,7 @@ function toInt(value, fallback) {
 
 // GET /api/piso?ciudad=&precioMax=&disponible=true&page=1&limit=10
 // Nota: precioMax/disponible filtran por HABITACION (exists)
-exports.getAllPisos = async (req, res) => {
+const getAllPisos = async (req, res) => {
   try {
     const ciudad = (req.query.ciudad || "").trim();
     const precioMax = req.query.precioMax !== undefined ? toInt(req.query.precioMax, NaN) : NaN;
@@ -104,7 +104,7 @@ exports.getAllPisos = async (req, res) => {
 };
 
 // GET /api/piso/:id  (detalle: piso + fotos + habitaciones + fotos_habitacion)
-exports.getPisoById = async (req, res) => {
+const getPisoById = async (req, res) => {
   try {
     const id = toInt(req.params.id, NaN);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "INVALID_ID" });
@@ -172,8 +172,8 @@ exports.getPisoById = async (req, res) => {
   }
 };
 
-// GET /api/piso/ciudad/:ciudad  (si quieres mantenerlo; realmente es redundante con /api/piso?ciudad=)
-exports.getPisosByCiudad = async (req, res) => {
+// GET /api/piso/ciudad/:ciudad  (redundante con /api/piso?ciudad= pero podría ser de alguna utilidad en el futuro para un frontend más semántico)
+const getPisosByCiudad = async (req, res) => {
   try {
     const ciudad = (req.params.ciudad || "").trim();
     const result = await pool.query(
@@ -192,7 +192,7 @@ exports.getPisosByCiudad = async (req, res) => {
 
 // POST /api/piso  (solo advertiser/admin por routes)
 // manager_usuario_id lo asigna el sistema
-exports.createPiso = async (req, res) => {
+const createPiso = async (req, res) => {
   try {
     const direccion = (req.body?.direccion || "").trim();
     const ciudad = (req.body?.ciudad || "").trim();
@@ -220,7 +220,7 @@ exports.createPiso = async (req, res) => {
 
 // PATCH /api/piso/:id  (routes ya restringen advertiser/admin)
 // Aquí validamos: admin o manager_usuario_id
-exports.updatePiso = async (req, res) => {
+const updatePiso = async (req, res) => {
   try {
     const id = toInt(req.params.id, NaN);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "INVALID_ID" });
@@ -305,7 +305,7 @@ exports.updatePiso = async (req, res) => {
 };
 
 // DELETE /api/piso/:id  (soft delete)
-exports.deletePiso = async (req, res) => {
+const deletePiso = async (req, res) => {
   try {
     const id = toInt(req.params.id, NaN);
     if (!Number.isFinite(id)) return res.status(400).json({ error: "INVALID_ID" });
@@ -331,10 +331,19 @@ exports.deletePiso = async (req, res) => {
        RETURNING id`,
       [id]
     );
-
+    if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
     return res.json({ ok: true });
   } catch (err) {
     console.error("deletePiso error:", err);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
   }
+};
+
+module.exports = {
+  getAllPisos,
+  getPisoById,
+  getPisosByCiudad,
+  createPiso,
+  updatePiso,
+  deletePiso
 };
