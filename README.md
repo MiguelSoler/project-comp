@@ -155,6 +155,96 @@ Las rutas protegidas requieren enviar el token en la cabecera:
 
 Authorization: Bearer <token>
 
+## Código de buenas prácticas
+Código de buenas prácticas (Project Comp)
+1) Principios base
+	-Claridad > cleverness: priorizamos código fácil de leer y mantener.
+	-Una responsabilidad por función: cada handler hace una cosa principal.
+	-Errores explícitos: respuestas consistentes, sin “silenciar” fallos.
+	-Consistencia: mismo estilo en nombres, respuestas JSON, y estructura.
+
+2) Nombres y estilo
+	-Archivos
+		--Controllers: authController.js, pisoController.js
+		--Routes: auth.js, 	piso.js
+	-Funciones
+		--Handlers: register, login, createPiso, getPisoById
+		--Utilidades: signToken, hashPassword, sanitizeUser
+	-Variables
+		--Nombres descriptivos: userRow, existingUser, tokenPayload
+		--Evitar data, info, temp, x salvo bucles cortos.
+
+3) Contratos API (consistencia)
+	-JSON siempre (request/response).
+	-Status codes coherentes:
+		--200 OK, 201 Created
+		--400 Validation error
+		--401 Auth inválida
+		--403 Prohibido / usuario inactivo / sin permisos
+		--404 No encontrado
+		--409 Conflicto (email duplicado, etc.)
+		--500 Error inesperado
+	-Formato de error estándar:
+		--{ "error": "ERROR_CODE", "message": "Texto humano opcional", "details": [] }
+	-No filtramos campos sensibles: nunca devolver password_hash.
+
+4) Validación de entrada
+		-Validamos al principio del handler (fail fast).
+		-Si faltan campos o formato inválido → 400 VALIDATION_ERROR.
+		-Validación mínima por ahora (MVP):
+			--email con formato básico + trim + lowercase para buscar
+			--password longitud mínima (p.ej. 8)
+			--nombre no vacío
+		-Nunca confiar en el frontend.
+
+5) Base de datos y SQL
+	-Siempre SQL parametrizado: ... WHERE email = $1.
+	-Nunca concatenar strings para construir queries con input del usuario.
+	-Preferir queries con RETURNING para evitar SELECT extra cuando aplica.
+	-Seleccionar solo columnas necesarias (y nunca password_hash en responses).
+	-Índices/constraints mandan: si hay error de constraint → mapear a 409 o 400 según corresponda.
+
+6) Estructura de cada controller
+	-Orden recomendado en cada handler:
+		--Leer y normalizar inputs (trim, lowercase).
+		--Validar (si falla → return res.status(400)...).
+		--Ejecutar queries (DB).
+		--Lógica de negocio mínima (hash, compare, token).
+		--Responder.
+	-Un único return res... por rama y no seguir ejecutando después.
+
+7) Autenticación y seguridad
+	-Password:
+		--Guardamos bcrypt.hash(password, saltRounds)
+		--Login con bcrypt.compare
+	-JWT:
+		--Payload mínimo: { id, rol }
+		--Expiración definida (p.ej. 7d)
+	-No revelar si el email existe en login (opcional MVP).
+		--Respuesta genérica INVALID_CREDENTIALS.
+
+8) Manejo de errores
+	-No usar console.log sueltos: usar console.error en errores inesperados.
+	-Errores esperables:
+		--Duplicado email → 409 EMAIL_ALREADY_EXISTS
+		--Credenciales inválidas → 401 INVALID_CREDENTIALS
+		--Usuario inactivo → 403 USER_INACTIVE
+	-Errores inesperados → 500 INTERNAL_ERROR (sin filtrar detalles internos al cliente).
+
+9) Código limpio en la práctica
+	-Funciones pequeñas: si un handler pasa de ~60–80 líneas, extraer helpers.
+	-Evitar duplicación: helpers como sanitizeUser(row) o buildAuthResponse(user).
+	-Comentarios solo para explicar “por qué”, no “qué”.
+	-Evitar magia: constantes arriba (salt rounds, jwt expiry). No hardcodear números/strings sin significado, usar constantes claras.
+	-Utilizar las funciones .filter y .map todo lo que sea posible, para hacer más legible el código.
+
+10) Formato y tooling
+	-Mantener formato consistente (ideal: Prettier + ESLint).
+	-Sin code-smells:
+		--nada de variables sin usar
+		--nada de any mental (en JS: cuidado con tipos)
+	-Commits pequeños, descriptivos.
+
 📜 Licencia
 Este proyecto está bajo la licencia MIT. Puedes usarlo, modificarlo y distribuirlo libremente.
 
