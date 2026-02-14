@@ -1,200 +1,340 @@
-const pool = require('../db/pool');
+const pool = require("../db/pool");
 
-// Obtener todos los pisos con filtros y paginación
+function toInt(value, fallback) {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// GET /api/piso?ciudad=&precioMax=&disponible=true&page=1&limit=10
+// Nota: precioMax/disponible filtran por HABITACION (exists)
 exports.getAllPisos = async (req, res) => {
-    try {
-        let { ciudad, precioMax, page = 1, limit = 10 } = req.query;
-
-        // Convertir page y limit a números
-        page = Number(page);
-        limit = Number(limit);
-        const offset = (page - 1) * limit;
-
-        // Construir consulta dinámica
-        let baseQuery = 'SELECT * FROM piso';
-        let countQuery = 'SELECT COUNT(*) FROM piso';
-        let conditions = [];
-        let values = [];
-
-        if (ciudad) {
-            values.push(ciudad);
-            conditions.push(`LOWER(ciudad) = LOWER($${values.length})`);
-        }
-        if (precioMax) {
-            values.push(precioMax);
-            conditions.push(`precio <= $${values.length}`);
-        }
-
-        if (conditions.length > 0) {
-            const whereClause = ' WHERE ' + conditions.join(' AND ');
-            baseQuery += whereClause;
-            countQuery += whereClause;
-        }
-
-        // Añadir orden y paginación
-        baseQuery += ` ORDER BY id ASC LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
-        values.push(limit, offset);
-
-        // Ejecutar consultas
-        const pisosResult = await pool.query(baseQuery, values);
-        const countResult = await pool.query(countQuery, values.slice(0, values.length - 2));
-
-        const total = parseInt(countResult.rows[0].count, 10);
-        const totalPages = Math.ceil(total / limit);
-
-        res.json({
-            pisos: pisosResult.rows,
-            total,
-            page,
-            totalPages
-        });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Error al obtener pisos');
-    }
-};
-
-// Obtener un piso por ID
-exports.getPisoById = async (req, res) => {
-   try {
-       const { id } = req.params;
-       const result = await pool.query('SELECT * FROM piso WHERE id = $1', [id]);
-       if (result.rows.length === 0) {
-           return res.status(404).send('Piso no encontrado');
-       }
-       res.json(result.rows[0]);
-   } catch (err) {
-       console.error(err);
-       res.status(500).send('Error al obtener piso');
-   }
-};
-
-// Obtener un piso por nombre de la ciudad
-exports.getPisosByCiudad = async (req, res) => {
   try {
-    const { ciudad } = req.params;
-    const result = await pool.query(
-      'SELECT * FROM piso WHERE LOWER(ciudad) = LOWER($1)',
-      [ciudad]
+    const ciudad = (req.query.ciudad || "").trim();
+    const precioMax = req.query.precioMax !== undefined ? toInt(req.query.precioMax, NaN) : NaN;
+    const disponible = req.query.disponible; // "true"|"false"|undefined
+
+    const page = Math.max(1, toInt(req.query.page, 1));
+    const limit = Math.min(100, Math.max(1, toInt(req.query.limit, 10)));
+    const offset = (page - 1) * limit;
+
+    const where = ["p.activo = true"];
+    const params = [];
+
+    if (ciudad) {
+      params.push(ciudad.toLowerCase());
+      where.push(`LOWER(p.ciudad) = $${params.length}`);
+    }
+
+    // Filtro por habitaciones (precio/disponible)
+    const habConds = [];
+    const habParams = [];
+
+    if (Number.isFinite(precioMax)) {
+      habParams.push(precioMax);
+      habConds.push(`h.precio_mensual <= $${params.length + habParams.length}`);
+    }
+    if (disponible === "true" || disponible === "false") {
+      habParams.push(disponible === "true");
+      habConds.push(`h.disponible = $${params.length + habParams.length}`);
+    }
+
+    if (habConds.length) {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM habitacion h
+          WHERE h.piso_id = p.id
+            AND ${habConds.join(" AND ")}
+        )
+      `);
+      params.push(...habParams);
+    }
+
+    const whereSql = `WHERE ${where.join(" AND ")}`;
+
+    // Total
+    const totalResult = await pool.query(
+      `SELECT COUNT(*)::int AS total
+       FROM piso p
+       ${whereSql}`,
+      params
     );
-    res.json(result.rows);
+
+    // Data (resumen piso + portada opcional + min_precio opcional)
+    params.push(limit, offset);
+
+    const dataResult = await pool.query(
+      `SELECT
+         p.id,
+         p.direccion,
+         p.ciudad,
+         p.codigo_postal,
+         p.descripcion,
+         p.manager_usuario_id,
+         p.activo,
+         p.created_at,
+         -- portada: la foto con orden más bajo
+         (SELECT fp.url
+            FROM foto_piso fp
+           WHERE fp.piso_id = p.id
+           ORDER BY fp.orden ASC, fp.id ASC
+           LIMIT 1) AS foto_portada_url,
+         -- min precio de habitaciones disponibles (útil en listado)
+         (SELECT MIN(h.precio_mensual)
+            FROM habitacion h
+           WHERE h.piso_id = p.id AND h.disponible = true) AS precio_desde
+       FROM piso p
+       ${whereSql}
+       ORDER BY p.created_at DESC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
+
+    const total = totalResult.rows[0].total;
+    return res.json({
+      pisos: dataResult.rows,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Error al obtener pisos por ciudad');
+    console.error("getAllPisos error:", err);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 };
 
-// Crear piso (usuario_id opcional)
+// GET /api/piso/:id  (detalle: piso + fotos + habitaciones + fotos_habitacion)
+exports.getPisoById = async (req, res) => {
+  try {
+    const id = toInt(req.params.id, NaN);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "INVALID_ID" });
+
+    const pisoResult = await pool.query(
+      `SELECT id, direccion, ciudad, codigo_postal, descripcion, manager_usuario_id, activo, created_at
+       FROM piso
+       WHERE id = $1`,
+      [id]
+    );
+
+    if (pisoResult.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+
+    const piso = pisoResult.rows[0];
+
+    const fotosPisoResult = await pool.query(
+      `SELECT id, url, orden, created_at
+       FROM foto_piso
+       WHERE piso_id = $1
+       ORDER BY orden ASC, id ASC`,
+      [id]
+    );
+
+    const habitacionesResult = await pool.query(
+      `SELECT id, piso_id, titulo, descripcion, precio_mensual, disponible, tamano_m2, amueblada, created_at
+       FROM habitacion
+       WHERE piso_id = $1
+       ORDER BY created_at DESC, id DESC`,
+      [id]
+    );
+
+    const habitacionIds = habitacionesResult.rows.map((h) => h.id);
+    let fotosHabitaciones = [];
+    if (habitacionIds.length) {
+      const fotosHabResult = await pool.query(
+        `SELECT id, habitacion_id, url, orden, created_at
+         FROM foto_habitacion
+         WHERE habitacion_id = ANY($1::int[])
+         ORDER BY habitacion_id ASC, orden ASC, id ASC`,
+        [habitacionIds]
+      );
+      fotosHabitaciones = fotosHabResult.rows;
+    }
+
+    // Agrupar fotos por habitacion_id
+    const fotosByHab = new Map();
+    for (const f of fotosHabitaciones) {
+      if (!fotosByHab.has(f.habitacion_id)) fotosByHab.set(f.habitacion_id, []);
+      fotosByHab.get(f.habitacion_id).push(f);
+    }
+
+    const habitaciones = habitacionesResult.rows.map((h) => ({
+      ...h,
+      fotos: fotosByHab.get(h.id) || [],
+    }));
+
+    return res.json({
+      piso,
+      fotos_piso: fotosPisoResult.rows,
+      habitaciones,
+    });
+  } catch (err) {
+    console.error("getPisoById error:", err);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+};
+
+// GET /api/piso/ciudad/:ciudad  (si quieres mantenerlo; realmente es redundante con /api/piso?ciudad=)
+exports.getPisosByCiudad = async (req, res) => {
+  try {
+    const ciudad = (req.params.ciudad || "").trim();
+    const result = await pool.query(
+      `SELECT id, direccion, ciudad, codigo_postal, descripcion, manager_usuario_id, activo, created_at
+       FROM piso
+       WHERE activo = true AND LOWER(ciudad) = LOWER($1)
+       ORDER BY created_at DESC`,
+      [ciudad]
+    );
+    return res.json({ pisos: result.rows });
+  } catch (err) {
+    console.error("getPisosByCiudad error:", err);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+};
+
+// POST /api/piso  (solo advertiser/admin por routes)
+// manager_usuario_id lo asigna el sistema
 exports.createPiso = async (req, res) => {
-    try {
-        const { direccion, ciudad, codigo_postal, descripcion } = req.body;
-        const usuario_id = req.user.id;
+  try {
+    const direccion = (req.body?.direccion || "").trim();
+    const ciudad = (req.body?.ciudad || "").trim();
+    const codigo_postal = req.body?.codigo_postal ? String(req.body.codigo_postal).trim() : null;
+    const descripcion = req.body?.descripcion ? String(req.body.descripcion).trim() : null;
 
-        // Si es usuario normal, verificar que no tenga ya un piso activo
-        if (req.user.rol === 'usuario') {
-            const existingRelation = await pool.query(
-                'SELECT * FROM usuario_piso WHERE usuario_id = $1 AND fecha_salida IS NULL',
-                [usuario_id]
-            );
-            if (existingRelation.rows.length > 0) {
-                return res.status(400).json({ error: 'Ya tienes un piso asignado' });
-            }
-        }
+    if (!direccion) return res.status(400).json({ error: "INVALID_DIRECCION" });
+    if (!ciudad) return res.status(400).json({ error: "INVALID_CIUDAD" });
 
-        // Crear piso
-        const result = await pool.query(
-            `INSERT INTO piso (direccion, ciudad, codigo_postal, descripcion, usuario_id)
-             VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-            [direccion, ciudad, codigo_postal, descripcion, usuario_id]
-        );
+    const managerId = req.user.id;
 
-        const piso = result.rows[0];
+    const result = await pool.query(
+      `INSERT INTO piso (direccion, ciudad, codigo_postal, descripcion, manager_usuario_id)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, direccion, ciudad, codigo_postal, descripcion, manager_usuario_id, activo, created_at`,
+      [direccion, ciudad, codigo_postal, descripcion, managerId]
+    );
 
-        // Si es usuario normal, crear relación automáticamente
-        if (req.user.rol === 'usuario') {
-            await pool.query(
-                `INSERT INTO usuario_piso (usuario_id, piso_id, fecha_entrada)
-                 VALUES ($1, $2, CURRENT_TIMESTAMP)`,
-                [usuario_id, piso.id]
-            );
-        }
-
-        res.status(201).json(piso);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Error al crear piso');
-    }
+    return res.status(201).json({ piso: result.rows[0] });
+  } catch (err) {
+    console.error("createPiso error:", err);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
 };
 
-// Actualizar un piso
+// PATCH /api/piso/:id  (routes ya restringen advertiser/admin)
+// Aquí validamos: admin o manager_usuario_id
 exports.updatePiso = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { direccion, ciudad, codigo_postal, descripcion } = req.body;
+  try {
+    const id = toInt(req.params.id, NaN);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "INVALID_ID" });
 
-        // Obtener datos actuales
-        const current = await pool.query('SELECT * FROM piso WHERE id = $1', [id]);
-        if (current.rows.length === 0) return res.status(404).send('Piso no encontrado');
+    const current = await pool.query(
+      `SELECT id, manager_usuario_id, activo
+       FROM piso
+       WHERE id = $1`,
+      [id]
+    );
+    if (current.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
 
-        const pisoActual = current.rows[0];
+    const piso = current.rows[0];
+    const isAdmin = req.user.rol === "admin";
+    const isManager = Number(piso.manager_usuario_id) === Number(req.user.id);
 
-        // Actualizar solo los campos enviados
-        const updated = await pool.query(
-            `UPDATE piso
-             SET direccion = $1,
-                 ciudad = $2,
-                 codigo_postal = $3,
-                 descripcion = $4
-             WHERE id = $5 RETURNING *`,
-            [
-                direccion ?? pisoActual.direccion,
-                ciudad ?? pisoActual.ciudad,
-                codigo_postal ?? pisoActual.codigo_postal,
-                descripcion ?? pisoActual.descripcion,
-                id
-            ]
-        );
+    if (!isAdmin && !isManager) return res.status(403).json({ error: "FORBIDDEN" });
 
-        res.json(updated.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Error al actualizar piso');
+    const direccion = typeof req.body?.direccion === "string" ? req.body.direccion.trim() : undefined;
+    const ciudad = typeof req.body?.ciudad === "string" ? req.body.ciudad.trim() : undefined;
+    const codigo_postal =
+      req.body?.codigo_postal === null ? null :
+      typeof req.body?.codigo_postal === "string" ? req.body.codigo_postal.trim() :
+      req.body?.codigo_postal !== undefined ? String(req.body.codigo_postal).trim() :
+      undefined;
+    const descripcion =
+      req.body?.descripcion === null ? null :
+      typeof req.body?.descripcion === "string" ? req.body.descripcion.trim() :
+      undefined;
+
+    // activo: solo admin debería poder reactivar (si quieres)
+    const activo =
+      typeof req.body?.activo === "boolean" ? req.body.activo : undefined;
+
+    const updates = [];
+    const params = [];
+    let idx = 1;
+
+    if (direccion !== undefined) {
+      if (!direccion) return res.status(400).json({ error: "INVALID_DIRECCION" });
+      params.push(direccion);
+      updates.push(`direccion = $${idx++}`);
     }
+    if (ciudad !== undefined) {
+      if (!ciudad) return res.status(400).json({ error: "INVALID_CIUDAD" });
+      params.push(ciudad);
+      updates.push(`ciudad = $${idx++}`);
+    }
+    if (codigo_postal !== undefined) {
+      params.push(codigo_postal);
+      updates.push(`codigo_postal = $${idx++}`);
+    }
+    if (descripcion !== undefined) {
+      params.push(descripcion);
+      updates.push(`descripcion = $${idx++}`);
+    }
+    if (activo !== undefined) {
+      if (!isAdmin && activo === true) {
+        return res.status(403).json({ error: "FORBIDDEN" });
+      }
+      params.push(activo);
+      updates.push(`activo = $${idx++}`);
+    }
+
+    if (updates.length === 0) return res.status(400).json({ error: "NO_FIELDS_TO_UPDATE" });
+
+    params.push(id);
+
+    const result = await pool.query(
+      `UPDATE piso
+       SET ${updates.join(", ")}
+       WHERE id = $${idx}
+       RETURNING id, direccion, ciudad, codigo_postal, descripcion, manager_usuario_id, activo, created_at`,
+      params
+    );
+
+    return res.json({ piso: result.rows[0] });
+  } catch (err) {
+    console.error("updatePiso error:", err);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
 };
 
-// Eliminar un piso
+// DELETE /api/piso/:id  (soft delete)
 exports.deletePiso = async (req, res) => {
-    try {
-        const { id } = req.params;
+  try {
+    const id = toInt(req.params.id, NaN);
+    if (!Number.isFinite(id)) return res.status(400).json({ error: "INVALID_ID" });
 
-        // Si no es admin, verificar que el piso le pertenece
-        if (req.user.rol !== 'admin') {
-            const pisoCheck = await pool.query(
-                'SELECT usuario_id FROM piso WHERE id = $1',
-                [id]
-            );
-            if (pisoCheck.rows.length === 0) {
-                return res.status(404).json({ error: 'Piso no encontrado' });
-            }
-            if (pisoCheck.rows[0].usuario_id !== req.user.id) {
-                return res.status(403).json({ error: 'No puedes borrar un piso que no has creado' });
-            }
-        }
+    const current = await pool.query(
+      `SELECT id, manager_usuario_id
+       FROM piso
+       WHERE id = $1`,
+      [id]
+    );
+    if (current.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
 
-        // Borrar piso
-        const result = await pool.query(
-            'DELETE FROM piso WHERE id = $1 RETURNING *',
-            [id]
-        );
+    const piso = current.rows[0];
+    const isAdmin = req.user.rol === "admin";
+    const isManager = Number(piso.manager_usuario_id) === Number(req.user.id);
 
-        if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Piso no encontrado' });
-        }
+    if (!isAdmin && !isManager) return res.status(403).json({ error: "FORBIDDEN" });
 
-        res.json({ mensaje: 'Piso eliminado correctamente' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Error al eliminar piso');
-    }
+    const result = await pool.query(
+      `UPDATE piso
+       SET activo = false
+       WHERE id = $1
+       RETURNING id`,
+      [id]
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("deletePiso error:", err);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
 };
-
