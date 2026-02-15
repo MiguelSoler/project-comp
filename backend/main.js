@@ -14,6 +14,8 @@ app.use(express.json());
 app.use('/api/usuario', require('./routes/usuario'));
 app.use('/api/piso', require('./routes/piso'));
 app.use('/api/auth', require('./routes/auth'));
+app.use("/api/usuario-habitacion", require("./routes/usuario_habitacion"));
+
 // ADMIN
 app.use('/api/admin/usuario', require('./routes/adminUsuario'));
 
