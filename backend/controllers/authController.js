@@ -11,6 +11,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 const sanitizeUser = (row) => ({
   id: row.id,
   nombre: row.nombre,
+  apellidos: row.apellidos,
   email: row.email,
   rol: row.rol,
   telefono: row.telefono,
@@ -36,12 +37,14 @@ const register = async (req, res) => {
 
   try {
     const nombre = (req.body?.nombre || "").trim();
+    const apellidos = (req.body?.apellidos || "").trim();
     const email = (req.body?.email || "").trim().toLowerCase();
     const password = req.body?.password || "";
     const telefono = req.body?.telefono ? String(req.body.telefono).trim() : null;
 
     const invalidFields = [];
     if (!nombre) invalidFields.push("nombre");
+    if (!apellidos) invalidFields.push("apellidos");
     if (!email || !email.includes("@")) invalidFields.push("email");
     if (!password || password.length < 8) invalidFields.push("password");
 
@@ -66,10 +69,10 @@ const register = async (req, res) => {
     // 1) No existe -> INSERT
     if (existing.rows.length === 0) {
       const inserted = await client.query(
-        `INSERT INTO usuario (nombre, email, password_hash, rol, telefono, activo)
-         VALUES ($1, $2, $3, 'user', $4, true)
-         RETURNING id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro, token_version`,
-        [nombre, email, passwordHash, telefono]
+        `INSERT INTO usuario (nombre, apellidos, email, password_hash, rol, telefono, activo)
+         VALUES ($1, $2, $3, $4, 'user', $5, true)
+         RETURNING id, nombre, apellidos, email, rol, telefono, foto_perfil_url, activo, fecha_registro, token_version`,
+        [nombre, apellidos, email, passwordHash, telefono]
       );
 
       await client.query("COMMIT");
@@ -88,16 +91,17 @@ const register = async (req, res) => {
       return res.status(409).json({ error: "EMAIL_ALREADY_EXISTS" });
     }
 
-    // 3) Existe pero está inactivo -> reactivar + reset password (+ actualizar nombre/telefono)
+    // 3) Existe pero está inactivo -> reactivar + reset password (+ actualizar nombre/apellidos/telefono)
     const updated = await client.query(
       `UPDATE usuario
        SET activo = true,
            password_hash = $1,
            nombre = $2,
-           telefono = $3
-       WHERE id = $4
-       RETURNING id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro, token_version`,
-      [passwordHash, nombre, telefono, id]
+           apellidos = $3,
+           telefono = $4
+       WHERE id = $5
+       RETURNING id, nombre, apellidos, email, rol, telefono, foto_perfil_url, activo, fecha_registro, token_version`,
+      [passwordHash, nombre, apellidos, telefono, id]
     );
 
     await client.query("COMMIT");
@@ -138,7 +142,7 @@ const login = async (req, res) => {
 
     // 1) Buscar usuario por email (case-insensitive)
     const result = await pool.query(
-      `SELECT id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro, password_hash, token_version
+      `SELECT id, nombre, apellidos, email, rol, telefono, foto_perfil_url, activo, fecha_registro, password_hash, token_version
        FROM usuario
        WHERE LOWER(email) = LOWER($1)
        LIMIT 1`,
