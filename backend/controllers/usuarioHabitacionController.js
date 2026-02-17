@@ -1,3 +1,5 @@
+// backend/controllers/usuarioHabitacionController.js
+
 const pool = require("../db/pool");
 
 function toInt(value, fallback = NaN) {
@@ -5,87 +7,179 @@ function toInt(value, fallback = NaN) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function normEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function isAdmin(req) {
+  return req.user?.rol === "admin";
+}
+
+function isAdvertiser(req) {
+  return req.user?.rol === "advertiser";
+}
+
+async function getUserByIdOrEmail(client, { usuarioId, email }) {
+  if (Number.isFinite(usuarioId)) {
+    const q = await client.query(
+      `SELECT id, rol, activo FROM usuario WHERE id = $1`,
+      [usuarioId]
+    );
+    return q.rows[0] || null;
+  }
+
+  if (email) {
+    const q = await client.query(
+      `SELECT id, rol, activo FROM usuario WHERE LOWER(email) = LOWER($1)`,
+      [email]
+    );
+    return q.rows[0] || null;
+  }
+
+  return null;
+}
+
 /**
  * POST /api/usuario-habitacion/join
- * body: { habitacionId }
+ * (MVP) El manager/admin da de alta a un usuario en una habitación (sin invitaciones).
+ *
+ * body: { habitacionId, usuarioId }  o  { habitacionId, email }
+ *
+ * Reglas:
+ * - Solo admin o advertiser (manager del piso) puede dar de alta.
+ * - El usuario debe existir y estar activo.
+ * - El usuario no puede tener estancia activa.
+ * - La habitación no puede estar ocupada.
+ * - Se inserta usuario_habitacion como active y la habitación pasa a no disponible.
  */
-const joinHabitacion = async (req, res) => {
-  const userId = req.user?.id;
+async function joinHabitacion(req, res) {
+  const requesterId = req.user?.id;
   const habitacionId = toInt(req.body?.habitacionId);
+
+  const usuarioId = req.body?.usuarioId !== undefined ? toInt(req.body.usuarioId) : NaN;
+  const email = req.body?.email ? normEmail(req.body.email) : "";
 
   if (!Number.isFinite(habitacionId)) {
     return res.status(400).json({ error: "VALIDATION_ERROR", details: ["habitacionId"] });
+  }
+  if (!Number.isFinite(usuarioId) && !email) {
+    return res.status(400).json({ error: "VALIDATION_ERROR", details: ["usuarioId|email"] });
+  }
+
+  // Solo admin o advertiser
+  if (!isAdmin(req) && !isAdvertiser(req)) {
+    return res.status(403).json({ error: "FORBIDDEN" });
   }
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    // 1) La habitación debe existir y estar activa y disponible
+    // 1) Habitación + piso (y validar ownership si advertiser)
     const roomQ = await client.query(
-      `SELECT id, piso_id, disponible, activo
-       FROM habitacion
-       WHERE id = $1`,
+      `SELECT
+         h.id AS habitacion_id,
+         h.piso_id,
+         h.disponible,
+         h.activo AS habitacion_activo,
+         p.activo AS piso_activo,
+         p.manager_usuario_id
+       FROM habitacion h
+       JOIN piso p ON p.id = h.piso_id
+       WHERE h.id = $1`,
       [habitacionId]
     );
+
     if (roomQ.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(404).json({ error: "HABITACION_NOT_FOUND" });
     }
+
     const room = roomQ.rows[0];
-    if (!room.activo) {
+
+    if (!room.piso_activo) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "PISO_INACTIVE" });
+    }
+    if (!room.habitacion_activo) {
       await client.query("ROLLBACK");
       return res.status(409).json({ error: "HABITACION_INACTIVE" });
     }
-    if (!room.disponible) {
+
+    if (isAdvertiser(req) && room.manager_usuario_id !== requesterId) {
       await client.query("ROLLBACK");
-      return res.status(409).json({ error: "HABITACION_NOT_AVAILABLE" });
+      return res.status(403).json({ error: "FORBIDDEN_NOT_OWNER" });
     }
 
-    // 2) El usuario no puede tener estancia activa
-    const activeStay = await client.query(
-      `SELECT id FROM usuario_habitacion
+    // 2) Usuario objetivo debe existir y estar activo
+    const targetUser = await getUserByIdOrEmail(client, {
+      usuarioId: Number.isFinite(usuarioId) ? usuarioId : NaN,
+      email: email || "",
+    });
+
+    if (!targetUser) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    if (!targetUser.activo) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "USER_INACTIVE" });
+    }
+
+    // Si quieres impedir que advertiser/admin "convivan", activa esto:
+    if (targetUser.rol !== "user") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "ROLE_NOT_ALLOWED_FOR_STAY" });
+    }
+
+    // 3) Usuario no puede tener estancia activa
+    const activeStayQ = await client.query(
+      `SELECT id
+       FROM usuario_habitacion
        WHERE usuario_id = $1 AND fecha_salida IS NULL
        LIMIT 1`,
-      [userId]
+      [targetUser.id]
     );
-    if (activeStay.rowCount > 0) {
+    if (activeStayQ.rowCount > 0) {
       await client.query("ROLLBACK");
       return res.status(409).json({ error: "USER_ALREADY_HAS_ACTIVE_STAY" });
     }
 
-    // 3) La habitación no puede estar ocupada (el índice único parcial ya lo protege, pero mejor error limpio)
-    const roomOccupied = await client.query(
-      `SELECT id FROM usuario_habitacion
+    // 4) La habitación no puede estar ocupada (estancia activa)
+    const roomOccupiedQ = await client.query(
+      `SELECT id
+       FROM usuario_habitacion
        WHERE habitacion_id = $1 AND fecha_salida IS NULL
        LIMIT 1`,
       [habitacionId]
     );
-    if (roomOccupied.rowCount > 0) {
+    if (roomOccupiedQ.rowCount > 0) {
       await client.query("ROLLBACK");
       return res.status(409).json({ error: "ROOM_ALREADY_OCCUPIED" });
     }
 
-    // 4) Crear estancia activa (estado active + fecha_salida NULL)
-    const ins = await client.query(
+    // 5) Insertar estancia activa
+    const insQ = await client.query(
       `INSERT INTO usuario_habitacion (usuario_id, habitacion_id, fecha_entrada, fecha_salida, estado)
        VALUES ($1, $2, CURRENT_TIMESTAMP, NULL, 'active')
        RETURNING id, usuario_id, habitacion_id, fecha_entrada, fecha_salida, estado, created_at, updated_at`,
-      [userId, habitacionId]
+      [targetUser.id, habitacionId]
     );
 
-    // 5) Opcional: marcar habitación como no disponible al ocupar (consistencia UX)
-    await client.query(
-      `UPDATE habitacion SET disponible = false WHERE id = $1`,
-      [habitacionId]
-    );
+    // 6) Marcar habitación como no disponible (bloqueo de anuncio)
+    await client.query(`UPDATE habitacion SET disponible = false WHERE id = $1`, [habitacionId]);
 
     await client.query("COMMIT");
-    return res.status(201).json({ stay: ins.rows[0] });
+
+    return res.status(201).json({
+      stay: insQ.rows[0],
+      piso_id: room.piso_id,
+    });
   } catch (error) {
     await client.query("ROLLBACK");
 
-    // Violación del índice único parcial (usuario o habitación)
+    // Conflictos por índices únicos (usuario o habitación con estancia activa)
     if (error.code === "23505") {
       return res.status(409).json({ error: "CONFLICT_ACTIVE_STAY_OR_OCCUPANCY" });
     }
@@ -95,44 +189,40 @@ const joinHabitacion = async (req, res) => {
   } finally {
     client.release();
   }
-};
+}
 
 /**
  * PATCH /api/usuario-habitacion/leave
- * body: { }  (sale de su estancia activa)
+ * El usuario cierra su estancia activa.
  */
-const leaveHabitacion = async (req, res) => {
+async function leaveHabitacion(req, res) {
   const userId = req.user?.id;
 
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    // Cerrar estancia activa del usuario
-    const upd = await client.query(
+    const updQ = await client.query(
       `UPDATE usuario_habitacion
        SET fecha_salida = CURRENT_TIMESTAMP,
            estado = 'left'
        WHERE usuario_id = $1 AND fecha_salida IS NULL
-       RETURNING id, habitacion_id, fecha_entrada, fecha_salida, estado`,
+       RETURNING id, usuario_id, habitacion_id, fecha_entrada, fecha_salida, estado`,
       [userId]
     );
 
-    if (upd.rowCount === 0) {
+    if (updQ.rowCount === 0) {
       await client.query("ROLLBACK");
       return res.status(409).json({ error: "NO_ACTIVE_STAY" });
     }
 
-    const habitacionId = upd.rows[0].habitacion_id;
+    const habitacionId = updQ.rows[0].habitacion_id;
 
-    // Liberar habitación (disponible = true)
-    await client.query(
-      `UPDATE habitacion SET disponible = true WHERE id = $1`,
-      [habitacionId]
-    );
+    // Liberar anuncio (para MVP: vuelve a disponible automáticamente)
+    await client.query(`UPDATE habitacion SET disponible = true WHERE id = $1`, [habitacionId]);
 
     await client.query("COMMIT");
-    return res.status(200).json({ stay: upd.rows[0] });
+    return res.status(200).json({ stay: updQ.rows[0] });
   } catch (error) {
     await client.query("ROLLBACK");
     console.error("leaveHabitacion error:", error);
@@ -140,13 +230,13 @@ const leaveHabitacion = async (req, res) => {
   } finally {
     client.release();
   }
-};
+}
 
 /**
  * PATCH /api/usuario-habitacion/kick/:usuarioHabitacionId
- * Permisos: admin OR manager del piso donde está esa estancia activa
+ * Admin o manager del piso puede expulsar (cierra estancia activa).
  */
-const kickFromHabitacion = async (req, res) => {
+async function kickFromHabitacion(req, res) {
   const requesterId = req.user?.id;
   const requesterRol = req.user?.rol;
   const usuarioHabitacionId = toInt(req.params.usuarioHabitacionId);
@@ -159,9 +249,14 @@ const kickFromHabitacion = async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // Traer estancia + piso + manager
     const q = await client.query(
-      `SELECT uh.id, uh.fecha_salida, uh.habitacion_id, h.piso_id, p.manager_usuario_id
+      `SELECT
+         uh.id,
+         uh.usuario_id,
+         uh.habitacion_id,
+         uh.fecha_salida,
+         h.piso_id,
+         p.manager_usuario_id
        FROM usuario_habitacion uh
        JOIN habitacion h ON h.id = uh.habitacion_id
        JOIN piso p ON p.id = h.piso_id
@@ -176,17 +271,15 @@ const kickFromHabitacion = async (req, res) => {
 
     const row = q.rows[0];
 
-    // Solo se puede expulsar si la estancia está activa
     if (row.fecha_salida !== null) {
       await client.query("ROLLBACK");
       return res.status(409).json({ error: "STAY_ALREADY_CLOSED" });
     }
 
-    // Permisos
-    const isAdmin = requesterRol === "admin";
-    const isManager = row.manager_usuario_id === requesterId;
+    const allowed =
+      requesterRol === "admin" || (requesterRol === "advertiser" && row.manager_usuario_id === requesterId);
 
-    if (!isAdmin && !isManager) {
+    if (!allowed) {
       await client.query("ROLLBACK");
       return res.status(403).json({ error: "FORBIDDEN" });
     }
@@ -200,7 +293,7 @@ const kickFromHabitacion = async (req, res) => {
       [usuarioHabitacionId]
     );
 
-    // Liberar habitación
+    // Liberar anuncio
     await client.query(`UPDATE habitacion SET disponible = true WHERE id = $1`, [row.habitacion_id]);
 
     await client.query("COMMIT");
@@ -212,20 +305,21 @@ const kickFromHabitacion = async (req, res) => {
   } finally {
     client.release();
   }
-};
+}
 
 /**
  * GET /api/usuario-habitacion/my
- * Devuelve estancia activa con info de habitacion/piso
+ * Devuelve la estancia activa del usuario (o null si no tiene).
  */
-const getMyStay = async (req, res) => {
+async function getMyStay(req, res) {
   const userId = req.user?.id;
 
   try {
     const q = await pool.query(
-      `SELECT uh.id, uh.usuario_id, uh.habitacion_id, uh.fecha_entrada, uh.fecha_salida, uh.estado,
-              h.titulo AS habitacion_titulo, h.piso_id,
-              p.ciudad, p.direccion
+      `SELECT
+         uh.id, uh.usuario_id, uh.habitacion_id, uh.fecha_entrada, uh.fecha_salida, uh.estado,
+         h.titulo AS habitacion_titulo, h.piso_id,
+         p.ciudad, p.direccion
        FROM usuario_habitacion uh
        JOIN habitacion h ON h.id = uh.habitacion_id
        JOIN piso p ON p.id = h.piso_id
@@ -239,21 +333,73 @@ const getMyStay = async (req, res) => {
     console.error("getMyStay error:", error);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
   }
-};
+}
 
 /**
  * GET /api/usuario-habitacion/piso/:pisoId/convivientes
- * Lista convivientes actuales de un piso (para votar)
+ * Lista convivientes actuales de un piso.
+ *
+ * Permisos (MVP seguro):
+ * - admin: OK
+ * - advertiser: solo si es manager del piso
+ * - user: solo si tiene estancia activa en ese piso
  */
-const getConvivientesByPiso = async (req, res) => {
+async function getConvivientesByPiso(req, res) {
   const pisoId = toInt(req.params.pisoId);
   if (!Number.isFinite(pisoId)) {
     return res.status(400).json({ error: "VALIDATION_ERROR", details: ["pisoId"] });
   }
 
   try {
+    // 1) Piso existe + manager
+    const pisoQ = await pool.query(
+      `SELECT id, manager_usuario_id, activo
+       FROM piso
+       WHERE id = $1`,
+      [pisoId]
+    );
+
+    if (pisoQ.rowCount === 0) {
+      return res.status(404).json({ error: "PISO_NOT_FOUND" });
+    }
+
+    const piso = pisoQ.rows[0];
+
+    if (!piso.activo) {
+      return res.status(409).json({ error: "PISO_INACTIVE" });
+    }
+
+    // 2) Permisos
+    if (isAdmin(req)) {
+      // ok
+    } else if (isAdvertiser(req)) {
+      if (piso.manager_usuario_id !== req.user.id) {
+        return res.status(403).json({ error: "FORBIDDEN_NOT_OWNER" });
+      }
+    } else {
+      // user normal: debe convivir en ese piso
+      const memberQ = await pool.query(
+        `SELECT 1
+         FROM usuario_habitacion uh
+         JOIN habitacion h ON h.id = uh.habitacion_id
+         WHERE uh.usuario_id = $1
+           AND uh.fecha_salida IS NULL
+           AND uh.estado = 'active'
+           AND h.piso_id = $2
+         LIMIT 1`,
+        [req.user.id, pisoId]
+      );
+
+      if (memberQ.rowCount === 0) {
+        return res.status(403).json({ error: "FORBIDDEN_NOT_ROOMMATE" });
+      }
+    }
+
+    // 3) Convivientes actuales del piso
     const q = await pool.query(
-      `SELECT u.id, u.nombre, u.apellidos, u.foto_perfil_url, uh.habitacion_id, uh.fecha_entrada
+      `SELECT
+         u.id, u.nombre, u.apellidos, u.foto_perfil_url,
+         uh.habitacion_id, uh.fecha_entrada
        FROM usuario_habitacion uh
        JOIN habitacion h ON h.id = uh.habitacion_id
        JOIN usuario u ON u.id = uh.usuario_id
@@ -270,12 +416,12 @@ const getConvivientesByPiso = async (req, res) => {
     console.error("getConvivientesByPiso error:", error);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
   }
-};
+}
 
 module.exports = {
   joinHabitacion,
   leaveHabitacion,
   kickFromHabitacion,
   getMyStay,
-  getConvivientesByPiso
+  getConvivientesByPiso,
 };
