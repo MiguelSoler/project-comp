@@ -339,7 +339,7 @@ async function getMyStay(req, res) {
  * GET /api/usuario-habitacion/piso/:pisoId/convivientes
  * Lista convivientes actuales de un piso.
  *
- * Permisos (MVP seguro):
+ * Permisos:
  * - admin: OK
  * - advertiser: solo si es manager del piso
  * - user: solo si tiene estancia activa en ese piso
@@ -370,9 +370,9 @@ async function getConvivientesByPiso(req, res) {
     }
 
     // 2) Permisos
-    if (isAdmin(req)) {
+    if (req.user?.rol === "admin") {
       // ok
-    } else if (isAdvertiser(req)) {
+    } else if (req.user?.rol === "advertiser") {
       if (piso.manager_usuario_id !== req.user.id) {
         return res.status(403).json({ error: "FORBIDDEN_NOT_OWNER" });
       }
@@ -398,8 +398,13 @@ async function getConvivientesByPiso(req, res) {
     // 3) Convivientes actuales del piso
     const q = await pool.query(
       `SELECT
-         u.id, u.nombre, u.apellidos, u.foto_perfil_url,
-         uh.habitacion_id, uh.fecha_entrada
+         uh.id AS usuario_habitacion_id,
+         u.id,
+         u.nombre,
+         u.apellidos,
+         u.foto_perfil_url,
+         uh.habitacion_id,
+         uh.fecha_entrada
        FROM usuario_habitacion uh
        JOIN habitacion h ON h.id = uh.habitacion_id
        JOIN usuario u ON u.id = uh.usuario_id
