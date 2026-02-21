@@ -20,7 +20,7 @@ app.use("/api/habitacion", require("./routes/habitacion"));
 
 // ADMIN
 app.use("/api/admin/usuario", require("./routes/adminUsuario"));
-//app.use("/api/admin/habitacion", require("./routes/adminHabitacion"));
+app.use("/api/admin/habitacion", require("./routes/adminHabitacion"));
 
 // Ruta raíz de prueba
 app.get("/", (req, res) => {
