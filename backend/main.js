@@ -14,6 +14,7 @@ app.use("/api/auth", require("./routes/auth"));
 app.use("/api/usuario", require("./routes/usuario"));
 app.use("/api/piso", require("./routes/piso"));
 app.use("/api/usuario-habitacion", require("./routes/usuarioHabitacion"));
+app.use("/api/voto-usuario", require("./routes/votoUsuario"));
 
 // HABITACION (público)
 app.use("/api/habitacion", require("./routes/habitacion"));
