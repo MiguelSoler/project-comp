@@ -3,10 +3,7 @@
 const express = require("express");
 const router = express.Router();
 
-const {
-  getResumenVotosUsuario,
-  listVotosRecibidosUsuario,
-} = require("../controllers/votoUsuarioController");
+const { getResumenVotosUsuario, listVotosRecibidosUsuario } = require("../controllers/votoUsuarioController");
 
 // Público
 router.get("/usuario/:usuarioId/resumen", getResumenVotosUsuario);
