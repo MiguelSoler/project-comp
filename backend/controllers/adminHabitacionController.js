@@ -375,6 +375,7 @@ const deactivateHabitacion = async (req, res) => {
 // ---------------------------------------------------------
 // POST /api/admin/habitacion/:habitacionId/fotos
 // Body: { url, orden? }
+// - Si NO viene "orden", asigna automáticamente next_orden = max(orden)+1
 // ---------------------------------------------------------
 const addFotoHabitacion = async (req, res) => {
   const requesterId = req.user?.id;
@@ -382,12 +383,14 @@ const addFotoHabitacion = async (req, res) => {
 
   const habitacionId = toInt(req.params.habitacionId, NaN);
   const url = String(req.body?.url || "").trim();
-  const orden = req.body?.orden === undefined ? 0 : toInt(req.body.orden, NaN);
+
+  const ordenProvided = Object.prototype.hasOwnProperty.call(req.body || {}, "orden");
+  let orden = ordenProvided ? toInt(req.body.orden, NaN) : undefined;
 
   const invalid = [];
   if (!Number.isFinite(habitacionId)) invalid.push("habitacionId");
   if (!url) invalid.push("url");
-  if (!Number.isFinite(orden) || orden < 0) invalid.push("orden");
+  if (ordenProvided && (!Number.isFinite(orden) || orden < 0)) invalid.push("orden");
   if (invalid.length) return badRequest(res, invalid);
 
   const client = await pool.connect();
@@ -403,6 +406,19 @@ const addFotoHabitacion = async (req, res) => {
     if (!authz.ok) {
       await client.query("ROLLBACK");
       return authz.code === "NOT_FOUND" ? notFound(res) : forbidden(res);
+    }
+
+    // Si no viene orden, calcula el siguiente (max + 1)
+    if (!ordenProvided) {
+      const next = await client.query(
+        `
+        SELECT COALESCE(MAX(orden), -1) + 1 AS next_orden
+        FROM foto_habitacion
+        WHERE habitacion_id = $1
+        `,
+        [habitacionId]
+      );
+      orden = Number(next.rows[0].next_orden);
     }
 
     const ins = await client.query(

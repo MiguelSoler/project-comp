@@ -1,0 +1,437 @@
+const pool = require("../db/pool");
+
+// =========================================================
+// Helpers
+// =========================================================
+async function getPisoForAdminFoto(client, pisoId) {
+    const q = await client.query(
+      `
+      SELECT id, manager_usuario_id, activo
+      FROM piso
+      WHERE id = $1
+      LIMIT 1
+      `,
+      [pisoId]
+      );
+
+    return q.rowCount ? q.rows[0] : null;
+}
+
+function toInt(value, fallback) {
+    const n = parseInt(value, 10);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+// POST /api/piso  (solo advertiser/admin por routes)
+// manager_usuario_id lo asigna el sistema
+const createPiso = async (req, res) => {
+    try {
+        const direccion = (req.body?.direccion || "").trim();
+        const ciudad = (req.body?.ciudad || "").trim();
+        const codigo_postal = req.body?.codigo_postal ? String(req.body.codigo_postal).trim() : null;
+        const descripcion = req.body?.descripcion ? String(req.body.descripcion).trim() : null;
+
+        if (!direccion) return res.status(400).json({ error: "INVALID_DIRECCION" });
+        if (!ciudad) return res.status(400).json({ error: "INVALID_CIUDAD" });
+
+        const managerId = req.user.id;
+
+        const result = await pool.query(
+            `INSERT INTO piso (direccion, ciudad, codigo_postal, descripcion, manager_usuario_id)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, direccion, ciudad, codigo_postal, descripcion, manager_usuario_id, activo, created_at`,
+            [direccion, ciudad, codigo_postal, descripcion, managerId]
+        );
+
+        return res.status(201).json({ piso: result.rows[0] });
+    } catch (err) {
+        console.error("createPiso error:", err);
+        return res.status(500).json({ error: "INTERNAL_ERROR" });
+    }
+};
+
+// PATCH /api/piso/:id  (routes ya restringen advertiser/admin)
+// Aquí validamos: admin o manager_usuario_id
+const updatePiso = async (req, res) => {
+    try {
+        const id = toInt(req.params.id, NaN);
+        if (!Number.isFinite(id)) return res.status(400).json({ error: "INVALID_ID" });
+
+        const current = await pool.query(
+            `SELECT id, manager_usuario_id, activo
+       FROM piso
+       WHERE id = $1`,
+            [id]
+        );
+        if (current.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+
+        const piso = current.rows[0];
+        const isAdmin = req.user.rol === "admin";
+        const isManager = Number(piso.manager_usuario_id) === Number(req.user.id);
+
+        if (!isAdmin && !isManager) return res.status(403).json({ error: "FORBIDDEN" });
+
+        const direccion = typeof req.body?.direccion === "string" ? req.body.direccion.trim() : undefined;
+        const ciudad = typeof req.body?.ciudad === "string" ? req.body.ciudad.trim() : undefined;
+        const codigo_postal =
+            req.body?.codigo_postal === null ? null :
+                typeof req.body?.codigo_postal === "string" ? req.body.codigo_postal.trim() :
+                    req.body?.codigo_postal !== undefined ? String(req.body.codigo_postal).trim() :
+                        undefined;
+        const descripcion =
+            req.body?.descripcion === null ? null :
+                typeof req.body?.descripcion === "string" ? req.body.descripcion.trim() :
+                    undefined;
+
+        // activo: solo admin debería poder reactivar
+        const activo =
+            typeof req.body?.activo === "boolean" ? req.body.activo : undefined;
+
+        const updates = [];
+        const params = [];
+        let idx = 1;
+
+        if (direccion !== undefined) {
+            if (!direccion) return res.status(400).json({ error: "INVALID_DIRECCION" });
+            params.push(direccion);
+            updates.push(`direccion = $${idx++}`);
+        }
+        if (ciudad !== undefined) {
+            if (!ciudad) return res.status(400).json({ error: "INVALID_CIUDAD" });
+            params.push(ciudad);
+            updates.push(`ciudad = $${idx++}`);
+        }
+        if (codigo_postal !== undefined) {
+            params.push(codigo_postal);
+            updates.push(`codigo_postal = $${idx++}`);
+        }
+        if (descripcion !== undefined) {
+            params.push(descripcion);
+            updates.push(`descripcion = $${idx++}`);
+        }
+        if (activo !== undefined) {
+            if (!isAdmin && activo === true) {
+                return res.status(403).json({ error: "FORBIDDEN" });
+            }
+            params.push(activo);
+            updates.push(`activo = $${idx++}`);
+        }
+
+        if (updates.length === 0) return res.status(400).json({ error: "NO_FIELDS_TO_UPDATE" });
+
+        params.push(id);
+
+        const result = await pool.query(
+            `UPDATE piso
+       SET ${updates.join(", ")}
+       WHERE id = $${idx}
+       RETURNING id, direccion, ciudad, codigo_postal, descripcion, manager_usuario_id, activo, created_at`,
+            params
+        );
+
+        return res.json({ piso: result.rows[0] });
+    } catch (err) {
+        console.error("updatePiso error:", err);
+        return res.status(500).json({ error: "INTERNAL_ERROR" });
+    }
+};
+
+// DELETE /api/piso/:id  (soft delete)
+const deletePiso = async (req, res) => {
+    try {
+        const id = toInt(req.params.id, NaN);
+        if (!Number.isFinite(id)) return res.status(400).json({ error: "INVALID_ID" });
+
+        const current = await pool.query(
+            `SELECT id, manager_usuario_id
+       FROM piso
+       WHERE id = $1`,
+            [id]
+        );
+        if (current.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+
+        const piso = current.rows[0];
+        const isAdmin = req.user.rol === "admin";
+        const isManager = Number(piso.manager_usuario_id) === Number(req.user.id);
+
+        if (!isAdmin && !isManager) return res.status(403).json({ error: "FORBIDDEN" });
+
+        const result = await pool.query(
+            `UPDATE piso
+       SET activo = false
+       WHERE id = $1
+       RETURNING id`,
+            [id]
+        );
+        if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+        return res.json({ ok: true });
+    } catch (err) {
+        console.error("deletePiso error:", err);
+        return res.status(500).json({ error: "INTERNAL_ERROR" });
+    }
+};
+
+// =========================================================
+// POST /api/admin/piso/:pisoId/fotos
+// - Si NO viene "orden", asigna automáticamente next_orden = max(orden)+1
+// =========================================================
+const addFotoPiso = async (req, res) => {
+    const requesterId = req.user?.id;
+    const requesterRol = req.user?.rol;
+
+    const pisoId = toInt(req.params.pisoId, NaN);
+    const url = String(req.body?.url || "").trim();
+
+    const ordenProvided = Object.prototype.hasOwnProperty.call(req.body || {}, "orden");
+    let orden = ordenProvided ? toInt(req.body.orden, NaN) : undefined;
+
+    const invalid = [];
+    if (!Number.isFinite(pisoId)) invalid.push("pisoId");
+    if (!url) invalid.push("url");
+    if (ordenProvided && (!Number.isFinite(orden) || orden < 0)) invalid.push("orden");
+
+    if (invalid.length) {
+        return res.status(400).json({ error: "VALIDATION_ERROR", details: invalid });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        const piso = await getPisoForAdminFoto(client, pisoId);
+        if (!piso) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "NOT_FOUND" });
+        }
+
+        const isAdmin = requesterRol === "admin";
+        const isManager = Number(piso.manager_usuario_id) === Number(requesterId);
+
+        if (!isAdmin && !isManager) {
+            await client.query("ROLLBACK");
+            return res.status(403).json({ error: "FORBIDDEN" });
+        }
+
+        if (!piso.activo) {
+            await client.query("ROLLBACK");
+            return res.status(409).json({ error: "PISO_INACTIVE" });
+        }
+
+        // Si no viene orden, calcula el siguiente (max + 1)
+        if (!ordenProvided) {
+            const next = await client.query(
+                `
+        SELECT COALESCE(MAX(orden), -1) + 1 AS next_orden
+        FROM foto_piso
+        WHERE piso_id = $1
+        `,
+                [pisoId]
+            );
+            orden = Number(next.rows[0].next_orden);
+        }
+
+        const q = await client.query(
+            `
+      INSERT INTO foto_piso (piso_id, url, orden)
+      VALUES ($1, $2, $3)
+      RETURNING id, piso_id, url, orden, created_at
+      `,
+            [pisoId, url, orden]
+        );
+
+        await client.query("COMMIT");
+
+        return res.status(201).json({ foto: q.rows[0] });
+    } catch (error) {
+        await client.query("ROLLBACK");
+
+        // uq_foto_piso_orden (piso_id, orden)
+        if (error?.code === "23505") {
+            return res.status(409).json({ error: "ORDER_CONFLICT" });
+        }
+
+        console.error("addFotoPiso error:", error);
+        return res.status(500).json({ error: "INTERNAL_ERROR" });
+    } finally {
+        client.release();
+    }
+};
+
+// =========================================================
+// PATCH /api/admin/piso/:pisoId/fotos/:fotoId
+// =========================================================
+const updateFotoPiso = async (req, res) => {
+    const requesterId = req.user?.id;
+    const requesterRol = req.user?.rol;
+
+    const pisoId = toInt(req.params.pisoId, NaN);
+    const fotoId = toInt(req.params.fotoId, NaN);
+
+    const hasUrl = Object.prototype.hasOwnProperty.call(req.body || {}, "url");
+    const hasOrden = Object.prototype.hasOwnProperty.call(req.body || {}, "orden");
+
+    const invalid = [];
+    if (!Number.isFinite(pisoId)) invalid.push("pisoId");
+    if (!Number.isFinite(fotoId)) invalid.push("fotoId");
+
+    let url;
+    if (hasUrl) {
+        url = String(req.body.url || "").trim();
+        if (!url) invalid.push("url");
+    }
+
+    let orden;
+    if (hasOrden) {
+        orden = toInt(req.body.orden, NaN);
+        if (!Number.isFinite(orden) || orden < 0) invalid.push("orden");
+    }
+
+    if (!hasUrl && !hasOrden) invalid.push("body");
+
+    if (invalid.length) {
+        return res.status(400).json({ error: "VALIDATION_ERROR", details: invalid });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        const piso = await getPisoForAdminFoto(client, pisoId);
+        if (!piso) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "NOT_FOUND" });
+        }
+
+        const isAdmin = requesterRol === "admin";
+        const isManager = Number(piso.manager_usuario_id) === Number(requesterId);
+
+        if (!isAdmin && !isManager) {
+            await client.query("ROLLBACK");
+            return res.status(403).json({ error: "FORBIDDEN" });
+        }
+
+        if (!piso.activo) {
+            await client.query("ROLLBACK");
+            return res.status(409).json({ error: "PISO_INACTIVE" });
+        }
+
+        const sets = [];
+        const params = [];
+        let i = 1;
+
+        if (hasUrl) {
+            sets.push(`url = $${i++}`);
+            params.push(url);
+        }
+        if (hasOrden) {
+            sets.push(`orden = $${i++}`);
+            params.push(orden);
+        }
+
+        params.push(fotoId);
+        params.push(pisoId);
+
+        const q = await client.query(
+            `
+      UPDATE foto_piso
+      SET ${sets.join(", ")}
+      WHERE id = $${i++}
+        AND piso_id = $${i++}
+      RETURNING id, piso_id, url, orden, created_at
+      `,
+            params
+        );
+
+        if (q.rowCount === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "NOT_FOUND" });
+        }
+
+        await client.query("COMMIT");
+
+        return res.json({ foto: q.rows[0] });
+    } catch (error) {
+        await client.query("ROLLBACK");
+
+        if (error?.code === "23505") {
+            return res.status(409).json({ error: "ORDER_CONFLICT" });
+        }
+
+        console.error("updateFotoPiso error:", error);
+        return res.status(500).json({ error: "INTERNAL_ERROR" });
+    } finally {
+        client.release();
+    }
+};
+
+// =========================================================
+// DELETE /api/admin/piso/:pisoId/fotos/:fotoId
+// =========================================================
+const deleteFotoPiso = async (req, res) => {
+    const requesterId = req.user?.id;
+    const requesterRol = req.user?.rol;
+
+    const pisoId = toInt(req.params.pisoId, NaN);
+    const fotoId = toInt(req.params.fotoId, NaN);
+
+    const invalid = [];
+    if (!Number.isFinite(pisoId)) invalid.push("pisoId");
+    if (!Number.isFinite(fotoId)) invalid.push("fotoId");
+
+    if (invalid.length) {
+        return res.status(400).json({ error: "VALIDATION_ERROR", details: invalid });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+
+        const piso = await getPisoForAdminFoto(client, pisoId);
+        if (!piso) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "NOT_FOUND" });
+        }
+
+        const isAdmin = requesterRol === "admin";
+        const isManager = Number(piso.manager_usuario_id) === Number(requesterId);
+
+        if (!isAdmin && !isManager) {
+            await client.query("ROLLBACK");
+            return res.status(403).json({ error: "FORBIDDEN" });
+        }
+
+        const q = await client.query(
+            `
+      DELETE FROM foto_piso
+      WHERE id = $1
+        AND piso_id = $2
+      RETURNING id
+      `,
+            [fotoId, pisoId]
+        );
+
+        if (q.rowCount === 0) {
+            await client.query("ROLLBACK");
+            return res.status(404).json({ error: "NOT_FOUND" });
+        }
+
+        await client.query("COMMIT");
+
+        return res.json({ deleted: true });
+    } catch (error) {
+        await client.query("ROLLBACK");
+        console.error("deleteFotoPiso error:", error);
+        return res.status(500).json({ error: "INTERNAL_ERROR" });
+    } finally {
+        client.release();
+    }
+};
+
+module.exports = {
+    createPiso,
+    updatePiso,
+    deletePiso,
+    addFotoPiso,
+    updateFotoPiso,
+    deleteFotoPiso
+};
