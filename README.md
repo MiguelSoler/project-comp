@@ -40,27 +40,38 @@ Los usuarios pueden:
 - project-comp/ 
     ## 📂 Backend
             ├── 📁 controllers
+                ├── 📄 adminHabitacionController.js
+                ├── 📄 adminPisoController.js
+                ├── 📄 adminUsuarioController.js
                 ├── 📄 authController.js
+                ├── 📄 habitacionController.js
                 ├── 📄 pisoController.js
                 ├── 📄 usuarioController.js
-                └── 📄 usuarioPisoController.js
+                ├── 📄 usuarioHabitacionController.js
+                ├── 📄 votoUsuarioAuthController.js
+                └── 📄 votoUsuarioController.js
             ├── 📁 db
                 ├── 📄 init.sql
                 └── 📄 pool.js
             ├── 📁 middleware
                 └── 📄 authMiddleware.js
+            ├── 📁 node_modules
             ├── 📁 routes
+                ├── 📄 adminHabitacion.js
+                ├── 📄 adminPiso.js
+                ├── 📄 adminUsuario.js
                 ├── 📄 auth.js
+                ├── 📄 habitacion.js
                 ├── 📄 piso.js
-                ├── 📄 usuario_piso.js
-                └── 📄 usuario.js
+                ├── 📄 usuario.js
+                ├── 📄 usuarioHabitacion.js
+                ├── 📄 votoUsuario.js
+                └── 📄 votoUsuarioAuth.js
+            ├── 📁 utilities
             ├── 📄 .env
-            ├── 📄 generateHashes.js
             ├── 📄 main.js
             ├── 📄 package-lock.json
-            ├── 📄 package.json
-            ├── 📄 testConnect.js
-            └── 📄 testConnection.js
+            └── 📄 package.json
     ## 📂 Frontend
             ├── 📁 public
                 └── (archivos estáticos)
