@@ -6,6 +6,16 @@ const express = require("express");
 const app = express();
 const port = process.env.PORT || 8080;
 
+const cors = require("cors");
+
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
+
 // Middleware para parsear JSON
 app.use(express.json());
 
