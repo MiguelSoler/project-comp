@@ -22,6 +22,336 @@ function toInt(value, fallback) {
     return Number.isFinite(n) ? n : fallback;
 }
 
+// =========================================================
+// GET /api/admin/piso
+// - Admin: lista todos los pisos
+// - Advertiser/Manager: lista solo sus pisos
+// Query: page, limit, activo=all|true|false, ciudad, sort=newest|updated|oldest
+// =========================================================
+const listPisosAdmin = async (req, res) => {
+    try {
+        const requesterId = req.user?.id;
+        const requesterRol = req.user?.rol;
+
+        if (requesterRol !== "admin" && requesterRol !== "advertiser") {
+            return res.status(403).json({ error: "FORBIDDEN" });
+        }
+
+        const page = Math.max(1, toInt(req.query.page, 1));
+        const limit = Math.min(100, Math.max(1, toInt(req.query.limit, 10)));
+        const offset = (page - 1) * limit;
+
+        const activoRaw = String(req.query.activo || "all").toLowerCase(); // all|true|false
+        const ciudad = (req.query.ciudad || "").trim();
+
+        const sort = String(req.query.sort || "newest");
+        const sortMap = {
+            newest: "p.created_at DESC, p.id DESC",
+            updated: "p.updated_at DESC, p.id DESC",
+            oldest: "p.created_at ASC, p.id ASC",
+        };
+        const orderBy = sortMap[sort] || sortMap.newest;
+
+        const where = [];
+        const params = [];
+        let i = 1;
+
+        // Manager: solo sus pisos
+        if (requesterRol !== "admin") {
+            params.push(requesterId);
+            where.push(`p.manager_usuario_id = $${i++}`);
+        }
+
+        // Filtro activo
+        if (activoRaw !== "all") {
+            if (activoRaw !== "true" && activoRaw !== "false") {
+                return res
+                    .status(400)
+                    .json({ error: "VALIDATION_ERROR", details: ["activo"] });
+            }
+            params.push(activoRaw === "true");
+            where.push(`p.activo = $${i++}`);
+        }
+
+        // Filtro ciudad (exact match)
+        if (ciudad) {
+            params.push(ciudad);
+            where.push(`p.ciudad = $${i++}`);
+        }
+
+        params.push(limit);
+        params.push(offset);
+
+        const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+        const q = await pool.query(
+            `
+      SELECT
+        p.id,
+        p.direccion,
+        p.ciudad,
+        p.codigo_postal,
+        p.descripcion,
+        p.manager_usuario_id,
+        p.activo,
+        p.created_at,
+        p.updated_at,
+        u.nombre AS manager_nombre,
+        u.apellidos AS manager_apellidos,
+        (SELECT fp.url
+         FROM foto_piso fp
+         WHERE fp.piso_id = p.id
+         ORDER BY fp.orden ASC, fp.id ASC
+         LIMIT 1) AS cover_foto_piso_url,
+        COUNT(*) OVER() AS total_count
+      FROM piso p
+      JOIN usuario u ON u.id = p.manager_usuario_id
+      ${whereSql}
+      ORDER BY ${orderBy}
+      LIMIT $${i++} OFFSET $${i++}
+      `,
+            params
+        );
+
+        const total = q.rowCount ? Number(q.rows[0].total_count) : 0;
+        const totalPages = total ? Math.ceil(total / limit) : 0;
+
+        const items = q.rows.map(({ total_count, ...row }) => ({
+            ...row,
+            manager: {
+                id: row.manager_usuario_id,
+                nombre: row.manager_nombre,
+                apellidos: row.manager_apellidos,
+            },
+        })).map((row) => {
+            // limpiamos duplicados ya anidados
+            const { manager_nombre, manager_apellidos, ...clean } = row;
+            return clean;
+        });
+
+        return res.json({ page, limit, total, totalPages, items });
+    } catch (error) {
+        console.error("listPisosAdmin error:", error);
+        return res.status(500).json({ error: "INTERNAL_ERROR" });
+    }
+};
+
+// =========================================================
+// GET /api/admin/piso/:pisoId
+// - Admin: puede ver cualquier piso (activo o no)
+// - Advertiser/Manager: solo puede ver sus pisos
+// =========================================================
+const getPisoAdminById = async (req, res) => {
+    try {
+        const requesterId = req.user?.id;
+        const requesterRol = req.user?.rol;
+
+        if (requesterRol !== "admin" && requesterRol !== "advertiser") {
+            return res.status(403).json({ error: "FORBIDDEN" });
+        }
+
+        const pisoId = toInt(req.params.pisoId, NaN);
+        if (!Number.isFinite(pisoId)) {
+            return res.status(400).json({ error: "VALIDATION_ERROR", details: ["pisoId"] });
+        }
+
+        const q = await pool.query(
+            `
+      SELECT
+        p.id,
+        p.direccion,
+        p.ciudad,
+        p.codigo_postal,
+        p.descripcion,
+        p.manager_usuario_id,
+        p.activo,
+        p.created_at,
+        p.updated_at,
+        u.nombre AS manager_nombre,
+        u.apellidos AS manager_apellidos,
+        (SELECT fp.url
+         FROM foto_piso fp
+         WHERE fp.piso_id = p.id
+         ORDER BY fp.orden ASC, fp.id ASC
+         LIMIT 1) AS cover_foto_piso_url,
+        (SELECT COUNT(*)::int FROM habitacion h WHERE h.piso_id = p.id) AS habitaciones_total,
+        (SELECT COUNT(*)::int FROM habitacion h WHERE h.piso_id = p.id AND h.activo = true) AS habitaciones_activas,
+        (SELECT COUNT(*)::int FROM habitacion h WHERE h.piso_id = p.id AND h.activo = true AND h.disponible = true) AS habitaciones_disponibles
+      FROM piso p
+      JOIN usuario u ON u.id = p.manager_usuario_id
+      WHERE p.id = $1
+      LIMIT 1
+      `,
+            [pisoId]
+        );
+
+        if (q.rowCount === 0) {
+            return res.status(404).json({ error: "NOT_FOUND" });
+        }
+
+        const piso = q.rows[0];
+
+        // Si no es admin, solo puede acceder a sus pisos
+        if (requesterRol !== "admin" && Number(piso.manager_usuario_id) !== Number(requesterId)) {
+            return res.status(403).json({ error: "FORBIDDEN" });
+        }
+
+        return res.json({
+            piso: {
+                ...piso,
+                manager: {
+                    id: piso.manager_usuario_id,
+                    nombre: piso.manager_nombre,
+                    apellidos: piso.manager_apellidos,
+                },
+            },
+        });
+    } catch (error) {
+        console.error("getPisoAdminById error:", error);
+        return res.status(500).json({ error: "INTERNAL_ERROR" });
+    }
+};
+
+// =========================================================
+// GET /api/admin/piso/:pisoId/habitaciones
+// - Admin: puede ver cualquier piso
+// - Advertiser/Manager: solo sus pisos
+// Devuelve habitaciones del piso (todas), con filtros opcionales
+// Query: page, limit, activo=all|true|false, disponible=all|true|false, sort
+// sort: precio_asc|precio_desc|newest|updated
+// =========================================================
+const listHabitacionesAdminByPiso = async (req, res) => {
+    try {
+        const requesterId = req.user?.id;
+        const requesterRol = req.user?.rol;
+
+        if (requesterRol !== "admin" && requesterRol !== "advertiser") {
+            return res.status(403).json({ error: "FORBIDDEN" });
+        }
+
+        const pisoId = toInt(req.params.pisoId, NaN);
+        if (!Number.isFinite(pisoId)) {
+            return res.status(400).json({ error: "VALIDATION_ERROR", details: ["pisoId"] });
+        }
+
+        // Verificamos piso + permisos (admin o manager del piso)
+        const p = await pool.query(
+            `
+      SELECT id, manager_usuario_id, activo, ciudad, direccion
+      FROM piso
+      WHERE id = $1
+      LIMIT 1
+      `,
+            [pisoId]
+        );
+
+        if (p.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
+
+        const piso = p.rows[0];
+
+        if (requesterRol !== "admin" && Number(piso.manager_usuario_id) !== Number(requesterId)) {
+            return res.status(403).json({ error: "FORBIDDEN" });
+        }
+
+        const page = Math.max(1, toInt(req.query.page, 1));
+        const limit = Math.min(100, Math.max(1, toInt(req.query.limit, 20)));
+        const offset = (page - 1) * limit;
+
+        const activoRaw = String(req.query.activo || "all").toLowerCase(); // all|true|false
+        const disponibleRaw = String(req.query.disponible || "all").toLowerCase(); // all|true|false
+
+        const sort = String(req.query.sort || "newest");
+        const sortMap = {
+            precio_asc: "h.precio_mensual ASC, h.id ASC",
+            precio_desc: "h.precio_mensual DESC, h.id DESC",
+            newest: "h.created_at DESC, h.id DESC",
+            updated: "h.updated_at DESC, h.id DESC",
+        };
+        const orderBy = sortMap[sort] || sortMap.newest;
+
+        const where = ["h.piso_id = $1"];
+        const params = [pisoId];
+        let i = 2;
+
+        if (activoRaw !== "all") {
+            if (activoRaw !== "true" && activoRaw !== "false") {
+                return res.status(400).json({ error: "VALIDATION_ERROR", details: ["activo"] });
+            }
+            params.push(activoRaw === "true");
+            where.push(`h.activo = $${i++}`);
+        }
+
+        if (disponibleRaw !== "all") {
+            if (disponibleRaw !== "true" && disponibleRaw !== "false") {
+                return res.status(400).json({ error: "VALIDATION_ERROR", details: ["disponible"] });
+            }
+            params.push(disponibleRaw === "true");
+            where.push(`h.disponible = $${i++}`);
+        }
+
+        params.push(limit);
+        params.push(offset);
+
+        const q = await pool.query(
+            `
+      SELECT
+        h.id,
+        h.piso_id,
+        h.titulo,
+        h.descripcion,
+        h.precio_mensual,
+        h.disponible,
+        h.activo,
+        h.tamano_m2,
+        h.amueblada,
+        h.bano,
+        h.balcon,
+        h.created_at,
+        h.updated_at,
+        EXISTS (
+          SELECT 1
+          FROM usuario_habitacion uh
+          WHERE uh.habitacion_id = h.id
+            AND uh.fecha_salida IS NULL
+        ) AS ocupada,
+        (SELECT fh.url
+         FROM foto_habitacion fh
+         WHERE fh.habitacion_id = h.id
+         ORDER BY fh.orden ASC, fh.id ASC
+         LIMIT 1) AS cover_foto_habitacion_url,
+        COUNT(*) OVER() AS total_count
+      FROM habitacion h
+      WHERE ${where.join(" AND ")}
+      ORDER BY ${orderBy}
+      LIMIT $${i++} OFFSET $${i++}
+      `,
+            params
+        );
+
+        const total = q.rowCount ? Number(q.rows[0].total_count) : 0;
+        const totalPages = total ? Math.ceil(total / limit) : 0;
+
+        const items = q.rows.map(({ total_count, ...row }) => row);
+
+        return res.json({
+            piso: {
+                id: piso.id,
+                ciudad: piso.ciudad,
+                direccion: piso.direccion,
+                activo: piso.activo,
+            },
+            page,
+            limit,
+            total,
+            totalPages,
+            items,
+        });
+    } catch (error) {
+        console.error("listHabitacionesAdminByPiso error:", error);
+        return res.status(500).json({ error: "INTERNAL_ERROR" });
+    }
+};
+
 // POST /api/piso  (solo advertiser/admin por routes)
 // manager_usuario_id lo asigna el sistema
 const createPiso = async (req, res) => {
@@ -428,6 +758,9 @@ const deleteFotoPiso = async (req, res) => {
 };
 
 module.exports = {
+    listPisosAdmin,
+    getPisoAdminById,
+    listHabitacionesAdminByPiso,
     createPiso,
     updatePiso,
     deletePiso,

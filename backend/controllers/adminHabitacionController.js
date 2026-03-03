@@ -93,6 +93,153 @@ async function hasActiveOccupancy(client, habitacionId) {
 }
 
 // ---------------------------------------------------------
+// GET /api/admin/habitacion
+// - Admin: ve todas las habitaciones
+// - Advertiser/Manager: solo habitaciones de sus pisos
+// Query: page, limit, activo=all|true|false, disponible=all|true|false,
+//        pisoId, ciudad, q, sort=precio_asc|precio_desc|newest|updated
+// ---------------------------------------------------------
+const listHabitacionesAdmin = async (req, res) => {
+  try {
+    const requesterId = req.user?.id;
+    const requesterRol = req.user?.rol;
+
+    if (requesterRol !== "admin" && requesterRol !== "advertiser") {
+      return forbidden(res);
+    }
+
+    const page = Math.max(1, toInt(req.query.page, 1));
+    const limit = Math.min(100, Math.max(1, toInt(req.query.limit, 10)));
+    const offset = (page - 1) * limit;
+
+    const activoRaw = String(req.query.activo || "all").toLowerCase(); // all|true|false
+    const disponibleRaw = String(req.query.disponible || "all").toLowerCase(); // all|true|false
+    const ciudad = (req.query.ciudad || "").trim();
+    const qText = (req.query.q || "").trim();
+
+    const pisoId =
+      req.query.pisoId !== undefined ? toInt(req.query.pisoId, NaN) : undefined;
+    if (req.query.pisoId !== undefined && !Number.isFinite(pisoId)) {
+      return badRequest(res, ["pisoId"]);
+    }
+
+    const sort = String(req.query.sort || "newest");
+    const sortMap = {
+      precio_asc: "h.precio_mensual ASC, h.id ASC",
+      precio_desc: "h.precio_mensual DESC, h.id DESC",
+      newest: "h.created_at DESC, h.id DESC",
+      updated: "h.updated_at DESC, h.id DESC",
+    };
+    const orderBy = sortMap[sort] || sortMap.newest;
+
+    const where = [];
+    const params = [];
+    let i = 1;
+
+    // Manager: solo sus pisos
+    if (requesterRol !== "admin") {
+      params.push(requesterId);
+      where.push(`p.manager_usuario_id = $${i++}`);
+    }
+
+    // Filtro activo (habitacion)
+    if (activoRaw !== "all") {
+      if (activoRaw !== "true" && activoRaw !== "false") {
+        return badRequest(res, ["activo"]);
+      }
+      params.push(activoRaw === "true");
+      where.push(`h.activo = $${i++}`);
+    }
+
+    // Filtro disponible (habitacion)
+    if (disponibleRaw !== "all") {
+      if (disponibleRaw !== "true" && disponibleRaw !== "false") {
+        return badRequest(res, ["disponible"]);
+      }
+      params.push(disponibleRaw === "true");
+      where.push(`h.disponible = $${i++}`);
+    }
+
+    if (Number.isFinite(pisoId)) {
+      params.push(pisoId);
+      where.push(`h.piso_id = $${i++}`);
+    }
+
+    if (ciudad) {
+      params.push(ciudad);
+      where.push(`p.ciudad = $${i++}`);
+    }
+
+    if (qText) {
+      params.push(qText);
+      where.push(
+        `to_tsvector('spanish', coalesce(h.titulo,'') || ' ' || coalesce(h.descripcion,'')) @@ plainto_tsquery('spanish', $${i++})`
+      );
+    }
+
+    params.push(limit);
+    params.push(offset);
+
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const sql = `
+      SELECT
+        h.id,
+        h.piso_id,
+        h.titulo,
+        h.descripcion,
+        h.precio_mensual,
+        h.disponible,
+        h.activo,
+        h.tamano_m2,
+        h.amueblada,
+        h.bano,
+        h.balcon,
+        h.created_at,
+        h.updated_at,
+
+        p.ciudad,
+        p.direccion,
+        p.codigo_postal,
+        p.activo AS piso_activo,
+        p.manager_usuario_id,
+
+        EXISTS (
+          SELECT 1
+          FROM usuario_habitacion uh
+          WHERE uh.habitacion_id = h.id
+            AND uh.fecha_salida IS NULL
+        ) AS ocupada,
+
+        (SELECT fh.url
+         FROM foto_habitacion fh
+         WHERE fh.habitacion_id = h.id
+         ORDER BY fh.orden ASC, fh.id ASC
+         LIMIT 1) AS cover_foto_habitacion_url,
+
+        COUNT(*) OVER() AS total_count
+      FROM habitacion h
+      JOIN piso p ON p.id = h.piso_id
+      ${whereSql}
+      ORDER BY ${orderBy}
+      LIMIT $${i++} OFFSET $${i++}
+    `;
+
+    const r = await pool.query(sql, params);
+
+    const total = r.rowCount ? Number(r.rows[0].total_count) : 0;
+    const totalPages = total ? Math.ceil(total / limit) : 0;
+
+    const items = r.rows.map(({ total_count, ...row }) => row);
+
+    return res.json({ page, limit, total, totalPages, items });
+  } catch (error) {
+    console.error("listHabitacionesAdmin error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+};
+
+// ---------------------------------------------------------
 // POST /api/admin/habitacion
 // ---------------------------------------------------------
 const createHabitacion = async (req, res) => {
@@ -592,6 +739,7 @@ const deleteFotoHabitacion = async (req, res) => {
 };
 
 module.exports = {
+  listHabitacionesAdmin,
   createHabitacion,
   updateHabitacion,
   deactivateHabitacion,
