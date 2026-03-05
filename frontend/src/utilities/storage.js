@@ -1,5 +1,6 @@
-const TOKEN_KEY = "pc_token";
-const USER_KEY = "pc_user";
+const TOKEN_KEY = import.meta.env.VITE_AUTH_TOKEN_STORAGE_KEY = "pc_token";
+const USER_KEY = import.meta.env.VITE_AUTH_USER_STORAGE_KEY = "pc_user";
+
 
 function notifyAuthChanged() {
     // Notifica a la app (mismo tab) que ha cambiado el auth en localStorage
