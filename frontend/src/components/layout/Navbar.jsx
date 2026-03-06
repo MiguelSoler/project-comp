@@ -1,8 +1,7 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth.js";
 
-const baseLink =
-  "inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150";
+const baseLink = "inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150";
 const navLink = ({ isActive }) =>
   `${baseLink} ${
     isActive ? "bg-blue-50 text-brand-primary" : "text-ui-text hover:bg-slate-50"
@@ -13,10 +12,12 @@ export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
 
   const handleLogout = () => {
-    //limpiamos localStorage
-    logout?.();
-      navigate("/", { replace: true });
+    logout();
+    navigate("/", { replace: true });
   };
+
+  //Panel según rol (solo admin/manager)
+  const panelPath = user?.rol === "admin" ? "/admin" : user?.rol === "advertiser" ? "/manager" : null;
 
   return (
     <header className="border-b border-ui-border bg-ui-surface">
@@ -43,6 +44,13 @@ export default function Navbar() {
             </div>
           ) : (
             <div className="flex items-center gap-2">
+              {/* Enlace a panel si aplica */}
+              {panelPath ? (
+                <Link className="btn btn-secondary btn-sm" to={panelPath}>
+                  Panel
+                </Link>
+              ) : null}
+
               <span className="text-sm text-ui-text-secondary">
                 Hola{user?.nombre ? `, ${user.nombre}` : ""}
               </span>
