@@ -1,4 +1,4 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router-dom";
 import RootLayout from "../components/layout/RootLayout.jsx";
 
 import Home from "../pages/public/Home.jsx";
@@ -8,10 +8,17 @@ import HabitacionDetail from "../pages/public/HabitacionDetail.jsx";
 import Login from "../pages/auth/Login.jsx";
 import Register from "../pages/auth/Register.jsx";
 
+import Perfil from "../pages/usuario/Perfil.jsx";
+import MiEstancia from "../pages/usuario/MiEstancia.jsx";
+import Convivientes from "../pages/usuario/Convivientes.jsx";
+
 import DashboardManager from "../pages/manager/DashboardManager.jsx";
 import DashboardAdmin from "../pages/admin/DashboardAdmin.jsx";
 
 import NotFound from "../pages/NotFound.jsx";
+
+import AuthGuard from "../middleware/authGuard.jsx";
+import RoleGuard from "../middleware/roleGuard.jsx";
 
 export default function AppRoutes() {
   return (
@@ -28,9 +35,19 @@ export default function AppRoutes() {
         <Route path="habitaciones" element={<HabitacionesList />} />
         <Route path="habitaciones/:habitacionId" element={<HabitacionDetail />} />
 
-        {/* Privado (placeholder) */}
-        <Route path="manager" element={<DashboardManager />} />
-        <Route path="admin" element={<DashboardAdmin />} />
+        {/* Privado */}
+        <Route element={<AuthGuard />}>
+          <Route path="perfil" element={<Perfil />} />
+          <Route path="mi-estancia" element={<MiEstancia />} />
+          <Route path="convivientes" element={<Convivientes />} />
+          <Route element={<RoleGuard allowedRoles={["advertiser"]} />}>
+            <Route path="manager" element={<DashboardManager />} />
+          </Route>
+
+          <Route element={<RoleGuard allowedRoles={["admin"]} />}>
+            <Route path="admin" element={<DashboardAdmin />} />
+          </Route>
+        </Route>
 
         {/* Landing opcional (si quieres conservarla) */}
         <Route path="home" element={<Home />} />
