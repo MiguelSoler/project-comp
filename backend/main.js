@@ -19,6 +19,9 @@ app.use(
 // Middleware para parsear JSON
 app.use(express.json());
 
+
+app.use("/uploads", express.static(path.resolve(__dirname, "..", "uploads")));
+
 // Rutas separadas por recurso
 app.use("/api/auth", require("./routes/auth"));
 app.use("/api/usuario", require("./routes/usuario"));

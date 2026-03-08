@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import PageShell from "../../components/layout/PageShell.jsx";
+import Modal from "../../components/ui/Modal.jsx";
 import { getHabitacionById } from "../../services/habitacionService.js";
 
 function formatEur(value) {
@@ -36,6 +37,20 @@ export default function HabitacionDetail() {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState("");
 
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [activeFotoUrl, setActiveFotoUrl] = useState(null);
+
+  const openFoto = (url) => {
+    if (!url) return;
+    setActiveFotoUrl(url);
+    setIsModalOpen(true);
+  };
+
+  const closeFoto = () => {
+    setIsModalOpen(false);
+    setActiveFotoUrl(null);
+  };
+
   useEffect(() => {
     let cancelled = false;
 
@@ -69,7 +84,6 @@ export default function HabitacionDetail() {
 
   const isDisponible = useMemo(() => {
     if (!habitacion) return false;
-    // tu backend trae disponible + ocupada
     return Boolean(habitacion.disponible) && !Boolean(habitacion.ocupada);
   }, [habitacion]);
 
@@ -137,10 +151,11 @@ export default function HabitacionDetail() {
             {/* Cover + gallery */}
             {coverUrl ? (
               <img
-                className="aspect-[4/3] w-full rounded-lg object-cover border border-ui-border"
+                className="aspect-[4/3] w-full rounded-lg object-cover border border-ui-border cursor-zoom-in"
                 src={coverUrl}
                 alt={habitacion.titulo}
                 loading="lazy"
+                onClick={() => openFoto(coverUrl)}
               />
             ) : (
               <div className="skeleton aspect-[4/3] w-full" />
@@ -151,13 +166,15 @@ export default function HabitacionDetail() {
                 {fotos.slice(0, 8).map((f) => {
                   const url = buildImageUrl(f.url);
                   return (
-                    <img
+                    <button
                       key={f.id}
-                      className="aspect-[4/3] w-full rounded-md object-cover border border-ui-border"
-                      src={url}
-                      alt={`Foto ${f.orden + 1}`}
-                      loading="lazy"
-                    />
+                      type="button"
+                      className="rounded-md border border-ui-border overflow-hidden cursor-zoom-in"
+                      onClick={() => openFoto(url)}
+                      aria-label={`Abrir foto ${f.orden + 1}`}
+                    >
+                      <img className="aspect-[4/3] w-full object-cover" src={url} alt={`Foto ${f.orden + 1}`} loading="lazy" />
+                    </button>
                   );
                 })}
               </div>
@@ -185,14 +202,12 @@ export default function HabitacionDetail() {
               </div>
             </div>
 
-            {/* Info del piso (contexto, no “producto”) */}
+            {/* Info del piso (contexto) */}
             {habitacion.piso_descripcion ? (
               <div className="card">
                 <div className="card-body space-y-2">
                   <h3 className="text-base font-semibold">Sobre el piso</h3>
-                  <p className="text-sm text-ui-text-secondary whitespace-pre-line">
-                    {habitacion.piso_descripcion}
-                  </p>
+                  <p className="text-sm text-ui-text-secondary whitespace-pre-line">{habitacion.piso_descripcion}</p>
                 </div>
               </div>
             ) : null}
@@ -222,7 +237,6 @@ export default function HabitacionDetail() {
               </div>
             </div>
 
-            {/* CTA (placeholder) */}
             <div className="card">
               <div className="card-body space-y-3">
                 <h3 className="text-base font-semibold">Acciones</h3>
@@ -237,6 +251,12 @@ export default function HabitacionDetail() {
           </aside>
         </div>
       )}
+
+      <Modal open={isModalOpen} title="Foto" onClose={closeFoto}>
+        {activeFotoUrl ? (
+          <img className="w-full max-h-[75vh] object-contain rounded-md" src={activeFotoUrl} alt="Foto ampliada" />
+        ) : null}
+      </Modal>
     </PageShell>
   );
 }

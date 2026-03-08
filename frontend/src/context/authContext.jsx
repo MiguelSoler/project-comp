@@ -1,4 +1,4 @@
-import { createContext, useEffect, useMemo, useState } from "react";
+import { createContext, useEffect, useMemo, useState, useCallback } from "react";
 
 import {
     getToken,
@@ -16,11 +16,22 @@ export function AuthProvider({ children }) {
     const [token, setTokenState] = useState(() => getToken());
     const [user, setUserState] = useState(() => getUser());
 
-    // Al montar: cargar lo que haya en localStorage
+    const syncAuthFromStorage = useCallback(() => {
+    setTokenState(getToken());
+    setUserState(getUser());
+}, []);
+
     useEffect(() => {
-        setTokenState(getToken());
-        setUserState(getUser());
-    }, []);
+    syncAuthFromStorage();
+
+    window.addEventListener("pc_auth_changed", syncAuthFromStorage);
+    window.addEventListener("storage", syncAuthFromStorage);
+
+    return () => {
+        window.removeEventListener("pc_auth_changed", syncAuthFromStorage);
+        window.removeEventListener("storage", syncAuthFromStorage);
+    };
+}, [syncAuthFromStorage]);
 
     const isAuthenticated = Boolean(token);
 
