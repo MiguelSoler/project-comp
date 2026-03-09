@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { getMyStay } from "../../services/usuarioService.js";
 import { listConvivientesByPiso } from "../../services/usuarioHabitacionService.js";
+
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
@@ -152,6 +154,14 @@ export default function Convivientes() {
                             ? new Date(conviviente.fecha_entrada).toLocaleDateString("es-ES")
                             : "—"}
                         </p>
+                      </div>
+                      <div className="flex items-center justify-end">
+                        <Link
+                          to={`/convivientes/${conviviente.id}/votar`}
+                          className="btn btn-primary btn-sm"
+                        >
+                          Votar
+                        </Link>
                       </div>
                     </div>
                   </article>

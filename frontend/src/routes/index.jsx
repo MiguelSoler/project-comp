@@ -11,6 +11,7 @@ import Register from "../pages/auth/Register.jsx";
 import Perfil from "../pages/usuario/Perfil.jsx";
 import MiEstancia from "../pages/usuario/MiEstancia.jsx";
 import Convivientes from "../pages/usuario/Convivientes.jsx";
+import VotarConviviente from "../pages/usuario/VotarConviviente.jsx";
 
 import DashboardManager from "../pages/manager/DashboardManager.jsx";
 import DashboardAdmin from "../pages/admin/DashboardAdmin.jsx";
@@ -40,6 +41,7 @@ export default function AppRoutes() {
           <Route path="perfil" element={<Perfil />} />
           <Route path="mi-estancia" element={<MiEstancia />} />
           <Route path="convivientes" element={<Convivientes />} />
+          <Route path="convivientes/:usuarioId/votar" element={<VotarConviviente />} />
           <Route element={<RoleGuard allowedRoles={["advertiser"]} />}>
             <Route path="manager" element={<DashboardManager />} />
           </Route>

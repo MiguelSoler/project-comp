@@ -70,7 +70,7 @@ const listHabitaciones = async (req, res) => {
 
     if (ciudad) {
       params.push(ciudad);
-      where.push(`p.ciudad = $${i++}`);
+      where.push(`LOWER(p.ciudad) = LOWER($${i++})`);
     }
 
     if (Number.isFinite(precioMax)) {
