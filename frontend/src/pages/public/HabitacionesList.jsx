@@ -193,6 +193,22 @@ function resetFilters() {
           </div>
 
           <div>
+            <label className="label" htmlFor="tamanoMin">
+              Tamaño mínimo (m²)
+            </label>
+            <input
+              id="tamanoMin"
+              name="tamanoMin"
+              type="number"
+              min="0"
+              className="input"
+              placeholder="Ej. 10"
+              value={filters.tamanoMin}
+              onChange={handleFilterChange}
+            />
+          </div>
+          
+          <div>
             <label className="label" htmlFor="sort">
               Ordenar por
             </label>
@@ -208,22 +224,6 @@ function resetFilters() {
               <option value="newest">Más recientes</option>
               <option value="tamano_desc">Tamaño: mayor a menor</option>
             </select>
-          </div>
-
-          <div>
-            <label className="label" htmlFor="tamanoMin">
-              Tamaño mínimo (m²)
-            </label>
-            <input
-              id="tamanoMin"
-              name="tamanoMin"
-              type="number"
-              min="0"
-              className="input"
-              placeholder="Ej. 10"
-              value={filters.tamanoMin}
-              onChange={handleFilterChange}
-            />
           </div>
 
           <div>

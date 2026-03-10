@@ -12,6 +12,9 @@ import Perfil from "../pages/usuario/Perfil.jsx";
 import MiEstancia from "../pages/usuario/MiEstancia.jsx";
 import Convivientes from "../pages/usuario/Convivientes.jsx";
 import VotarConviviente from "../pages/usuario/VotarConviviente.jsx";
+import MisVotos from "../pages/usuario/MisVotos.jsx";
+import MiReputacion from "../pages/usuario/MiReputacion.jsx";
+import VotosRecibidos from "../pages/usuario/VotosRecibidos.jsx";
 
 import DashboardManager from "../pages/manager/DashboardManager.jsx";
 import DashboardAdmin from "../pages/admin/DashboardAdmin.jsx";
@@ -42,6 +45,9 @@ export default function AppRoutes() {
           <Route path="mi-estancia" element={<MiEstancia />} />
           <Route path="convivientes" element={<Convivientes />} />
           <Route path="convivientes/:usuarioId/votar" element={<VotarConviviente />} />
+          <Route path="mis-votos" element={<MisVotos />} />
+          <Route path="mi-reputacion" element={<MiReputacion />} />
+          <Route path="votos-recibidos" element={<VotosRecibidos />} />
           <Route element={<RoleGuard allowedRoles={["advertiser"]} />}>
             <Route path="manager" element={<DashboardManager />} />
           </Route>

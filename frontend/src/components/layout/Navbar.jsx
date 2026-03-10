@@ -62,6 +62,15 @@ export default function Navbar() {
               <NavLink className={navLink} to="/convivientes">
                 Convivientes
               </NavLink>
+              <NavLink className={navLink} to="/mis-votos">
+                Mis votos
+              </NavLink>
+              <NavLink className={navLink} to="/mi-reputacion">
+                Mi reputación
+              </NavLink>
+              <NavLink className={navLink} to="/votos-recibidos">
+                Votos recibidos
+              </NavLink>
               <NavLink className={navLink} to="/perfil">
                 Perfil
               </NavLink>

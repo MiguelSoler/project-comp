@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getMyStay } from "../../services/usuarioService.js";
 import { listConvivientesByPiso } from "../../services/usuarioHabitacionService.js";
-import { createOrUpdateVote } from "../../services/votoUsuarioAuthService.js";
+import { createOrUpdateVote, listMyVotes } from "../../services/votoUsuarioAuthService.js";
 import useAuth from "../../hooks/useAuth.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
@@ -58,6 +58,28 @@ export default function VotarConviviente() {
         if (!isMounted) return;
         setConvivientes(
           Array.isArray(convivientesData?.convivientes) ? convivientesData.convivientes : []
+        );
+
+        const votosData = await listMyVotes({
+          page: 1,
+          limit: 100,
+          pisoId,
+        });
+        
+        if (!isMounted) return;
+        
+        const existingVote = Array.isArray(votosData?.items)
+          ? votosData.items.find((item) => Number(item.votado_id) === Number(usuarioId))
+          : null;
+        
+        setForm(
+          existingVote
+            ? {
+                limpieza: String(existingVote.limpieza),
+                ruido: String(existingVote.ruido),
+                puntualidad_pagos: String(existingVote.puntualidad_pagos),
+              }
+            : INITIAL_FORM
         );
       } catch (err) {
         if (!isMounted) return;
