@@ -94,7 +94,7 @@ export default function VotarConviviente() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [usuarioId]);
 
   const conviviente = useMemo(() => {
     const targetId = Number(usuarioId);
