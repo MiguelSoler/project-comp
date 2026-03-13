@@ -738,6 +738,150 @@ const deleteFotoHabitacion = async (req, res) => {
   }
 };
 
+// ---------------------------------------------------------
+// GET /api/admin/habitacion/:habitacionId
+// - Admin: puede ver cualquier habitación
+// - Advertiser/Manager: solo habitaciones de sus pisos
+// ---------------------------------------------------------
+const getHabitacionAdminById = async (req, res) => {
+  const requesterId = req.user?.id;
+  const requesterRol = req.user?.rol;
+
+  const habitacionId = toInt(req.params.habitacionId, NaN);
+  if (!Number.isFinite(habitacionId)) return badRequest(res, ["habitacionId"]);
+
+  try {
+    if (requesterRol !== "admin" && requesterRol !== "advertiser") {
+      return forbidden(res);
+    }
+
+    const authz = await assertHabitacionManagerOrAdmin(
+      pool,
+      requesterId,
+      requesterRol,
+      habitacionId
+    );
+
+    if (!authz.ok) {
+      return authz.code === "NOT_FOUND" ? notFound(res) : forbidden(res);
+    }
+
+    const q = await pool.query(
+      `
+      SELECT
+        h.id,
+        h.piso_id,
+        h.titulo,
+        h.descripcion,
+        h.precio_mensual,
+        h.disponible,
+        h.activo,
+        h.tamano_m2,
+        h.amueblada,
+        h.bano,
+        h.balcon,
+        h.created_at,
+        h.updated_at,
+
+        p.ciudad,
+        p.direccion,
+        p.codigo_postal,
+        p.activo AS piso_activo,
+        p.manager_usuario_id,
+
+        EXISTS (
+          SELECT 1
+          FROM usuario_habitacion uh
+          WHERE uh.habitacion_id = h.id
+            AND uh.fecha_salida IS NULL
+        ) AS ocupada
+      FROM habitacion h
+      JOIN piso p ON p.id = h.piso_id
+      WHERE h.id = $1
+      LIMIT 1
+      `,
+      [habitacionId]
+    );
+
+    if (q.rowCount === 0) return notFound(res);
+
+    const fotos = await pool.query(
+      `
+      SELECT id, habitacion_id, url, orden, created_at
+      FROM foto_habitacion
+      WHERE habitacion_id = $1
+      ORDER BY orden ASC, id ASC
+      `,
+      [habitacionId]
+    );
+
+    return res.json({
+      habitacion: q.rows[0],
+      fotos: fotos.rows,
+    });
+  } catch (error) {
+    console.error("getHabitacionAdminById error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+};
+
+// ---------------------------------------------------------
+// PATCH /api/admin/habitacion/:habitacionId/reactivate
+// ---------------------------------------------------------
+const reactivateHabitacion = async (req, res) => {
+  const requesterId = req.user?.id;
+  const requesterRol = req.user?.rol;
+
+  const habitacionId = toInt(req.params.habitacionId, NaN);
+  if (!Number.isFinite(habitacionId)) return badRequest(res, ["habitacionId"]);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const authz = await assertHabitacionManagerOrAdmin(
+      client,
+      requesterId,
+      requesterRol,
+      habitacionId
+    );
+
+    if (!authz.ok) {
+      await client.query("ROLLBACK");
+      return authz.code === "NOT_FOUND" ? notFound(res) : forbidden(res);
+    }
+
+    if (!authz.data.piso_activo) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "PISO_INACTIVE" });
+    }
+
+    const upd = await client.query(
+      `
+      UPDATE habitacion
+      SET activo = true
+      WHERE id = $1
+      RETURNING *
+      `,
+      [habitacionId]
+    );
+
+    if (upd.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return notFound(res);
+    }
+
+    await client.query("COMMIT");
+    return res.json({ habitacion: upd.rows[0] });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("reactivateHabitacion error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   listHabitacionesAdmin,
   createHabitacion,
@@ -746,4 +890,6 @@ module.exports = {
   addFotoHabitacion,
   updateFotoHabitacion,
   deleteFotoHabitacion,
+  getHabitacionAdminById,
+  reactivateHabitacion
 };
