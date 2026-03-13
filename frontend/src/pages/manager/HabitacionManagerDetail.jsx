@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../components/layout/PageShell.jsx";
 import {
+  addAdminHabitacionFoto,
   getAdminHabitacionById,
   updateAdminHabitacion,
 } from "../../services/adminHabitacionService.js";
@@ -17,6 +18,11 @@ const EMPTY_FORM = {
   amueblada: "false",
   bano: "false",
   balcon: "false",
+};
+
+const EMPTY_UPLOAD_FORM = {
+  foto: null,
+  orden: "",
 };
 
 function buildImageUrl(url) {
@@ -59,9 +65,12 @@ export default function HabitacionManagerDetail() {
   const [habitacion, setHabitacion] = useState(null);
   const [fotos, setFotos] = useState([]);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [uploadForm, setUploadForm] = useState(EMPTY_UPLOAD_FORM);
+  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -106,6 +115,74 @@ export default function HabitacionManagerDetail() {
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
+  function handlePhotoFileChange(event) {
+    const file = event.target.files?.[0] || null;
+    setUploadForm((prev) => ({ ...prev, foto: file }));
+    uploadPhotoFile(file);
+  }
+
+  function handlePhotoOrderChange(event) {
+    const { value } = event.target;
+    setUploadForm((prev) => ({ ...prev, orden: value }));
+  }
+
+  async function uploadPhotoFile(file) {
+  if (!file) return;
+
+   try {
+     setUploadingPhoto(true);
+     setError("");
+     setSuccess("");
+ 
+     const formData = new FormData();
+     formData.append("foto", file);
+ 
+     if (uploadForm.orden !== "") {
+       formData.append("orden", uploadForm.orden);
+     }
+ 
+     const data = await addAdminHabitacionFoto(habitacionId, formData);
+     const nuevaFoto = data?.foto || null;
+ 
+     if (nuevaFoto) {
+       setFotos((prev) =>
+         [...prev, nuevaFoto].sort((a, b) => {
+           if (a.orden !== b.orden) return a.orden - b.orden;
+           return a.id - b.id;
+         })
+       );
+     }
+ 
+     setUploadForm(EMPTY_UPLOAD_FORM);
+     setSuccess("Foto subida correctamente.");
+   } catch (err) {
+     setError(err?.error || err?.message || "No se pudo subir la foto.");
+   } finally {
+     setUploadingPhoto(false);
+   }
+ }
+
+  function handlePhotoDragOver(event) {
+    event.preventDefault();
+    setIsDraggingPhoto(true);
+  }
+
+  function handlePhotoDragLeave(event) {
+    event.preventDefault();
+    setIsDraggingPhoto(false);
+  }
+
+  function handlePhotoDrop(event) {
+    event.preventDefault();
+    setIsDraggingPhoto(false);
+    
+    const file = event.dataTransfer?.files?.[0] || null;
+    if (!file) return;
+    
+    setUploadForm((prev) => ({ ...prev, foto: file }));
+    uploadPhotoFile(file);
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
 
@@ -138,6 +215,10 @@ export default function HabitacionManagerDetail() {
     }
   }
 
+  function handleUploadPhoto(event) {
+    event.preventDefault();
+  }
+
   return (
     <PageShell
       title="Detalle de habitación"
@@ -155,7 +236,7 @@ export default function HabitacionManagerDetail() {
       }
     >
       {error ? <div className="alert-error">{error}</div> : null}
-      
+
       {loading ? (
         <div className="space-y-4">
           <div className="card">
@@ -210,7 +291,7 @@ export default function HabitacionManagerDetail() {
                     }
                   >
                     {habitacion.disponible ? "Disponible" : "No disponible"}
-                  </span>             
+                  </span>
                 </div>
               </div>
 
@@ -260,7 +341,7 @@ export default function HabitacionManagerDetail() {
               </div>
 
               {success ? <div className="alert-success">{success}</div> : null}
-              
+
               <form className="space-y-4" onSubmit={handleSubmit}>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div className="md:col-span-2">
@@ -411,6 +492,74 @@ export default function HabitacionManagerDetail() {
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-lg font-semibold text-ui-text">Fotos de la habitación</h3>
               <span className="text-xs text-ui-text-secondary">Total: {fotos.length}</span>
+            </div>
+
+            <div className="card">
+              <div className="card-body space-y-4">
+                <div>
+                  <h4 className="text-base font-semibold text-ui-text">Añadir foto</h4>
+                  <p className="mt-1 text-sm text-ui-text-secondary">
+                    Selecciona una imagen desde tu equipo para subirla a esta habitación.
+                  </p>
+                </div>
+
+                <form className="space-y-4" onSubmit={handleUploadPhoto}>
+                  <label 
+                    htmlFor="foto"
+                    onDragOver={handlePhotoDragOver}
+                    onDragLeave={handlePhotoDragLeave}
+                    onDrop={handlePhotoDrop}
+                    className={`flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${
+                      isDraggingPhoto
+                        ? "border-brand-primary bg-blue-50"
+                        : "border-ui-border bg-slate-50 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-ui-text">
+                        {uploadForm.foto ? uploadForm.foto.name : "Haz clic o arrastra una foto aquí"}
+                      </p>
+                      <p className="text-xs text-ui-text-secondary">
+                        JPG, PNG u otros formatos de imagen · máximo 8 MB
+                      </p>
+                    </div>
+                  </label>
+
+                  <input
+                    id="foto"
+                    name="foto"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handlePhotoFileChange}
+                    disabled={uploadingPhoto}
+                  />
+
+                  <div className="max-w-[220px]">
+                    <label className="label" htmlFor="orden">
+                      Orden (opcional)
+                    </label>
+                    <input
+                      id="orden"
+                      name="orden"
+                      type="number"
+                      min="0"
+                      className="input"
+                      value={uploadForm.orden}
+                      onChange={handlePhotoOrderChange}
+                      disabled={uploadingPhoto}
+                    />
+                  </div>
+
+                  {uploadingPhoto ? (
+                    <div className="flex justify-end">
+                      <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
+                        Subiendo foto...
+                      </div>
+                    </div>
+                  ) : null}
+                </form>
+              </div>
             </div>
 
             {fotos.length === 0 ? (

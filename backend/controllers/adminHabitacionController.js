@@ -529,14 +529,13 @@ const addFotoHabitacion = async (req, res) => {
   const requesterRol = req.user?.rol;
 
   const habitacionId = toInt(req.params.habitacionId, NaN);
-  const url = String(req.body?.url || "").trim();
 
   const ordenProvided = Object.prototype.hasOwnProperty.call(req.body || {}, "orden");
   let orden = ordenProvided ? toInt(req.body.orden, NaN) : undefined;
 
   const invalid = [];
   if (!Number.isFinite(habitacionId)) invalid.push("habitacionId");
-  if (!url) invalid.push("url");
+  if (!req.file) invalid.push("foto");
   if (ordenProvided && (!Number.isFinite(orden) || orden < 0)) invalid.push("orden");
   if (invalid.length) return badRequest(res, invalid);
 
@@ -550,6 +549,7 @@ const addFotoHabitacion = async (req, res) => {
       requesterRol,
       habitacionId
     );
+
     if (!authz.ok) {
       await client.query("ROLLBACK");
       return authz.code === "NOT_FOUND" ? notFound(res) : forbidden(res);
@@ -567,6 +567,8 @@ const addFotoHabitacion = async (req, res) => {
       );
       orden = Number(next.rows[0].next_orden);
     }
+
+    const url = `/uploads/habitaciones/${habitacionId}/${req.file.filename}`;
 
     const ins = await client.query(
       `
