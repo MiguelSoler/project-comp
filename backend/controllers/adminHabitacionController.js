@@ -2,6 +2,8 @@
 // Controllers PRIVADOS de Habitacion (gestión: admin o manager del piso)
 
 const pool = require("../db/pool");
+const fs = require("fs");
+const path = require("path");
 
 function toInt(value, fallback = NaN) {
   const n = parseInt(value, 10);
@@ -23,6 +25,21 @@ const badRequest = (res, details = []) =>
 
 const notFound = (res) => res.status(404).json({ error: "NOT_FOUND" });
 const forbidden = (res) => res.status(403).json({ error: "FORBIDDEN" });
+
+function deleteUploadedFileByUrl(url) {
+  if (!url || typeof url !== "string") return;
+
+  const normalized = url.startsWith("/") ? url.slice(1) : url;
+  const absolutePath = path.resolve(__dirname, "..", "..", normalized);
+
+  try {
+    if (fs.existsSync(absolutePath)) {
+      fs.unlinkSync(absolutePath);
+    }
+  } catch (error) {
+    console.error("deleteUploadedFileByUrl error:", error);
+  }
+}
 
 async function assertPisoManagerOrAdmin(client, requesterId, requesterRol, pisoId) {
   const q = await client.query(
@@ -719,17 +736,20 @@ const deleteFotoHabitacion = async (req, res) => {
       DELETE FROM foto_habitacion
       WHERE id = $1
         AND habitacion_id = $2
-      RETURNING id
+      RETURNING id, url
       `,
       [fotoId, habitacionId]
     );
-
+    
     if (del.rowCount === 0) {
       await client.query("ROLLBACK");
       return notFound(res);
     }
-
+    
     await client.query("COMMIT");
+    
+    deleteUploadedFileByUrl(del.rows[0].url);
+    
     return res.json({ deleted: true });
   } catch (error) {
     await client.query("ROLLBACK");

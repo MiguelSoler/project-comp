@@ -2,12 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
-import {
-  addAdminHabitacionFoto,
-  deleteAdminHabitacionFoto,
-  getAdminHabitacionById,
-  updateAdminHabitacion,
-} from "../../services/adminHabitacionService.js";
+import { addAdminHabitacionFoto, deleteAdminHabitacionFoto, getAdminHabitacionById, updateAdminHabitacion, updateAdminHabitacionFoto } from "../../services/adminHabitacionService.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
@@ -73,8 +68,13 @@ export default function HabitacionManagerDetail() {
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deletingPhotoId, setDeletingPhotoId] = useState(null);
+  const [photoOrderValues, setPhotoOrderValues] = useState({});
+  const [updatingPhotoId, setUpdatingPhotoId] = useState(null);
+  const [photoOrderFeedback, setPhotoOrderFeedback] = useState({});
   const [fotoToDelete, setFotoToDelete] = useState(null);
   const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -114,9 +114,36 @@ export default function HabitacionManagerDetail() {
     };
   }, [habitacionId]);
 
+  useEffect(() => {
+    setPhotoOrderValues(
+      Object.fromEntries(fotos.map((foto) => [foto.id, String(foto.orden)]))
+    );
+  }, [fotos]);
+
   function handleChange(event) {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function openPhotoModal(index) {
+    setSelectedPhotoIndex(index);
+    setIsPhotoModalOpen(true);
+  }
+
+  function closePhotoModal() {
+    setIsPhotoModalOpen(false);
+  }
+
+  function showPrevPhoto() {
+    setSelectedPhotoIndex((prev) =>
+      prev === 0 ? fotos.length - 1 : prev - 1
+    );
+  }
+
+  function showNextPhoto() {
+    setSelectedPhotoIndex((prev) =>
+      prev === fotos.length - 1 ? 0 : prev + 1
+    );
   }
 
   async function uploadPhotoFile(file) {
@@ -189,6 +216,79 @@ export default function HabitacionManagerDetail() {
 
   function handleUploadPhoto(event) {
     event.preventDefault();
+  }
+
+  function handlePhotoOrderValueChange(fotoId, value) {
+    setPhotoOrderValues((prev) => ({
+      ...prev,
+      [fotoId]: value,
+    }));
+
+    setPhotoOrderFeedback((prev) => {
+      const next = { ...prev };
+      delete next[fotoId];
+      return next;
+    });
+  }
+
+  async function handleSavePhotoOrder(foto) {
+    const rawValue = photoOrderValues[foto.id];
+    const nextOrder = Number(rawValue);
+
+    if (!Number.isInteger(nextOrder) || nextOrder < 0) {
+      setPhotoOrderFeedback((prev) => ({
+        ...prev,
+        [foto.id]: {
+          type: "error",
+          message: "El orden debe ser un número entero mayor o igual que 0.",
+        },
+      }));
+      return;
+    }
+
+    try {
+      setUpdatingPhotoId(foto.id);
+      setError("");
+
+      const data = await updateAdminHabitacionFoto(habitacionId, foto.id, {
+        orden: nextOrder,
+      });
+
+      const updatedFoto = data?.foto || null;
+      if (!updatedFoto) return;
+
+      setFotos((prev) =>
+        prev
+          .map((item) => (item.id === foto.id ? updatedFoto : item))
+          .sort((a, b) => {
+            if (a.orden !== b.orden) return a.orden - b.orden;
+            return a.id - b.id;
+          })
+      );
+
+      setPhotoOrderFeedback((prev) => ({
+        ...prev,
+        [foto.id]: {
+          type: "success",
+          message: "Orden de foto actualizado correctamente.",
+        },
+      }));
+    } catch (err) {
+      const friendlyMessage =
+        err?.error === "ORDER_CONFLICT"
+          ? "Ya existe otra foto con ese orden. Prueba con otro número distinto."
+          : err?.message || "No se pudo actualizar el orden de la foto.";
+
+      setPhotoOrderFeedback((prev) => ({
+        ...prev,
+        [foto.id]: {
+          type: "error",
+          message: friendlyMessage,
+        },
+      }));
+    } finally {
+      setUpdatingPhotoId(null);
+    }
   }
 
   function requestDeletePhoto(foto) {
@@ -292,11 +392,17 @@ export default function HabitacionManagerDetail() {
             <div className="card">
               <div className="card-body space-y-4">
                 {fotos.length > 0 ? (
-                  <img
-                    src={buildImageUrl(fotos[0].url)}
-                    alt={habitacion.titulo || `Habitación ${habitacion.id}`}
-                    className="aspect-[16/6] w-full rounded-lg object-cover"
-                  />
+                  <button
+                    type="button"
+                    className="block w-full"
+                    onClick={() => openPhotoModal(0)}
+                  >
+                    <img
+                      src={buildImageUrl(fotos[0].url)}
+                      alt={habitacion.titulo || `Habitación ${habitacion.id}`}
+                      className="aspect-[16/6] w-full rounded-lg object-cover"
+                    />
+                  </button>
                 ) : (
                   <div className="skeleton aspect-[16/6] w-full rounded-lg" />
                 )}
@@ -371,7 +477,7 @@ export default function HabitacionManagerDetail() {
             <div className="card">
               <div className="card-body space-y-6">
                 <div>
-                  <h3 className="text-lg font-semibold text-ui-text">Editar habitación</h3>
+                  <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">Editar habitación</h3>
                 </div>
 
                 {success ? <div className="alert-success">{success}</div> : null}
@@ -524,7 +630,7 @@ export default function HabitacionManagerDetail() {
 
             <section className="space-y-4">
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-lg font-semibold text-ui-text">Fotos de la habitación</h3>
+                <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">Fotos de la habitación</h3>
                 <span className="text-xs text-ui-text-secondary">Total: {fotos.length}</span>
               </div>
 
@@ -616,19 +722,55 @@ export default function HabitacionManagerDetail() {
                         />
 
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-sm font-medium text-ui-text">Orden {foto.orden}</span>
                           <span className="text-xs text-ui-text-secondary">ID #{foto.id}</span>
                         </div>
 
-                        <div className="flex items-center justify-end">
-                          <button
-                            type="button"
-                            className="btn btn-danger btn-sm"
-                            disabled={deletingPhotoId === foto.id}
-                            onClick={() => requestDeletePhoto(foto)}
-                          >
-                            {deletingPhotoId === foto.id ? "Eliminando..." : "Eliminar foto"}
-                          </button>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="label" htmlFor={`orden-foto-${foto.id}`}>
+                              Orden
+                            </label>
+                            <input
+                              id={`orden-foto-${foto.id}`}
+                              type="number"
+                              min="0"
+                              className="input"
+                              value={photoOrderValues[foto.id] ?? ""}
+                              onChange={(event) => handlePhotoOrderValueChange(foto.id, event.target.value)}
+                              disabled={updatingPhotoId === foto.id || deletingPhotoId === foto.id}
+                            />
+                          </div>
+
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              className="btn btn-sm border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                              disabled={updatingPhotoId === foto.id || deletingPhotoId === foto.id}
+                              onClick={() => handleSavePhotoOrder(foto)}
+                            >
+                              {updatingPhotoId === foto.id ? "Guardando..." : "Guardar orden"}
+                            </button>
+
+                            <button
+                              type="button"
+                              className="btn btn-danger btn-sm"
+                              disabled={deletingPhotoId === foto.id || updatingPhotoId === foto.id}
+                              onClick={() => requestDeletePhoto(foto)}
+                            >
+                              {deletingPhotoId === foto.id ? "Eliminando..." : "Eliminar foto"}
+                            </button>
+                          </div>
+                          {photoOrderFeedback[foto.id] ? (
+                            <div
+                              className={
+                                photoOrderFeedback[foto.id].type === "success"
+                                  ? "alert-success"
+                                  : "alert-error"
+                              }
+                            >
+                              {photoOrderFeedback[foto.id].message}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </article>
@@ -641,46 +783,47 @@ export default function HabitacionManagerDetail() {
       </PageShell>
 
       <Modal
-        open={Boolean(fotoToDelete)}
-        title="Confirmar eliminación"
-        onClose={closeDeletePhotoModal}
-        size="md"
-        tone="danger"
-        closeLabel="Cancelar"
-        closeOnOverlay={false}
-        showCloseButton={false}
+        open={isPhotoModalOpen}
+        title="Foto de la habitación"
+        onClose={closePhotoModal}
+        size="default"
+        closeLabel="Cerrar"
       >
-        <div className="space-y-4">
-          <p className="text-sm text-ui-text-secondary">
-            Vas a eliminar esta foto de la habitación. Esta acción no se puede deshacer.
-          </p>
+        {fotos.length > 0 ? (
+          <div className="space-y-4">
+            <div className="relative">
+              <img
+                src={buildImageUrl(fotos[selectedPhotoIndex]?.url)}
+                alt={`Foto ${selectedPhotoIndex + 1}`}
+                className="max-h-[80vh] w-full rounded-lg object-contain"
+              />
 
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-            <p className="text-sm font-semibold text-red-700">
-              Foto #{fotoToDelete?.id} · orden {fotoToDelete?.orden}
-            </p>
+              {fotos.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                    onClick={showPrevPhoto}
+                  >
+                    &lt;
+                  </button>
+              
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                    onClick={showNextPhoto}
+                  >
+                    &gt;
+                  </button>
+                </>
+              ) : null}
+            </div>
+            
+            <div className="text-center text-sm text-ui-text-secondary">
+              Foto {selectedPhotoIndex + 1} de {fotos.length}
+            </div>
           </div>
-
-          <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={closeDeletePhotoModal}
-              disabled={Boolean(deletingPhotoId)}
-            >
-              Cancelar
-            </button>
-
-            <button
-              type="button"
-              className="btn btn-danger btn-sm"
-              onClick={handleConfirmDeletePhoto}
-              disabled={Boolean(deletingPhotoId)}
-            >
-              {deletingPhotoId ? "Eliminando..." : "Sí, eliminar"}
-            </button>
-          </div>
-        </div>
+        ) : null}
       </Modal>
     </>
   );

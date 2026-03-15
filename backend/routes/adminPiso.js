@@ -7,6 +7,8 @@ const { requireAuth } = require("../middleware/authMiddleware");
 
 const { listPisosAdmin, getPisoAdminById, listHabitacionesAdminByPiso, createPiso, updatePiso, deletePiso, addFotoPiso, updateFotoPiso, deleteFotoPiso } = require("../controllers/adminPisoController");
 
+const { uploadPisoPhoto } = require("../middleware/uploadPisoPhoto");
+
 // Privado (admin o manager del piso; se valida en controller)
 router.get("/", requireAuth, listPisosAdmin);
 router.get("/:pisoId", requireAuth, getPisoAdminById);
@@ -16,7 +18,7 @@ router.patch("/:pisoId", requireAuth, updatePiso);
 router.delete("/:pisoId/:id", requireAuth, deletePiso);
 
 // Fotos de piso
-router.post("/:pisoId/fotos", requireAuth, addFotoPiso);
+router.post("/:pisoId/fotos", requireAuth, uploadPisoPhoto.single("foto"), addFotoPiso);
 router.patch("/:pisoId/fotos/:fotoId", requireAuth, updateFotoPiso);
 router.delete("/:pisoId/fotos/:fotoId", requireAuth, deleteFotoPiso);
 

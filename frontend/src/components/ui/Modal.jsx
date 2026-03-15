@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 export default function Modal({
   open,
@@ -11,6 +11,29 @@ export default function Modal({
   closeOnOverlay = true,
   showCloseButton = true,
 }) {
+  const [isRendered, setIsRendered] = useState(open);
+  const [isVisible, setIsVisible] = useState(open);
+
+  useEffect(() => {
+    if (open) {
+      setIsRendered(true);
+
+      const raf = requestAnimationFrame(() => {
+        setIsVisible(true);
+      });
+
+      return () => cancelAnimationFrame(raf);
+    }
+
+    setIsVisible(false);
+
+    const timeout = setTimeout(() => {
+      setIsRendered(false);
+    }, 180);
+
+    return () => clearTimeout(timeout);
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
 
@@ -27,7 +50,7 @@ export default function Modal({
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!isRendered) return null;
 
   const sizeClass =
     size === "md"
@@ -57,14 +80,20 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-400 ease-out ${
+        isVisible ? "bg-black/40 opacity-100" : "bg-black/0 opacity-0"
+      }`}
       role="dialog"
       aria-modal="true"
       aria-label={title || "Modal"}
       onClick={handleOverlayClick}
     >
       <div
-        className={`${sizeClass} overflow-hidden rounded-xl border border-ui-border bg-ui-surface shadow-modal`}
+        className={`${sizeClass} overflow-hidden rounded-xl border border-ui-border bg-ui-surface shadow-modal transition-all duration-400 ease-out ${
+          isVisible
+            ? "translate-y-0 scale-100 opacity-100"
+            : "translate-y-1 scale-[0.992] opacity-0"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={headerClass}>

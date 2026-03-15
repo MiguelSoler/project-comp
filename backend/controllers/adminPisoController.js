@@ -1,4 +1,6 @@
 const pool = require("../db/pool");
+const fs = require("fs");
+const path = require("path");
 
 // =========================================================
 // Helpers
@@ -20,6 +22,21 @@ async function getPisoForAdminFoto(client, pisoId) {
 function toInt(value, fallback) {
     const n = parseInt(value, 10);
     return Number.isFinite(n) ? n : fallback;
+}
+
+function deleteUploadedFileByUrl(url) {
+  if (!url || typeof url !== "string") return;
+
+  const normalized = url.startsWith("/") ? url.slice(1) : url;
+  const absolutePath = path.resolve(__dirname, "..", "..", normalized);
+
+  try {
+    if (fs.existsSync(absolutePath)) {
+      fs.unlinkSync(absolutePath);
+    }
+  } catch (error) {
+    console.error("deleteUploadedFileByUrl error:", error);
+  }
 }
 
 // =========================================================
@@ -196,6 +213,16 @@ const getPisoAdminById = async (req, res) => {
             return res.status(403).json({ error: "FORBIDDEN" });
         }
 
+        const fotosQ = await pool.query(
+          `
+          SELECT id, piso_id, url, orden, created_at
+          FROM foto_piso
+          WHERE piso_id = $1
+          ORDER BY orden ASC, id ASC
+          `,
+            [pisoId]
+        );
+
         return res.json({
             piso: {
                 ...piso,
@@ -205,6 +232,7 @@ const getPisoAdminById = async (req, res) => {
                     apellidos: piso.manager_apellidos,
                 },
             },
+            fotos: fotosQ.rows,
         });
     } catch (error) {
         console.error("getPisoAdminById error:", error);
@@ -510,14 +538,13 @@ const addFotoPiso = async (req, res) => {
     const requesterRol = req.user?.rol;
 
     const pisoId = toInt(req.params.pisoId, NaN);
-    const url = String(req.body?.url || "").trim();
 
     const ordenProvided = Object.prototype.hasOwnProperty.call(req.body || {}, "orden");
     let orden = ordenProvided ? toInt(req.body.orden, NaN) : undefined;
 
     const invalid = [];
     if (!Number.isFinite(pisoId)) invalid.push("pisoId");
-    if (!url) invalid.push("url");
+    if (!req.file) invalid.push("foto");
     if (ordenProvided && (!Number.isFinite(orden) || orden < 0)) invalid.push("orden");
 
     if (invalid.length) {
@@ -547,25 +574,26 @@ const addFotoPiso = async (req, res) => {
             return res.status(409).json({ error: "PISO_INACTIVE" });
         }
 
-        // Si no viene orden, calcula el siguiente (max + 1)
         if (!ordenProvided) {
             const next = await client.query(
                 `
-        SELECT COALESCE(MAX(orden), -1) + 1 AS next_orden
-        FROM foto_piso
-        WHERE piso_id = $1
-        `,
+                SELECT COALESCE(MAX(orden), -1) + 1 AS next_orden
+                FROM foto_piso
+                WHERE piso_id = $1
+                `,
                 [pisoId]
             );
             orden = Number(next.rows[0].next_orden);
         }
 
+        const url = `/uploads/pisos/${pisoId}/${req.file.filename}`;
+
         const q = await client.query(
             `
-      INSERT INTO foto_piso (piso_id, url, orden)
-      VALUES ($1, $2, $3)
-      RETURNING id, piso_id, url, orden, created_at
-      `,
+            INSERT INTO foto_piso (piso_id, url, orden)
+            VALUES ($1, $2, $3)
+            RETURNING id, piso_id, url, orden, created_at
+            `,
             [pisoId, url, orden]
         );
 
@@ -575,7 +603,6 @@ const addFotoPiso = async (req, res) => {
     } catch (error) {
         await client.query("ROLLBACK");
 
-        // uq_foto_piso_orden (piso_id, orden)
         if (error?.code === "23505") {
             return res.status(409).json({ error: "ORDER_CONFLICT" });
         }
@@ -731,22 +758,24 @@ const deleteFotoPiso = async (req, res) => {
         }
 
         const q = await client.query(
-            `
-      DELETE FROM foto_piso
-      WHERE id = $1
-        AND piso_id = $2
-      RETURNING id
-      `,
-            [fotoId, pisoId]
+          `
+          DELETE FROM foto_piso
+          WHERE id = $1
+            AND piso_id = $2
+          RETURNING id, url
+          `,
+          [fotoId, pisoId]
         );
-
+        
         if (q.rowCount === 0) {
-            await client.query("ROLLBACK");
-            return res.status(404).json({ error: "NOT_FOUND" });
+          await client.query("ROLLBACK");
+          return res.status(404).json({ error: "NOT_FOUND" });
         }
-
+        
         await client.query("COMMIT");
-
+        
+        deleteUploadedFileByUrl(q.rows[0].url);
+        
         return res.json({ deleted: true });
     } catch (error) {
         await client.query("ROLLBACK");

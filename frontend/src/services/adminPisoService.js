@@ -1,4 +1,4 @@
-import { get } from "./apiClient.js";
+import { del, get, patch, post } from "./apiClient.js";
 
 // GET /api/admin/piso?page=1&limit=10&activo=all|true|false&ciudad=&sort=
 export function listAdminPisos({
@@ -47,4 +47,19 @@ export function listAdminHabitacionesByPiso(
   params.set("sort", String(sort));
 
   return get(`/api/admin/piso/${pisoId}/habitaciones?${params.toString()}`);
+}
+
+// POST /api/admin/piso/:pisoId/fotos
+export function addAdminPisoFoto(pisoId, payload) {
+  return post(`/api/admin/piso/${pisoId}/fotos`, payload);
+}
+
+// PATCH /api/admin/piso/:pisoId/fotos/:fotoId
+export function updateAdminPisoFoto(pisoId, fotoId, payload) {
+  return patch(`/api/admin/piso/${pisoId}/fotos/${fotoId}`, payload);
+}
+
+// DELETE /api/admin/piso/:pisoId/fotos/:fotoId
+export function deleteAdminPisoFoto(pisoId, fotoId) {
+  return del(`/api/admin/piso/${pisoId}/fotos/${fotoId}`);
 }

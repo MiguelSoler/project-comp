@@ -1,37 +1,53 @@
 import Container from "./Container.jsx";
 
 export default function PageShell({
-    title,
-    subtitle,
-    actions,
-    children,
-    variant = "plain", // "plain" | "card"
-    className = "",
-    contentClassName = "",
+  title,
+  subtitle,
+  actions,
+  children,
+  variant = "plain",
+  className = "",
+  contentClassName = "",
 }) {
-    return (
-        <section className={`section ${className}`.trim()}>
-            <Container>
-                <div className="space-y-6">
-                    {(title || subtitle || actions) && (
-                        <div className="flex items-start justify-between gap-3">
-                            <div className="space-y-1">
-                                {title && <h1>{title}</h1>}
-                                {subtitle && <p className="text-sm text-ui-text-secondary">{subtitle}</p>}
-                            </div>
-                            {actions && <div className="flex items-center gap-2">{actions}</div>}
-                        </div>
-                    )}
+  return (
+    <section className={`section ${className}`.trim()}>
+      <Container>
+        <div className="space-y-8">
+          {(title || subtitle || actions) && (
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div className="space-y-2">
+                {title ? (
+                  <h1 className="text-3xl font-bold tracking-tight text-ui-text md:text-4xl">
+                    {title}
+                  </h1>
+                ) : null}
 
-                    {variant === "card" ? (
-                        <div className="card">
-                            <div className={`card-body ${contentClassName}`.trim()}>{children}</div>
-                        </div>
-                    ) : (
-                        <div className={contentClassName}>{children}</div>
-                    )}
+                {subtitle ? (
+                  <p className="max-w-3xl text-sm text-ui-text-secondary md:text-base">
+                    {subtitle}
+                  </p>
+                ) : null}
+              </div>
+
+              {actions ? (
+                <div className="flex items-center gap-2 md:pt-1">
+                  {actions}
                 </div>
-            </Container>
-        </section>
-    );
+              ) : null}
+            </div>
+          )}
+
+          {variant === "card" ? (
+            <div className="card">
+              <div className={`card-body ${contentClassName}`.trim()}>
+                {children}
+              </div>
+            </div>
+          ) : (
+            <div className={contentClassName}>{children}</div>
+          )}
+        </div>
+      </Container>
+    </section>
+  );
 }
