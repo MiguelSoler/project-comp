@@ -698,7 +698,7 @@ export default function PisoManagerDetail() {
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div className="rounded-xl border border-amber-300 bg-amber-50">
                 <div className="card-body">
-                  <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                  <p className="text-xs font-medium uppercase tracking-wide text-amber-600">
                     Habitaciones totales
                   </p>
                   <p className="mt-2 text-2xl font-bold text-ui-text">
@@ -709,7 +709,7 @@ export default function PisoManagerDetail() {
 
               <div className="rounded-xl border border-emerald-300 bg-emerald-50">
                 <div className="card-body">
-                  <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                  <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
                     Habitaciones activas
                   </p>
                   <p className="mt-2 text-2xl font-bold text-ui-text">
@@ -720,7 +720,7 @@ export default function PisoManagerDetail() {
 
               <div className="rounded-xl border border-sky-300 bg-sky-50">
                 <div className="card-body">
-                  <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                  <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
                     Habitaciones disponibles
                   </p>
                   <p className="mt-2 text-2xl font-bold text-ui-text">

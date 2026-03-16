@@ -442,9 +442,9 @@ export default function HabitacionManagerDetail() {
             </div>
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="card">
+              <div className="rounded-lg border border-amber-300 bg-amber-50">
                 <div className="card-body">
-                  <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                  <p className="text-xs font-medium uppercase tracking-wide text-amber-600">
                     Precio mensual
                   </p>
                   <p className="mt-2 text-2xl font-bold text-ui-text">
@@ -453,9 +453,9 @@ export default function HabitacionManagerDetail() {
                 </div>
               </div>
 
-              <div className="card">
+              <div className="rounded-lg border border-sky-300 bg-sky-50">
                 <div className="card-body">
-                  <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                  <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
                     Tamaño
                   </p>
                   <p className="mt-2 text-2xl font-bold text-ui-text">
@@ -464,9 +464,9 @@ export default function HabitacionManagerDetail() {
                 </div>
               </div>
 
-              <div className="card">
+              <div className="rounded-lg border border-violet-300 bg-violet-50">
                 <div className="card-body">
-                  <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                  <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
                     Piso
                   </p>
                   <p className="mt-2 text-2xl font-bold text-ui-text">#{habitacion.piso_id}</p>
@@ -628,14 +628,13 @@ export default function HabitacionManagerDetail() {
               </div>
             </div>
 
-            <section className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">Fotos de la habitación</h3>
-                <span className="text-xs text-ui-text-secondary">Total: {fotos.length}</span>
-              </div>
-
+            <section className="space-y-4">              
               <div className="card">
                 <div className="card-body space-y-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">Fotos de la habitación</h3>
+                    <span className="text-xs text-ui-text-secondary">Total: {fotos.length}</span>
+                  </div>
                   <div>
                     <h4 className="text-base font-semibold text-ui-text">Añadir foto</h4>
                     <p className="mt-1 text-sm text-ui-text-secondary">
