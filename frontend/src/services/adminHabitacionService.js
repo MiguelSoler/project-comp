@@ -5,6 +5,11 @@ export function getAdminHabitacionById(habitacionId) {
   return get(`/api/admin/habitacion/${habitacionId}`);
 }
 
+// POST /api/admin/habitacion
+export function createAdminHabitacion(payload) {
+  return post("/api/admin/habitacion", payload);
+}
+
 // PATCH /api/admin/habitacion/:habitacionId
 export function updateAdminHabitacion(habitacionId, payload) {
   return patch(`/api/admin/habitacion/${habitacionId}`, payload);

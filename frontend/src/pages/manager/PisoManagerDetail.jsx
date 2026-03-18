@@ -10,6 +10,7 @@ import {
   updateAdminPisoFoto,
 } from "../../services/adminPisoService.js";
 import {
+  createAdminHabitacion,
   deactivateAdminHabitacion,
   reactivateAdminHabitacion,
 } from "../../services/adminHabitacionService.js";
@@ -19,6 +20,17 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080
 const EMPTY_PISO_UPLOAD_FORM = {
   foto: null,
   orden: "",
+};
+
+const EMPTY_HABITACION_FORM = {
+  titulo: "",
+  descripcion: "",
+  precio_mensual: "",
+  disponible: "true",
+  tamano_m2: "",
+  amueblada: "false",
+  bano: "false",
+  balcon: "false",
 };
 
 function buildImageUrl(url) {
@@ -41,6 +53,10 @@ export default function PisoManagerDetail() {
   const [fotosPiso, setFotosPiso] = useState([]);
   const [pisoUploadForm, setPisoUploadForm] = useState(EMPTY_PISO_UPLOAD_FORM);
   const [pisoPhotoOrderValues, setPisoPhotoOrderValues] = useState({});
+  const [habitacionForm, setHabitacionForm] = useState(EMPTY_HABITACION_FORM);
+  const [creatingHabitacion, setCreatingHabitacion] = useState(false);
+  const [isCreateHabitacionOpen, setIsCreateHabitacionOpen] = useState(false);
+  const [createHabitacionSuccess, setCreateHabitacionSuccess] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [changingId, setChangingId] = useState(null);
@@ -64,6 +80,7 @@ export default function PisoManagerDetail() {
         setLoading(true);
         setError("");
         setSuccess("");
+        setCreateHabitacionSuccess("");
 
         const [pisoData, habitacionesData] = await Promise.all([
           getAdminPisoById(pisoId),
@@ -99,51 +116,79 @@ export default function PisoManagerDetail() {
     );
   }, [fotosPiso]);
 
-  async function handleDeactivateHabitacion(habitacion) {
-    const confirmed = window.confirm(
-      `¿Seguro que quieres desactivar la habitación "${habitacion.titulo || habitacion.id}"?`
-    );
+  function handleHabitacionFormChange(event) {
+    const { name, value } = event.target;
+    setHabitacionForm((prev) => ({ ...prev, [name]: value }));
+  }
 
-    if (!confirmed) return;
+  function resetHabitacionForm() {
+    setHabitacionForm(EMPTY_HABITACION_FORM);
+  }
+
+  function openCreateHabitacionForm() {
+    setError("");
+    setCreateHabitacionSuccess("");
+    setIsCreateHabitacionOpen(true);
+  }
+
+  function closeCreateHabitacionForm() {
+    if (creatingHabitacion) return;
+    resetHabitacionForm();
+    setCreateHabitacionSuccess("");
+    setIsCreateHabitacionOpen(false);
+  }
+
+  async function handleCreateHabitacion(event) {
+    event.preventDefault();
 
     try {
-      setChangingId(habitacion.id);
+      setCreatingHabitacion(true);
       setError("");
       setSuccess("");
+      setCreateHabitacionSuccess("");
 
-      const data = await deactivateAdminHabitacion(habitacion.id);
-      const updatedHabitacion = data?.habitacion;
+      const payload = {
+        piso_id: Number(pisoId),
+        titulo: habitacionForm.titulo.trim(),
+        descripcion: habitacionForm.descripcion.trim(),
+        precio_mensual: Number(habitacionForm.precio_mensual),
+        disponible: habitacionForm.disponible === "true",
+        tamano_m2:
+          habitacionForm.tamano_m2 === "" ? null : Number(habitacionForm.tamano_m2),
+        amueblada: habitacionForm.amueblada === "true",
+        bano: habitacionForm.bano === "true",
+        balcon: habitacionForm.balcon === "true",
+      };
 
-      setHabitaciones((prev) =>
-        prev.map((item) =>
-          item.id === habitacion.id
-            ? { ...item, activo: updatedHabitacion?.activo ?? false }
-            : item
-        )
-      );
+      const data = await createAdminHabitacion(payload);
+      const nuevaHabitacion = data?.habitacion || null;
+
+      if (!nuevaHabitacion) {
+        throw new Error("No se pudo crear la habitación.");
+      }
+
+      setHabitaciones((prev) => [nuevaHabitacion, ...prev]);
 
       setPiso((prev) => {
         if (!prev) return prev;
 
-        const wasActive = Boolean(habitacion.activo);
-        const wasAvailableAndActive = Boolean(habitacion.activo && habitacion.disponible);
-
         return {
           ...prev,
-          habitaciones_activas: wasActive
-            ? Math.max(0, Number(prev.habitaciones_activas ?? 0) - 1)
-            : Number(prev.habitaciones_activas ?? 0),
-          habitaciones_disponibles: wasAvailableAndActive
-            ? Math.max(0, Number(prev.habitaciones_disponibles ?? 0) - 1)
+          habitaciones_total: Number(prev.habitaciones_total ?? 0) + 1,
+          habitaciones_activas: Number(prev.habitaciones_activas ?? 0) + 1,
+          habitaciones_disponibles: nuevaHabitacion.disponible
+            ? Number(prev.habitaciones_disponibles ?? 0) + 1
             : Number(prev.habitaciones_disponibles ?? 0),
         };
       });
 
-      setSuccess("Habitación desactivada correctamente.");
+      resetHabitacionForm();
+      setIsCreateHabitacionOpen(false);
+      setCreateHabitacionSuccess("Habitación creada correctamente.");
     } catch (err) {
-      setError(err?.error || err?.message || "No se pudo desactivar la habitación.");
+      setError(err?.error || err?.message || "No se pudo crear la habitación.");
     } finally {
-      setChangingId(null);
+      setCreatingHabitacion(false);
     }
   }
 
@@ -152,6 +197,7 @@ export default function PisoManagerDetail() {
       setChangingId(habitacion.id);
       setError("");
       setSuccess("");
+      setCreateHabitacionSuccess("");
 
       const data = await reactivateAdminHabitacion(habitacion.id);
       const updatedHabitacion = data?.habitacion;
@@ -206,6 +252,7 @@ export default function PisoManagerDetail() {
       setChangingId(habitacion.id);
       setError("");
       setSuccess("");
+      setCreateHabitacionSuccess("");
 
       const data = await deactivateAdminHabitacion(habitacion.id);
       const updatedHabitacion = data?.habitacion;
@@ -555,11 +602,10 @@ export default function PisoManagerDetail() {
                       onDragOver={handlePisoPhotoDragOver}
                       onDragLeave={handlePisoPhotoDragLeave}
                       onDrop={handlePisoPhotoDrop}
-                      className={`flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${
-                        isDraggingPisoPhoto
+                      className={`flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${isDraggingPisoPhoto
                           ? "border-brand-primary bg-blue-50"
                           : "border-ui-border bg-slate-50 hover:bg-slate-100"
-                      }`}
+                        }`}
                     >
                       <div className="space-y-2">
                         <p className="text-sm font-medium text-ui-text">
@@ -686,49 +732,256 @@ export default function PisoManagerDetail() {
                   ))}
                 </div>
               )}
-            </section>            
+            </section>
 
             <section className="space-y-4 rounded-2xl border border-slate-300 bg-white p-4 md:p-5">
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">Habitaciones del piso</h3>
+                <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                  Habitaciones del piso
+                </h3>
                 <span className="text-xs text-ui-text-secondary">
                   Total cargadas: {habitaciones.length}
                 </span>
               </div>
+
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <div className="rounded-xl border border-amber-300 bg-amber-50">
-                <div className="card-body">
-                  <p className="text-xs font-medium uppercase tracking-wide text-amber-600">
-                    Habitaciones totales
-                  </p>
-                  <p className="mt-2 text-2xl font-bold text-ui-text">
-                    {piso.habitaciones_total ?? 0}
-                  </p>
+                <div className="rounded-xl border border-amber-300 bg-amber-50">
+                  <div className="card-body">
+                    <p className="text-xs font-medium uppercase tracking-wide text-amber-600">
+                      Habitaciones totales
+                    </p>
+                    <p className="mt-2 text-2xl font-bold text-ui-text">
+                      {piso.habitaciones_total ?? 0}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-emerald-300 bg-emerald-50">
+                  <div className="card-body">
+                    <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
+                      Habitaciones activas
+                    </p>
+                    <p className="mt-2 text-2xl font-bold text-ui-text">
+                      {piso.habitaciones_activas ?? 0}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-sky-300 bg-sky-50">
+                  <div className="card-body">
+                    <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
+                      Habitaciones disponibles
+                    </p>
+                    <p className="mt-2 text-2xl font-bold text-ui-text">
+                      {piso.habitaciones_disponibles ?? 0}
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-emerald-300 bg-emerald-50">
-                <div className="card-body">
-                  <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
-                    Habitaciones activas
-                  </p>
-                  <p className="mt-2 text-2xl font-bold text-ui-text">
-                    {piso.habitaciones_activas ?? 0}
-                  </p>
-                </div>
-              </div>
+              {createHabitacionSuccess ? (
+                <div className="alert-success">{createHabitacionSuccess}</div>
+              ) : null}
 
-              <div className="rounded-xl border border-sky-300 bg-sky-50">
-                <div className="card-body">
-                  <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
-                    Habitaciones disponibles
-                  </p>
-                  <p className="mt-2 text-2xl font-bold text-ui-text">
-                    {piso.habitaciones_disponibles ?? 0}
-                  </p>
+              <div className="space-y-4">
+                {!isCreateHabitacionOpen ? (
+                  <div className="flex justify-start">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={openCreateHabitacionForm}
+                    >
+                      Añadir habitación
+                    </button>
+                  </div>
+                ) : null}
+
+                <div
+                  className={`overflow-hidden transition-all duration-500 ease-out ${isCreateHabitacionOpen
+                      ? "mt-4 max-h-[660px] translate-y-0 opacity-100"
+                      : "max-h-0 -translate-y-3 opacity-0 pointer-events-none"
+                    }`}
+                >
+                  <div className="card">
+                    <div className="card-body space-y-6">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h4 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                            Nueva habitación
+                          </h4>
+                          <p className="mt-1 text-sm text-ui-text-secondary">
+                            Completa los datos para crear una nueva habitación en este piso.
+                          </p>
+                        </div>
+                      </div>
+
+                      <form className="space-y-4" onSubmit={handleCreateHabitacion}>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                          <div className="md:col-span-2">
+                            <label className="label" htmlFor="new-titulo">
+                              Título
+                            </label>
+                            <input
+                              id="new-titulo"
+                              name="titulo"
+                              type="text"
+                              className="input"
+                              value={habitacionForm.titulo}
+                              onChange={handleHabitacionFormChange}
+                              disabled={creatingHabitacion}
+                              placeholder="Ej. Habitación luminosa con escritorio"
+                            />
+                          </div>
+
+                          <div className="md:col-span-2">
+                            <label className="label" htmlFor="new-descripcion">
+                              Descripción
+                            </label>
+                            <textarea
+                              id="new-descripcion"
+                              name="descripcion"
+                              className="textarea"
+                              value={habitacionForm.descripcion}
+                              onChange={handleHabitacionFormChange}
+                              disabled={creatingHabitacion}
+                              placeholder="Describe brevemente la habitación"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="label" htmlFor="new-precio_mensual">
+                              Precio mensual
+                            </label>
+                            <input
+                              id="new-precio_mensual"
+                              name="precio_mensual"
+                              type="number"
+                              min="0"
+                              className="input"
+                              value={habitacionForm.precio_mensual}
+                              onChange={handleHabitacionFormChange}
+                              disabled={creatingHabitacion}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="label" htmlFor="new-tamano_m2">
+                              Tamaño (m²)
+                            </label>
+                            <input
+                              id="new-tamano_m2"
+                              name="tamano_m2"
+                              type="number"
+                              min="1"
+                              className="input"
+                              value={habitacionForm.tamano_m2}
+                              onChange={handleHabitacionFormChange}
+                              disabled={creatingHabitacion}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="label" htmlFor="new-disponible">
+                              Disponibilidad
+                            </label>
+                            <select
+                              id="new-disponible"
+                              name="disponible"
+                              className="select"
+                              value={habitacionForm.disponible}
+                              onChange={handleHabitacionFormChange}
+                              disabled={creatingHabitacion}
+                            >
+                              <option value="true">Disponible</option>
+                              <option value="false">No disponible</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="label" htmlFor="new-amueblada">
+                              Amueblada
+                            </label>
+                            <select
+                              id="new-amueblada"
+                              name="amueblada"
+                              className="select"
+                              value={habitacionForm.amueblada}
+                              onChange={handleHabitacionFormChange}
+                              disabled={creatingHabitacion}
+                            >
+                              <option value="true">Sí</option>
+                              <option value="false">No</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="label" htmlFor="new-bano">
+                              Baño
+                            </label>
+                            <select
+                              id="new-bano"
+                              name="bano"
+                              className="select"
+                              value={habitacionForm.bano}
+                              onChange={handleHabitacionFormChange}
+                              disabled={creatingHabitacion}
+                            >
+                              <option value="true">Sí</option>
+                              <option value="false">No</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="label" htmlFor="new-balcon">
+                              Balcón
+                            </label>
+                            <select
+                              id="new-balcon"
+                              name="balcon"
+                              className="select"
+                              value={habitacionForm.balcon}
+                              onChange={handleHabitacionFormChange}
+                              disabled={creatingHabitacion}
+                            >
+                              <option value="true">Sí</option>
+                              <option value="false">No</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            type="button"
+                            className="btn border border-rose-300 bg-rose-100 text-rose-800 hover:bg-rose-200"
+                            onClick={closeCreateHabitacionForm}
+                            disabled={creatingHabitacion}
+                          >
+                            Cancelar
+                          </button>
+
+                          <button
+                            type="button"
+                            className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
+                            onClick={resetHabitacionForm}
+                            disabled={creatingHabitacion}
+                          >
+                            Limpiar
+                          </button>
+
+                          <button
+                            type="submit"
+                            className="btn btn-primary"
+                            disabled={creatingHabitacion}
+                            aria-busy={creatingHabitacion}
+                          >
+                            {creatingHabitacion ? "Creando..." : "Crear habitación"}
+                          </button>
+                        </div>
+                      </form>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
 
               {habitaciones.length === 0 ? (
                 <div className="rounded-xl border border-slate-300 bg-slate-50">
@@ -747,9 +1000,8 @@ export default function PisoManagerDetail() {
                     return (
                       <article
                         key={habitacion.id}
-                        className={`card flex h-full flex-col transition-opacity ${
-                          isInactive ? "opacity-45" : ""
-                        }`}
+                        className={`card flex h-full flex-col transition-opacity ${isInactive ? "opacity-45" : ""
+                          }`}
                       >
                         <div className="card-body flex flex-1 flex-col gap-3">
                           {roomCover ? (
@@ -778,9 +1030,7 @@ export default function PisoManagerDetail() {
 
                               <span
                                 className={
-                                  habitacion.disponible
-                                    ? "badge badge-info"
-                                    : "badge badge-warning"
+                                  habitacion.disponible ? "badge badge-info" : "badge badge-warning"
                                 }
                               >
                                 {habitacion.disponible ? "Disponible" : "No disponible"}
@@ -909,7 +1159,7 @@ export default function PisoManagerDetail() {
                   >
                     &lt;
                   </button>
-              
+
                   <button
                     type="button"
                     className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
@@ -920,7 +1170,7 @@ export default function PisoManagerDetail() {
                 </>
               ) : null}
             </div>
-            
+
             <div className="text-center text-sm text-ui-text-secondary">
               Foto {selectedPisoPhotoIndex + 1} de {fotosPiso.length}
             </div>
