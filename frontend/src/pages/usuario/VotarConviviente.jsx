@@ -5,7 +5,7 @@ import { listConvivientesByPiso } from "../../services/usuarioHabitacionService.
 import { createOrUpdateVote, listMyVotes } from "../../services/votoUsuarioAuthService.js";
 import useAuth from "../../hooks/useAuth.js";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const INITIAL_FORM = {
   limpieza: "3",

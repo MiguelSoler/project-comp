@@ -5,9 +5,15 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173, // Puerto de desarrollo de Vite
+    allowedHosts: true,
     proxy: {
       // Redirige todas las llamadas que empiecen por /api al backend en 8080
       '/api': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        secure: false
+      },
+      '/uploads': {
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false

@@ -27,6 +27,11 @@ export function getAdminPisoById(pisoId) {
   return get(`/api/admin/piso/${pisoId}`);
 }
 
+// PATCH /api/admin/piso/:pisoId
+export function updateAdminPiso(pisoId, payload) {
+  return patch(`/api/admin/piso/${pisoId}`, payload);
+}
+
 // GET /api/admin/piso/:pisoId/habitaciones?page=1&limit=20&activo=all|true|false&disponible=all|true|false&sort=
 export function listAdminHabitacionesByPiso(
   pisoId,

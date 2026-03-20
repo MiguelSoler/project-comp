@@ -4,7 +4,7 @@ import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
 import { addAdminHabitacionFoto, deleteAdminHabitacionFoto, getAdminHabitacionById, updateAdminHabitacion, updateAdminHabitacionFoto } from "../../services/adminHabitacionService.js";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const EMPTY_FORM = {
   titulo: "",
@@ -628,155 +628,161 @@ export default function HabitacionManagerDetail() {
               </div>
             </div>
 
-            <section className="space-y-4">              
-              <div className="card">
-                <div className="card-body space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">Fotos de la habitación</h3>
-                    <span className="text-xs text-ui-text-secondary">Total: {fotos.length}</span>
-                  </div>
-                  <div>
-                    <h4 className="text-base font-semibold text-ui-text">Añadir foto</h4>
-                    <p className="mt-1 text-sm text-ui-text-secondary">
-                      Selecciona una imagen desde tu equipo para subirla a esta habitación.
-                    </p>
-                  </div>
+            <section className="space-y-4 rounded-2xl border border-slate-300 bg-white p-4 md:p-5">
+  <div className="flex items-center justify-between gap-3">
+    <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+      Fotos de la habitación
+    </h3>
+    <span className="text-xs text-ui-text-secondary">Total: {fotos.length}</span>
+  </div>
 
-                  {uploadingPhoto ? (
-                    <div className="flex justify-end">
-                      <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
-                        Subiendo foto...
-                      </div>
-                    </div>
-                  ) : null}
+  <div className="card">
+    <div className="card-body space-y-4">
+      <div>
+        <h4 className="text-base font-semibold text-ui-text">Añadir foto</h4>
+        <p className="mt-1 text-sm text-ui-text-secondary">
+          Selecciona una imagen desde tu equipo para subirla a esta habitación.
+        </p>
+      </div>
 
-                  <form className="space-y-4" onSubmit={handleUploadPhoto}>
-                    <label
-                      htmlFor="foto"
-                      onDragOver={handlePhotoDragOver}
-                      onDragLeave={handlePhotoDragLeave}
-                      onDrop={handlePhotoDrop}
-                      className={`flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${
-                        isDraggingPhoto
-                          ? "border-brand-primary bg-blue-50"
-                          : "border-ui-border bg-slate-50 hover:bg-slate-100"
-                      }`}
-                    >
-                      <div className="space-y-2">
-                        <p className="text-sm font-medium text-ui-text">
-                          {uploadForm.foto ? uploadForm.foto.name : "Haz clic o arrastra una foto aquí"}
-                        </p>
-                        <p className="text-xs text-ui-text-secondary">
-                          JPG, PNG u otros formatos de imagen · máximo 8 MB
-                        </p>
-                      </div>
-                    </label>
+      {uploadingPhoto ? (
+        <div className="flex justify-end">
+          <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
+            Subiendo foto...
+          </div>
+        </div>
+      ) : null}
 
-                    <input
-                      id="foto"
-                      name="foto"
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handlePhotoFileChange}
-                      disabled={uploadingPhoto}
-                    />
+      <form className="space-y-4" onSubmit={handleUploadPhoto}>
+        <label
+          htmlFor="foto"
+          onDragOver={handlePhotoDragOver}
+          onDragLeave={handlePhotoDragLeave}
+          onDrop={handlePhotoDrop}
+          className={`flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border-[3px] border-dashed px-4 py-6 text-center transition-colors ${
+            isDraggingPhoto
+              ? "border-emerald-300 bg-emerald-100"
+              : "border-emerald-200 bg-emerald-50 hover:border-emerald-300 hover:bg-emerald-100"
+          }`}
+        >
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-ui-text">
+              {uploadForm.foto ? uploadForm.foto.name : "Haz clic o arrastra una foto aquí"}
+            </p>
+            <p className="text-xs text-ui-text-secondary">
+              JPG, PNG u otros formatos de imagen · máximo 8 MB
+            </p>
+          </div>
+        </label>
 
-                    <div className="max-w-[220px]">
-                      <label className="label" htmlFor="orden">
-                        Orden (opcional)
-                      </label>
-                      <input
-                        id="orden"
-                        name="orden"
-                        type="number"
-                        min="0"
-                        className="input"
-                        value={uploadForm.orden}
-                        onChange={handlePhotoOrderChange}
-                        disabled={uploadingPhoto}
-                      />
-                    </div>
-                  </form>
-                </div>
+        <input
+          id="foto"
+          name="foto"
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handlePhotoFileChange}
+          disabled={uploadingPhoto}
+        />
+
+        <div className="max-w-[220px]">
+          <label className="label" htmlFor="orden">
+            Orden (opcional)
+          </label>
+          <input
+            id="orden"
+            name="orden"
+            type="number"
+            min="0"
+            className="input"
+            value={uploadForm.orden}
+            onChange={handlePhotoOrderChange}
+            disabled={uploadingPhoto}
+          />
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {fotos.length === 0 ? (
+    <div className="card">
+      <div className="card-body">
+        <p className="text-sm text-ui-text-secondary">
+          Esta habitación todavía no tiene fotos.
+        </p>
+      </div>
+    </div>
+  ) : (
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {fotos.map((foto) => (
+        <article key={foto.id} className="card">
+          <div className="card-body space-y-3">
+            <img
+              src={buildImageUrl(foto.url)}
+              alt={`Foto ${foto.orden}`}
+              className="aspect-[4/3] w-full rounded-md object-cover"
+            />
+
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-ui-text-secondary">ID #{foto.id}</span>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="label" htmlFor={`orden-foto-${foto.id}`}>
+                  Orden
+                </label>
+                <input
+                  id={`orden-foto-${foto.id}`}
+                  type="number"
+                  min="0"
+                  className="input"
+                  value={photoOrderValues[foto.id] ?? ""}
+                  onChange={(event) =>
+                    handlePhotoOrderValueChange(foto.id, event.target.value)
+                  }
+                  disabled={updatingPhotoId === foto.id || deletingPhotoId === foto.id}
+                />
               </div>
 
-              {fotos.length === 0 ? (
-                <div className="card">
-                  <div className="card-body">
-                    <p className="text-sm text-ui-text-secondary">
-                      Esta habitación todavía no tiene fotos.
-                    </p>
-                  </div>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  className="btn btn-sm border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                  disabled={updatingPhotoId === foto.id || deletingPhotoId === foto.id}
+                  onClick={() => handleSavePhotoOrder(foto)}
+                >
+                  {updatingPhotoId === foto.id ? "Guardando..." : "Guardar orden"}
+                </button>
+
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  disabled={deletingPhotoId === foto.id || updatingPhotoId === foto.id}
+                  onClick={() => requestDeletePhoto(foto)}
+                >
+                  {deletingPhotoId === foto.id ? "Eliminando..." : "Eliminar foto"}
+                </button>
+              </div>
+
+              {photoOrderFeedback[foto.id] ? (
+                <div
+                  className={
+                    photoOrderFeedback[foto.id].type === "success"
+                      ? "alert-success"
+                      : "alert-error"
+                  }
+                >
+                  {photoOrderFeedback[foto.id].message}
                 </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {fotos.map((foto) => (
-                    <article key={foto.id} className="card">
-                      <div className="card-body space-y-3">
-                        <img
-                          src={buildImageUrl(foto.url)}
-                          alt={`Foto ${foto.orden}`}
-                          className="aspect-[4/3] w-full rounded-md object-cover"
-                        />
-
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs text-ui-text-secondary">ID #{foto.id}</span>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div>
-                            <label className="label" htmlFor={`orden-foto-${foto.id}`}>
-                              Orden
-                            </label>
-                            <input
-                              id={`orden-foto-${foto.id}`}
-                              type="number"
-                              min="0"
-                              className="input"
-                              value={photoOrderValues[foto.id] ?? ""}
-                              onChange={(event) => handlePhotoOrderValueChange(foto.id, event.target.value)}
-                              disabled={updatingPhotoId === foto.id || deletingPhotoId === foto.id}
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              className="btn btn-sm border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                              disabled={updatingPhotoId === foto.id || deletingPhotoId === foto.id}
-                              onClick={() => handleSavePhotoOrder(foto)}
-                            >
-                              {updatingPhotoId === foto.id ? "Guardando..." : "Guardar orden"}
-                            </button>
-
-                            <button
-                              type="button"
-                              className="btn btn-danger btn-sm"
-                              disabled={deletingPhotoId === foto.id || updatingPhotoId === foto.id}
-                              onClick={() => requestDeletePhoto(foto)}
-                            >
-                              {deletingPhotoId === foto.id ? "Eliminando..." : "Eliminar foto"}
-                            </button>
-                          </div>
-                          {photoOrderFeedback[foto.id] ? (
-                            <div
-                              className={
-                                photoOrderFeedback[foto.id].type === "success"
-                                  ? "alert-success"
-                                  : "alert-error"
-                              }
-                            >
-                              {photoOrderFeedback[foto.id].message}
-                            </div>
-                          ) : null}
-                        </div>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
+              ) : null}
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+  )}
+</section>
           </>
         ) : null}
       </PageShell>

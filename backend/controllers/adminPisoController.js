@@ -411,122 +411,167 @@ const createPiso = async (req, res) => {
 // PATCH /api/piso/:id  (routes ya restringen advertiser/admin)
 // Aquí validamos: admin o manager_usuario_id
 const updatePiso = async (req, res) => {
-    try {
-        const id = toInt(req.params.id, NaN);
-        if (!Number.isFinite(id)) return res.status(400).json({ error: "INVALID_ID" });
-
-        const current = await pool.query(
-            `SELECT id, manager_usuario_id, activo
-       FROM piso
-       WHERE id = $1`,
-            [id]
-        );
-        if (current.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
-
-        const piso = current.rows[0];
-        const isAdmin = req.user.rol === "admin";
-        const isManager = Number(piso.manager_usuario_id) === Number(req.user.id);
-
-        if (!isAdmin && !isManager) return res.status(403).json({ error: "FORBIDDEN" });
-
-        const direccion = typeof req.body?.direccion === "string" ? req.body.direccion.trim() : undefined;
-        const ciudad = typeof req.body?.ciudad === "string" ? req.body.ciudad.trim() : undefined;
-        const codigo_postal =
-            req.body?.codigo_postal === null ? null :
-                typeof req.body?.codigo_postal === "string" ? req.body.codigo_postal.trim() :
-                    req.body?.codigo_postal !== undefined ? String(req.body.codigo_postal).trim() :
-                        undefined;
-        const descripcion =
-            req.body?.descripcion === null ? null :
-                typeof req.body?.descripcion === "string" ? req.body.descripcion.trim() :
-                    undefined;
-
-        // activo: solo admin debería poder reactivar
-        const activo =
-            typeof req.body?.activo === "boolean" ? req.body.activo : undefined;
-
-        const updates = [];
-        const params = [];
-        let idx = 1;
-
-        if (direccion !== undefined) {
-            if (!direccion) return res.status(400).json({ error: "INVALID_DIRECCION" });
-            params.push(direccion);
-            updates.push(`direccion = $${idx++}`);
-        }
-        if (ciudad !== undefined) {
-            if (!ciudad) return res.status(400).json({ error: "INVALID_CIUDAD" });
-            params.push(ciudad);
-            updates.push(`ciudad = $${idx++}`);
-        }
-        if (codigo_postal !== undefined) {
-            params.push(codigo_postal);
-            updates.push(`codigo_postal = $${idx++}`);
-        }
-        if (descripcion !== undefined) {
-            params.push(descripcion);
-            updates.push(`descripcion = $${idx++}`);
-        }
-        if (activo !== undefined) {
-            if (!isAdmin && activo === true) {
-                return res.status(403).json({ error: "FORBIDDEN" });
-            }
-            params.push(activo);
-            updates.push(`activo = $${idx++}`);
-        }
-
-        if (updates.length === 0) return res.status(400).json({ error: "NO_FIELDS_TO_UPDATE" });
-
-        params.push(id);
-
-        const result = await pool.query(
-            `UPDATE piso
-       SET ${updates.join(", ")}
-       WHERE id = $${idx}
-       RETURNING id, direccion, ciudad, codigo_postal, descripcion, manager_usuario_id, activo, created_at`,
-            params
-        );
-
-        return res.json({ piso: result.rows[0] });
-    } catch (err) {
-        console.error("updatePiso error:", err);
-        return res.status(500).json({ error: "INTERNAL_ERROR" });
+  try {
+    const pisoId = toInt(req.params.pisoId, NaN);
+    if (!Number.isFinite(pisoId)) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: ["pisoId"] });
     }
+
+    const current = await pool.query(
+      `
+      SELECT id, manager_usuario_id, activo
+      FROM piso
+      WHERE id = $1
+      `,
+      [pisoId]
+    );
+
+    if (current.rowCount === 0) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+
+    const piso = current.rows[0];
+    const isAdmin = req.user?.rol === "admin";
+    const isManager = Number(piso.manager_usuario_id) === Number(req.user?.id);
+
+    if (!isAdmin && !isManager) {
+      return res.status(403).json({ error: "FORBIDDEN" });
+    }
+
+    const direccion =
+      typeof req.body?.direccion === "string" ? req.body.direccion.trim() : undefined;
+
+    const ciudad =
+      typeof req.body?.ciudad === "string" ? req.body.ciudad.trim() : undefined;
+
+    const codigo_postal =
+      req.body?.codigo_postal === null
+        ? null
+        : typeof req.body?.codigo_postal === "string"
+          ? req.body.codigo_postal.trim()
+          : req.body?.codigo_postal !== undefined
+            ? String(req.body.codigo_postal).trim()
+            : undefined;
+
+    const descripcion =
+      req.body?.descripcion === null
+        ? null
+        : typeof req.body?.descripcion === "string"
+          ? req.body.descripcion.trim()
+          : undefined;
+
+    const activo =
+      typeof req.body?.activo === "boolean" ? req.body.activo : undefined;
+
+    const updates = [];
+    const params = [];
+    let idx = 1;
+
+    if (direccion !== undefined) {
+      if (!direccion) {
+        return res.status(400).json({ error: "VALIDATION_ERROR", details: ["direccion"] });
+      }
+      params.push(direccion);
+      updates.push(`direccion = $${idx++}`);
+    }
+
+    if (ciudad !== undefined) {
+      if (!ciudad) {
+        return res.status(400).json({ error: "VALIDATION_ERROR", details: ["ciudad"] });
+      }
+      params.push(ciudad);
+      updates.push(`ciudad = $${idx++}`);
+    }
+
+    if (codigo_postal !== undefined) {
+      params.push(codigo_postal);
+      updates.push(`codigo_postal = $${idx++}`);
+    }
+
+    if (descripcion !== undefined) {
+      params.push(descripcion);
+      updates.push(`descripcion = $${idx++}`);
+    }
+
+    if (activo !== undefined) {
+      if (!isAdmin && activo === true) {
+        return res.status(403).json({ error: "FORBIDDEN" });
+      }
+      params.push(activo);
+      updates.push(`activo = $${idx++}`);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "NO_FIELDS_TO_UPDATE" });
+    }
+
+    params.push(pisoId);
+
+    const result = await pool.query(
+      `
+      UPDATE piso
+      SET ${updates.join(", ")}, updated_at = NOW()
+      WHERE id = $${idx}
+      RETURNING id, direccion, ciudad, codigo_postal, descripcion, manager_usuario_id, activo, created_at, updated_at
+      `,
+      params
+    );
+
+    return res.json({ piso: result.rows[0] });
+  } catch (err) {
+    console.error("updatePiso error:", err);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
 };
 
 // DELETE /api/piso/:id  (soft delete)
 const deletePiso = async (req, res) => {
-    try {
-        const id = toInt(req.params.id, NaN);
-        if (!Number.isFinite(id)) return res.status(400).json({ error: "INVALID_ID" });
-
-        const current = await pool.query(
-            `SELECT id, manager_usuario_id
-       FROM piso
-       WHERE id = $1`,
-            [id]
-        );
-        if (current.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
-
-        const piso = current.rows[0];
-        const isAdmin = req.user.rol === "admin";
-        const isManager = Number(piso.manager_usuario_id) === Number(req.user.id);
-
-        if (!isAdmin && !isManager) return res.status(403).json({ error: "FORBIDDEN" });
-
-        const result = await pool.query(
-            `UPDATE piso
-       SET activo = false
-       WHERE id = $1
-       RETURNING id`,
-            [id]
-        );
-        if (result.rowCount === 0) return res.status(404).json({ error: "NOT_FOUND" });
-        return res.json({ ok: true });
-    } catch (err) {
-        console.error("deletePiso error:", err);
-        return res.status(500).json({ error: "INTERNAL_ERROR" });
+  try {
+    const pisoId = toInt(req.params.pisoId, NaN);
+    if (!Number.isFinite(pisoId)) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: ["pisoId"] });
     }
+
+    const current = await pool.query(
+      `
+      SELECT id, manager_usuario_id
+      FROM piso
+      WHERE id = $1
+      `,
+      [pisoId]
+    );
+
+    if (current.rowCount === 0) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+
+    const piso = current.rows[0];
+    const isAdmin = req.user?.rol === "admin";
+    const isManager = Number(piso.manager_usuario_id) === Number(req.user?.id);
+
+    if (!isAdmin && !isManager) {
+      return res.status(403).json({ error: "FORBIDDEN" });
+    }
+
+    const result = await pool.query(
+      `
+      UPDATE piso
+      SET activo = false, updated_at = NOW()
+      WHERE id = $1
+      RETURNING id
+      `,
+      [pisoId]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("deletePiso error:", err);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
 };
 
 // =========================================================

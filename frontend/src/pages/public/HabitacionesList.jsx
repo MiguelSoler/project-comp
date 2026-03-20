@@ -15,7 +15,7 @@ function buildImageUrl(pathOrNull) {
   if (!pathOrNull) return null;
   if (pathOrNull.startsWith("http")) return pathOrNull;
 
-  const base = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+  const base = import.meta.env.VITE_API_BASE_URL || "";
   return `${base}${pathOrNull}`;
 }
 

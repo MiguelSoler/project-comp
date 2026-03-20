@@ -15,7 +15,7 @@ router.get("/:pisoId", requireAuth, getPisoAdminById);
 router.get("/:pisoId/habitaciones", requireAuth, listHabitacionesAdminByPiso);
 router.post("/", requireAuth, createPiso);
 router.patch("/:pisoId", requireAuth, updatePiso);
-router.delete("/:pisoId/:id", requireAuth, deletePiso);
+router.delete("/:pisoId", requireAuth, deletePiso);
 
 // Fotos de piso
 router.post("/:pisoId/fotos", requireAuth, uploadPisoPhoto.single("foto"), addFotoPiso);

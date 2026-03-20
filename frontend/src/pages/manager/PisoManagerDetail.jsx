@@ -7,6 +7,7 @@ import {
   deleteAdminPisoFoto,
   getAdminPisoById,
   listAdminHabitacionesByPiso,
+  updateAdminPiso,
   updateAdminPisoFoto,
 } from "../../services/adminPisoService.js";
 import {
@@ -15,7 +16,7 @@ import {
   reactivateAdminHabitacion,
 } from "../../services/adminHabitacionService.js";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
 const EMPTY_PISO_UPLOAD_FORM = {
   foto: null,
@@ -32,6 +33,24 @@ const EMPTY_HABITACION_FORM = {
   bano: "false",
   balcon: "false",
 };
+
+const EMPTY_PISO_FORM = {
+  direccion: "",
+  ciudad: "",
+  codigo_postal: "",
+  descripcion: "",
+};
+
+function buildPisoFormFromPiso(piso) {
+  if (!piso) return EMPTY_PISO_FORM;
+
+  return {
+    direccion: piso.direccion || "",
+    ciudad: piso.ciudad || "",
+    codigo_postal: piso.codigo_postal || "",
+    descripcion: piso.descripcion || "",
+  };
+}
 
 function buildImageUrl(url) {
   if (!url) return "";
@@ -57,6 +76,8 @@ export default function PisoManagerDetail() {
   const [creatingHabitacion, setCreatingHabitacion] = useState(false);
   const [isCreateHabitacionOpen, setIsCreateHabitacionOpen] = useState(false);
   const [createHabitacionSuccess, setCreateHabitacionSuccess] = useState("");
+  const [pisoForm, setPisoForm] = useState(EMPTY_PISO_FORM);
+  const [savingPiso, setSavingPiso] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [changingId, setChangingId] = useState(null);
@@ -90,6 +111,7 @@ export default function PisoManagerDetail() {
         if (!isMounted) return;
 
         setPiso(pisoData?.piso || null);
+        setPisoForm(buildPisoFormFromPiso(pisoData?.piso || null));
         setHabitaciones(Array.isArray(habitacionesData?.items) ? habitacionesData.items : []);
         setFotosPiso(Array.isArray(pisoData?.fotos) ? pisoData.fotos : []);
       } catch (err) {
@@ -115,6 +137,60 @@ export default function PisoManagerDetail() {
       Object.fromEntries(fotosPiso.map((foto) => [foto.id, String(foto.orden)]))
     );
   }, [fotosPiso]);
+
+  function handlePisoFormChange(event) {
+  const { name, value } = event.target;
+  setPisoForm((prev) => ({ ...prev, [name]: value }));
+}
+
+function resetPisoForm() {
+  setPisoForm(buildPisoFormFromPiso(piso));
+}
+
+async function handleUpdatePiso(event) {
+  event.preventDefault();
+
+  try {
+    setSavingPiso(true);
+    setError("");
+    setSuccess("");
+
+    const payload = {
+      direccion: pisoForm.direccion.trim(),
+      ciudad: pisoForm.ciudad.trim(),
+      codigo_postal: pisoForm.codigo_postal.trim() || null,
+      descripcion: pisoForm.descripcion.trim() || null,
+    };
+
+    const data = await updateAdminPiso(pisoId, payload);
+    const updatedPiso = data?.piso || null;
+
+    if (!updatedPiso) {
+      throw new Error("No se pudo actualizar el piso.");
+    }
+
+    setPiso((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        direccion: updatedPiso.direccion,
+        ciudad: updatedPiso.ciudad,
+        codigo_postal: updatedPiso.codigo_postal,
+        descripcion: updatedPiso.descripcion,
+        activo: updatedPiso.activo,
+        updated_at: updatedPiso.updated_at,
+      };
+    });
+
+    setPisoForm(buildPisoFormFromPiso(updatedPiso));
+    setSuccess("Piso actualizado correctamente.");
+  } catch (err) {
+    setError(err?.error || err?.message || "No se pudo actualizar el piso.");
+  } finally {
+    setSavingPiso(false);
+  }
+}
 
   function handleHabitacionFormChange(event) {
     const { name, value } = event.target;
@@ -571,6 +647,102 @@ export default function PisoManagerDetail() {
               </div>
             </div>
 
+            <div className="card">
+              <div className="card-body space-y-6">
+                <div>
+                  <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                    Editar piso
+                  </h3>
+                  <p className="mt-1 text-sm text-ui-text-secondary">
+                    Actualiza los datos principales del piso.
+                  </p>
+                </div>
+                          
+                <form className="space-y-4" onSubmit={handleUpdatePiso}>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="md:col-span-2">
+                      <label className="label" htmlFor="direccion">
+                        Dirección
+                      </label>
+                      <input
+                        id="direccion"
+                        name="direccion"
+                        type="text"
+                        className="input"
+                        value={pisoForm.direccion}
+                        onChange={handlePisoFormChange}
+                        disabled={savingPiso}
+                      />
+                    </div>
+                          
+                    <div>
+                      <label className="label" htmlFor="ciudad">
+                        Ciudad
+                      </label>
+                      <input
+                        id="ciudad"
+                        name="ciudad"
+                        type="text"
+                        className="input"
+                        value={pisoForm.ciudad}
+                        onChange={handlePisoFormChange}
+                        disabled={savingPiso}
+                      />
+                    </div>
+                          
+                    <div>
+                      <label className="label" htmlFor="codigo_postal">
+                        Código postal
+                      </label>
+                      <input
+                        id="codigo_postal"
+                        name="codigo_postal"
+                        type="text"
+                        className="input"
+                        value={pisoForm.codigo_postal}
+                        onChange={handlePisoFormChange}
+                        disabled={savingPiso}
+                      />
+                    </div>
+                          
+                    <div className="md:col-span-2">
+                      <label className="label" htmlFor="descripcion">
+                        Descripción
+                      </label>
+                      <textarea
+                        id="descripcion"
+                        name="descripcion"
+                        className="textarea"
+                        value={pisoForm.descripcion}
+                        onChange={handlePisoFormChange}
+                        disabled={savingPiso}
+                      />
+                    </div>
+                  </div>
+                          
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
+                      onClick={resetPisoForm}
+                      disabled={savingPiso}
+                    >
+                      Restablecer
+                    </button>
+                          
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      disabled={savingPiso}
+                      aria-busy={savingPiso}
+                    >
+                      {savingPiso ? "Guardando..." : "Guardar cambios"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+
             <section className="space-y-4 rounded-2xl border border-slate-300 bg-white p-4 md:p-5">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
@@ -602,9 +774,9 @@ export default function PisoManagerDetail() {
                       onDragOver={handlePisoPhotoDragOver}
                       onDragLeave={handlePisoPhotoDragLeave}
                       onDrop={handlePisoPhotoDrop}
-                      className={`flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border border-dashed px-4 py-6 text-center transition-colors ${isDraggingPisoPhoto
-                          ? "border-brand-primary bg-blue-50"
-                          : "border-ui-border bg-slate-50 hover:bg-slate-100"
+                      className={`flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border-[3px] border-dashed px-4 py-6 text-center transition-colors ${isDraggingPisoPhoto
+                          ? "border-emerald-300 bg-emerald-100"
+                          : "border-emerald-200 bg-emerald-50 hover:border-emerald-300 hover:bg-emerald-100"
                         }`}
                     >
                       <div className="space-y-2">
