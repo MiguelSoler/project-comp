@@ -23,6 +23,13 @@ const EMPTY_PISO_UPLOAD_FORM = {
   orden: "",
 };
 
+const EMPTY_PISO_FORM = {
+  direccion: "",
+  ciudad: "",
+  codigo_postal: "",
+  descripcion: "",
+};
+
 const EMPTY_HABITACION_FORM = {
   titulo: "",
   descripcion: "",
@@ -33,24 +40,6 @@ const EMPTY_HABITACION_FORM = {
   bano: "false",
   balcon: "false",
 };
-
-const EMPTY_PISO_FORM = {
-  direccion: "",
-  ciudad: "",
-  codigo_postal: "",
-  descripcion: "",
-};
-
-function buildPisoFormFromPiso(piso) {
-  if (!piso) return EMPTY_PISO_FORM;
-
-  return {
-    direccion: piso.direccion || "",
-    ciudad: piso.ciudad || "",
-    codigo_postal: piso.codigo_postal || "",
-    descripcion: piso.descripcion || "",
-  };
-}
 
 function buildImageUrl(url) {
   if (!url) return "";
@@ -64,20 +53,33 @@ function formatEur(value) {
   return `${new Intl.NumberFormat("es-ES").format(n)} €`;
 }
 
+function buildPisoFormFromPiso(piso) {
+  if (!piso) return EMPTY_PISO_FORM;
+
+  return {
+    direccion: piso.direccion || "",
+    ciudad: piso.ciudad || "",
+    codigo_postal: piso.codigo_postal || "",
+    descripcion: piso.descripcion || "",
+  };
+}
+
 export default function PisoManagerDetail() {
   const { pisoId } = useParams();
 
   const [piso, setPiso] = useState(null);
   const [habitaciones, setHabitaciones] = useState([]);
   const [fotosPiso, setFotosPiso] = useState([]);
+  const [pisoForm, setPisoForm] = useState(EMPTY_PISO_FORM);
   const [pisoUploadForm, setPisoUploadForm] = useState(EMPTY_PISO_UPLOAD_FORM);
   const [pisoPhotoOrderValues, setPisoPhotoOrderValues] = useState({});
   const [habitacionForm, setHabitacionForm] = useState(EMPTY_HABITACION_FORM);
   const [creatingHabitacion, setCreatingHabitacion] = useState(false);
+  const [savingPiso, setSavingPiso] = useState(false);
+  const [isEditPisoOpen, setIsEditPisoOpen] = useState(false);
+  const [editPisoFeedback, setEditPisoFeedback] = useState(null);
   const [isCreateHabitacionOpen, setIsCreateHabitacionOpen] = useState(false);
   const [createHabitacionSuccess, setCreateHabitacionSuccess] = useState("");
-  const [pisoForm, setPisoForm] = useState(EMPTY_PISO_FORM);
-  const [savingPiso, setSavingPiso] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [changingId, setChangingId] = useState(null);
@@ -110,14 +112,17 @@ export default function PisoManagerDetail() {
 
         if (!isMounted) return;
 
-        setPiso(pisoData?.piso || null);
-        setPisoForm(buildPisoFormFromPiso(pisoData?.piso || null));
+        const nextPiso = pisoData?.piso || null;
+
+        setPiso(nextPiso);
+        setPisoForm(buildPisoFormFromPiso(nextPiso));
         setHabitaciones(Array.isArray(habitacionesData?.items) ? habitacionesData.items : []);
         setFotosPiso(Array.isArray(pisoData?.fotos) ? pisoData.fotos : []);
       } catch (err) {
         if (!isMounted) return;
         setError(err?.message || "No se pudo cargar el detalle del piso.");
         setPiso(null);
+        setPisoForm(EMPTY_PISO_FORM);
         setHabitaciones([]);
         setFotosPiso([]);
       } finally {
@@ -139,58 +144,76 @@ export default function PisoManagerDetail() {
   }, [fotosPiso]);
 
   function handlePisoFormChange(event) {
-  const { name, value } = event.target;
-  setPisoForm((prev) => ({ ...prev, [name]: value }));
-}
-
-function resetPisoForm() {
-  setPisoForm(buildPisoFormFromPiso(piso));
-}
-
-async function handleUpdatePiso(event) {
-  event.preventDefault();
-
-  try {
-    setSavingPiso(true);
-    setError("");
-    setSuccess("");
-
-    const payload = {
-      direccion: pisoForm.direccion.trim(),
-      ciudad: pisoForm.ciudad.trim(),
-      codigo_postal: pisoForm.codigo_postal.trim() || null,
-      descripcion: pisoForm.descripcion.trim() || null,
-    };
-
-    const data = await updateAdminPiso(pisoId, payload);
-    const updatedPiso = data?.piso || null;
-
-    if (!updatedPiso) {
-      throw new Error("No se pudo actualizar el piso.");
-    }
-
-    setPiso((prev) => {
-      if (!prev) return prev;
-
-      return {
-        ...prev,
-        direccion: updatedPiso.direccion,
-        ciudad: updatedPiso.ciudad,
-        codigo_postal: updatedPiso.codigo_postal,
-        descripcion: updatedPiso.descripcion,
-        activo: updatedPiso.activo,
-        updated_at: updatedPiso.updated_at,
-      };
-    });
-
-    setPisoForm(buildPisoFormFromPiso(updatedPiso));
-    setSuccess("Piso actualizado correctamente.");
-  } catch (err) {
-    setError(err?.error || err?.message || "No se pudo actualizar el piso.");
-  } finally {
-    setSavingPiso(false);
+    const { name, value } = event.target;
+    setPisoForm((prev) => ({ ...prev, [name]: value }));
   }
-}
+
+  function resetPisoForm() {
+    setPisoForm(buildPisoFormFromPiso(piso));
+  }
+
+  function openEditPisoForm() {
+    setPisoForm(buildPisoFormFromPiso(piso));
+    setEditPisoFeedback(null);
+    setIsEditPisoOpen(true);
+  }
+
+  function closeEditPisoForm() {
+    if (savingPiso) return;
+    resetPisoForm();
+    setEditPisoFeedback(null);
+    setIsEditPisoOpen(false);
+  }
+
+  async function handleUpdatePiso(event) {
+    event.preventDefault();
+
+    try {
+      setSavingPiso(true);
+      setEditPisoFeedback(null);
+
+      const payload = {
+        direccion: pisoForm.direccion.trim(),
+        ciudad: pisoForm.ciudad.trim(),
+        codigo_postal: pisoForm.codigo_postal.trim() || null,
+        descripcion: pisoForm.descripcion.trim() || null,
+      };
+
+      const data = await updateAdminPiso(pisoId, payload);
+      const updatedPiso = data?.piso || null;
+
+      if (!updatedPiso) {
+        throw new Error("No se pudo actualizar el piso.");
+      }
+
+      setPiso((prev) => {
+        if (!prev) return prev;
+
+        return {
+          ...prev,
+          direccion: updatedPiso.direccion,
+          ciudad: updatedPiso.ciudad,
+          codigo_postal: updatedPiso.codigo_postal,
+          descripcion: updatedPiso.descripcion,
+          activo: updatedPiso.activo,
+          updated_at: updatedPiso.updated_at,
+        };
+      });
+
+      setPisoForm(buildPisoFormFromPiso(updatedPiso));
+      setEditPisoFeedback({
+        type: "success",
+        message: "Piso actualizado correctamente.",
+      });
+    } catch (err) {
+      setEditPisoFeedback({
+        type: "error",
+        message: err?.error || err?.message || "No se pudo actualizar el piso.",
+      });
+    } finally {
+      setSavingPiso(false);
+    }
+  }
 
   function handleHabitacionFormChange(event) {
     const { name, value } = event.target;
@@ -647,99 +670,142 @@ async function handleUpdatePiso(event) {
               </div>
             </div>
 
-            <div className="card">
-              <div className="card-body space-y-6">
-                <div>
-                  <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+            <div className="space-y-4">
+              {!isEditPisoOpen ? (
+                <div className="flex justify-start">
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={openEditPisoForm}
+                  >
                     Editar piso
-                  </h3>
-                  <p className="mt-1 text-sm text-ui-text-secondary">
-                    Actualiza los datos principales del piso.
-                  </p>
+                  </button>
                 </div>
-                          
-                <form className="space-y-4" onSubmit={handleUpdatePiso}>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div className="md:col-span-2">
-                      <label className="label" htmlFor="direccion">
-                        Dirección
-                      </label>
-                      <input
-                        id="direccion"
-                        name="direccion"
-                        type="text"
-                        className="input"
-                        value={pisoForm.direccion}
-                        onChange={handlePisoFormChange}
-                        disabled={savingPiso}
-                      />
-                    </div>
-                          
+              ) : null}
+            
+              <div
+                className={`overflow-hidden transition-all duration-500 ease-out ${
+                  isEditPisoOpen
+                    ? "mt-4 max-h-[720px] translate-y-0 opacity-100"
+                    : "max-h-0 -translate-y-3 opacity-0 pointer-events-none"
+                }`}
+              >
+                <div className="card">
+                  <div className="card-body space-y-6">
                     <div>
-                      <label className="label" htmlFor="ciudad">
-                        Ciudad
-                      </label>
-                      <input
-                        id="ciudad"
-                        name="ciudad"
-                        type="text"
-                        className="input"
-                        value={pisoForm.ciudad}
-                        onChange={handlePisoFormChange}
-                        disabled={savingPiso}
-                      />
+                      <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                        Editar piso
+                      </h3>
+                      <p className="mt-1 text-sm text-ui-text-secondary">
+                        Actualiza los datos principales del piso.
+                      </p>
                     </div>
-                          
-                    <div>
-                      <label className="label" htmlFor="codigo_postal">
-                        Código postal
-                      </label>
-                      <input
-                        id="codigo_postal"
-                        name="codigo_postal"
-                        type="text"
-                        className="input"
-                        value={pisoForm.codigo_postal}
-                        onChange={handlePisoFormChange}
-                        disabled={savingPiso}
-                      />
-                    </div>
-                          
-                    <div className="md:col-span-2">
-                      <label className="label" htmlFor="descripcion">
-                        Descripción
-                      </label>
-                      <textarea
-                        id="descripcion"
-                        name="descripcion"
-                        className="textarea"
-                        value={pisoForm.descripcion}
-                        onChange={handlePisoFormChange}
-                        disabled={savingPiso}
-                      />
-                    </div>
+              
+                    {editPisoFeedback ? (
+                      <div
+                        className={
+                          editPisoFeedback.type === "success"
+                            ? "alert-success"
+                            : "alert-error"
+                        }
+                      >
+                        {editPisoFeedback.message}
+                      </div>
+                    ) : null}
+            
+                    <form className="space-y-4" onSubmit={handleUpdatePiso}>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="md:col-span-2">
+                          <label className="label" htmlFor="direccion">
+                            Dirección
+                          </label>
+                          <input
+                            id="direccion"
+                            name="direccion"
+                            type="text"
+                            className="input"
+                            value={pisoForm.direccion}
+                            onChange={handlePisoFormChange}
+                            disabled={savingPiso}
+                          />
+                        </div>
+                  
+                        <div>
+                          <label className="label" htmlFor="ciudad">
+                            Ciudad
+                          </label>
+                          <input
+                            id="ciudad"
+                            name="ciudad"
+                            type="text"
+                            className="input"
+                            value={pisoForm.ciudad}
+                            onChange={handlePisoFormChange}
+                            disabled={savingPiso}
+                          />
+                        </div>
+                  
+                        <div>
+                          <label className="label" htmlFor="codigo_postal">
+                            Código postal
+                          </label>
+                          <input
+                            id="codigo_postal"
+                            name="codigo_postal"
+                            type="text"
+                            className="input"
+                            value={pisoForm.codigo_postal}
+                            onChange={handlePisoFormChange}
+                            disabled={savingPiso}
+                          />
+                        </div>
+                  
+                        <div className="md:col-span-2">
+                          <label className="label" htmlFor="descripcion">
+                            Descripción
+                          </label>
+                          <textarea
+                            id="descripcion"
+                            name="descripcion"
+                            className="textarea"
+                            value={pisoForm.descripcion}
+                            onChange={handlePisoFormChange}
+                            disabled={savingPiso}
+                          />
+                        </div>
+                      </div>
+                  
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          className="btn border border-rose-300 bg-rose-100 text-rose-800 hover:bg-rose-200"
+                          onClick={closeEditPisoForm}
+                          disabled={savingPiso}
+                        >
+                          Cancelar
+                        </button>
+                  
+                        <button
+                          type="button"
+                          className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
+                          onClick={resetPisoForm}
+                          disabled={savingPiso}
+                        >
+                          Restablecer
+                        </button>
+                  
+                        <button
+                          type="submit"
+                          className="btn btn-primary"
+                          disabled={savingPiso}
+                          aria-busy={savingPiso}
+                        >
+                          {savingPiso ? "Guardando..." : "Guardar cambios"}
+                        </button>
+                      </div>
+                    </form>
                   </div>
-                          
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
-                      onClick={resetPisoForm}
-                      disabled={savingPiso}
-                    >
-                      Restablecer
-                    </button>
-                          
-                    <button
-                      type="submit"
-                      className="btn btn-primary"
-                      disabled={savingPiso}
-                      aria-busy={savingPiso}
-                    >
-                      {savingPiso ? "Guardando..." : "Guardar cambios"}
-                    </button>
-                  </div>
-                </form>
+                </div>
               </div>
             </div>
 
@@ -774,10 +840,11 @@ async function handleUpdatePiso(event) {
                       onDragOver={handlePisoPhotoDragOver}
                       onDragLeave={handlePisoPhotoDragLeave}
                       onDrop={handlePisoPhotoDrop}
-                      className={`flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border-[3px] border-dashed px-4 py-6 text-center transition-colors ${isDraggingPisoPhoto
+                      className={`flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border-[3px] border-dashed px-4 py-6 text-center transition-colors ${
+                        isDraggingPisoPhoto
                           ? "border-emerald-300 bg-emerald-100"
                           : "border-emerald-200 bg-emerald-50 hover:border-emerald-300 hover:bg-emerald-100"
-                        }`}
+                      }`}
                     >
                       <div className="space-y-2">
                         <p className="text-sm font-medium text-ui-text">
@@ -969,10 +1036,11 @@ async function handleUpdatePiso(event) {
                 ) : null}
 
                 <div
-                  className={`overflow-hidden transition-all duration-500 ease-out ${isCreateHabitacionOpen
+                  className={`overflow-hidden transition-all duration-500 ease-out ${
+                    isCreateHabitacionOpen
                       ? "mt-4 max-h-[660px] translate-y-0 opacity-100"
                       : "max-h-0 -translate-y-3 opacity-0 pointer-events-none"
-                    }`}
+                  }`}
                 >
                   <div className="card">
                     <div className="card-body space-y-6">
@@ -1172,8 +1240,9 @@ async function handleUpdatePiso(event) {
                     return (
                       <article
                         key={habitacion.id}
-                        className={`card flex h-full flex-col transition-opacity ${isInactive ? "opacity-45" : ""
-                          }`}
+                        className={`card flex h-full flex-col transition-opacity ${
+                          isInactive ? "opacity-45" : ""
+                        }`}
                       >
                         <div className="card-body flex flex-1 flex-col gap-3">
                           {roomCover ? (

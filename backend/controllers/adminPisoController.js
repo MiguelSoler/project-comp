@@ -494,9 +494,6 @@ const updatePiso = async (req, res) => {
     }
 
     if (activo !== undefined) {
-      if (!isAdmin && activo === true) {
-        return res.status(403).json({ error: "FORBIDDEN" });
-      }
       params.push(activo);
       updates.push(`activo = $${idx++}`);
     }

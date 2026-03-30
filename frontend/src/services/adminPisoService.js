@@ -27,6 +27,21 @@ export function getAdminPisoById(pisoId) {
   return get(`/api/admin/piso/${pisoId}`);
 }
 
+// POST /api/admin/piso
+export function createAdminPiso(payload) {
+  return post("/api/admin/piso", payload);
+}
+
+// DELETE /api/admin/piso/:pisoId
+export function deactivateAdminPiso(pisoId) {
+  return del(`/api/admin/piso/${pisoId}`);
+}
+
+// PATCH /api/admin/piso/:pisoId  { activo: true }
+export function reactivateAdminPiso(pisoId) {
+  return patch(`/api/admin/piso/${pisoId}`, { activo: true });
+}
+
 // PATCH /api/admin/piso/:pisoId
 export function updateAdminPiso(pisoId, payload) {
   return patch(`/api/admin/piso/${pisoId}`, payload);
