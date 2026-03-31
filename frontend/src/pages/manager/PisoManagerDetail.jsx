@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
 import {
@@ -66,6 +66,7 @@ function buildPisoFormFromPiso(piso) {
 
 export default function PisoManagerDetail() {
   const { pisoId } = useParams();
+  const navigate = useNavigate();
 
   const [piso, setPiso] = useState(null);
   const [habitaciones, setHabitaciones] = useState([]);
@@ -74,6 +75,7 @@ export default function PisoManagerDetail() {
   const [pisoUploadForm, setPisoUploadForm] = useState(EMPTY_PISO_UPLOAD_FORM);
   const [pisoPhotoOrderValues, setPisoPhotoOrderValues] = useState({});
   const [habitacionForm, setHabitacionForm] = useState(EMPTY_HABITACION_FORM);
+
   const [creatingHabitacion, setCreatingHabitacion] = useState(false);
   const [savingPiso, setSavingPiso] = useState(false);
   const [isEditPisoOpen, setIsEditPisoOpen] = useState(false);
@@ -84,14 +86,22 @@ export default function PisoManagerDetail() {
   const [loading, setLoading] = useState(true);
   const [changingId, setChangingId] = useState(null);
   const [habitacionToDeactivate, setHabitacionToDeactivate] = useState(null);
+
   const [isDraggingPisoPhoto, setIsDraggingPisoPhoto] = useState(false);
   const [uploadingPisoPhoto, setUploadingPisoPhoto] = useState(false);
   const [updatingPisoPhotoId, setUpdatingPisoPhotoId] = useState(null);
   const [deletingPisoPhotoId, setDeletingPisoPhotoId] = useState(null);
   const [pisoPhotoToDelete, setPisoPhotoToDelete] = useState(null);
   const [pisoPhotoFeedback, setPisoPhotoFeedback] = useState({});
+  const [editingPisoPhotoOrderId, setEditingPisoPhotoOrderId] = useState(null);
+  const [openPisoPhotoMenuId, setOpenPisoPhotoMenuId] = useState(null);
+
+  const [openHabitacionMenuId, setOpenHabitacionMenuId] = useState(null);
+  const [habitacionCardFeedback, setHabitacionCardFeedback] = useState({});
+
   const [isPisoPhotoModalOpen, setIsPisoPhotoModalOpen] = useState(false);
   const [selectedPisoPhotoIndex, setSelectedPisoPhotoIndex] = useState(0);
+
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
@@ -291,12 +301,63 @@ export default function PisoManagerDetail() {
     }
   }
 
-  async function handleReactivateHabitacion(habitacion) {
+  function togglePisoPhotoMenu(fotoId, event) {
+    event.stopPropagation();
+    setOpenHabitacionMenuId(null);
+    setOpenPisoPhotoMenuId((prev) => (prev === fotoId ? null : fotoId));
+  }
+
+  function openPisoPhotoOrderEditor(fotoId, event) {
+    event.stopPropagation();
+    setOpenPisoPhotoMenuId(null);
+
+    setPisoPhotoFeedback((prev) => {
+      const next = { ...prev };
+      delete next[fotoId];
+      return next;
+    });
+
+    setEditingPisoPhotoOrderId(fotoId);
+  }
+
+  function closePisoPhotoOrderEditor(fotoId, event) {
+    if (event) event.stopPropagation();
+
+    setEditingPisoPhotoOrderId(null);
+
+    setPisoPhotoFeedback((prev) => {
+      const next = { ...prev };
+      delete next[fotoId];
+      return next;
+    });
+  }
+
+  function toggleHabitacionMenu(habitacionId, event) {
+    event.stopPropagation();
+    setOpenPisoPhotoMenuId(null);
+    setOpenHabitacionMenuId((prev) => (prev === habitacionId ? null : habitacionId));
+  }
+
+  function openHabitacionDetail(habitacionId) {
+    setOpenHabitacionMenuId(null);
+    navigate(`/manager/habitacion/${habitacionId}`);
+  }
+
+  async function handleReactivateHabitacion(habitacion, event) {
+    if (event) event.stopPropagation();
+
     try {
       setChangingId(habitacion.id);
       setError("");
       setSuccess("");
       setCreateHabitacionSuccess("");
+      setOpenHabitacionMenuId(null);
+
+      setHabitacionCardFeedback((prev) => {
+        const next = { ...prev };
+        delete next[habitacion.id];
+        return next;
+      });
 
       const data = await reactivateAdminHabitacion(habitacion.id);
       const updatedHabitacion = data?.habitacion;
@@ -326,15 +387,29 @@ export default function PisoManagerDetail() {
         };
       });
 
-      setSuccess("Habitación reactivada correctamente.");
+      setHabitacionCardFeedback((prev) => ({
+        ...prev,
+        [habitacion.id]: {
+          type: "success",
+          message: "Habitación reactivada correctamente.",
+        },
+      }));
     } catch (err) {
-      setError(err?.error || err?.message || "No se pudo reactivar la habitación.");
+      setHabitacionCardFeedback((prev) => ({
+        ...prev,
+        [habitacion.id]: {
+          type: "error",
+          message: err?.error || err?.message || "No se pudo reactivar la habitación.",
+        },
+      }));
     } finally {
       setChangingId(null);
     }
   }
 
-  function requestDeactivateHabitacion(habitacion) {
+  function requestDeactivateHabitacion(habitacion, event) {
+    if (event) event.stopPropagation();
+    setOpenHabitacionMenuId(null);
     setHabitacionToDeactivate(habitacion);
   }
 
@@ -352,6 +427,12 @@ export default function PisoManagerDetail() {
       setError("");
       setSuccess("");
       setCreateHabitacionSuccess("");
+
+      setHabitacionCardFeedback((prev) => {
+        const next = { ...prev };
+        delete next[habitacion.id];
+        return next;
+      });
 
       const data = await deactivateAdminHabitacion(habitacion.id);
       const updatedHabitacion = data?.habitacion;
@@ -381,10 +462,23 @@ export default function PisoManagerDetail() {
         };
       });
 
-      setSuccess("Habitación desactivada correctamente.");
+      setHabitacionCardFeedback((prev) => ({
+        ...prev,
+        [habitacion.id]: {
+          type: "success",
+          message: "Habitación desactivada correctamente.",
+        },
+      }));
+
       setHabitacionToDeactivate(null);
     } catch (err) {
-      setError(err?.error || err?.message || "No se pudo desactivar la habitación.");
+      setHabitacionCardFeedback((prev) => ({
+        ...prev,
+        [habitacion.id]: {
+          type: "error",
+          message: err?.error || err?.message || "No se pudo desactivar la habitación.",
+        },
+      }));
     } finally {
       setChangingId(null);
     }
@@ -423,6 +517,7 @@ export default function PisoManagerDetail() {
   }
 
   function openPisoPhotoModal(index) {
+    setOpenPisoPhotoMenuId(null);
     setSelectedPisoPhotoIndex(index);
     setIsPisoPhotoModalOpen(true);
   }
@@ -509,7 +604,6 @@ export default function PisoManagerDetail() {
 
     try {
       setUpdatingPisoPhotoId(foto.id);
-      setError("");
 
       const data = await updateAdminPisoFoto(pisoId, foto.id, {
         orden: nextOrder,
@@ -526,6 +620,8 @@ export default function PisoManagerDetail() {
             return a.id - b.id;
           })
       );
+
+      setEditingPisoPhotoOrderId(null);
 
       setPisoPhotoFeedback((prev) => ({
         ...prev,
@@ -552,7 +648,9 @@ export default function PisoManagerDetail() {
     }
   }
 
-  function requestDeletePisoPhoto(foto) {
+  function requestDeletePisoPhoto(foto, event) {
+    if (event) event.stopPropagation();
+    setOpenPisoPhotoMenuId(null);
     setPisoPhotoToDelete(foto);
   }
 
@@ -566,16 +664,30 @@ export default function PisoManagerDetail() {
 
     try {
       setDeletingPisoPhotoId(pisoPhotoToDelete.id);
-      setError("");
-      setSuccess("");
+
+      setPisoPhotoFeedback((prev) => {
+        const next = { ...prev };
+        delete next[pisoPhotoToDelete.id];
+        return next;
+      });
 
       await deleteAdminPisoFoto(pisoId, pisoPhotoToDelete.id);
 
       setFotosPiso((prev) => prev.filter((foto) => foto.id !== pisoPhotoToDelete.id));
+
+      if (editingPisoPhotoOrderId === pisoPhotoToDelete.id) {
+        setEditingPisoPhotoOrderId(null);
+      }
+
       setPisoPhotoToDelete(null);
-      setSuccess("Foto del piso eliminada correctamente.");
     } catch (err) {
-      setError(err?.error || err?.message || "No se pudo eliminar la foto del piso.");
+      setPisoPhotoFeedback((prev) => ({
+        ...prev,
+        [pisoPhotoToDelete.id]: {
+          type: "error",
+          message: err?.error || err?.message || "No se pudo eliminar la foto del piso.",
+        },
+      }));
     } finally {
       setDeletingPisoPhotoId(null);
     }
@@ -682,7 +794,7 @@ export default function PisoManagerDetail() {
                   </button>
                 </div>
               ) : null}
-            
+
               <div
                 className={`overflow-hidden transition-all duration-500 ease-out ${
                   isEditPisoOpen
@@ -700,7 +812,7 @@ export default function PisoManagerDetail() {
                         Actualiza los datos principales del piso.
                       </p>
                     </div>
-              
+
                     {editPisoFeedback ? (
                       <div
                         className={
@@ -712,7 +824,7 @@ export default function PisoManagerDetail() {
                         {editPisoFeedback.message}
                       </div>
                     ) : null}
-            
+
                     <form className="space-y-4" onSubmit={handleUpdatePiso}>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="md:col-span-2">
@@ -729,7 +841,7 @@ export default function PisoManagerDetail() {
                             disabled={savingPiso}
                           />
                         </div>
-                  
+
                         <div>
                           <label className="label" htmlFor="ciudad">
                             Ciudad
@@ -744,7 +856,7 @@ export default function PisoManagerDetail() {
                             disabled={savingPiso}
                           />
                         </div>
-                  
+
                         <div>
                           <label className="label" htmlFor="codigo_postal">
                             Código postal
@@ -759,7 +871,7 @@ export default function PisoManagerDetail() {
                             disabled={savingPiso}
                           />
                         </div>
-                  
+
                         <div className="md:col-span-2">
                           <label className="label" htmlFor="descripcion">
                             Descripción
@@ -774,7 +886,7 @@ export default function PisoManagerDetail() {
                           />
                         </div>
                       </div>
-                  
+
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
@@ -784,7 +896,7 @@ export default function PisoManagerDetail() {
                         >
                           Cancelar
                         </button>
-                  
+
                         <button
                           type="button"
                           className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
@@ -793,7 +905,7 @@ export default function PisoManagerDetail() {
                         >
                           Restablecer
                         </button>
-                  
+
                         <button
                           type="submit"
                           className="btn btn-primary"
@@ -897,75 +1009,123 @@ export default function PisoManagerDetail() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {fotosPiso.map((foto) => (
-                    <article key={foto.id} className="card">
+                  {fotosPiso.map((foto, index) => (
+                    <article key={foto.id} className="card card-hover relative">
+                      <button
+                        type="button"
+                        className="absolute right-[10px] top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300 bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.35)] transition-all hover:from-sky-500 hover:via-blue-600 hover:to-indigo-700 hover:shadow-[0_0_0_4px_rgba(59,130,246,0.4)]"
+                        onClick={(event) => togglePisoPhotoMenu(foto.id, event)}
+                        aria-label="Más acciones"
+                      >
+                        <span className="flex items-center justify-center gap-0.5">
+                          <span className="h-1 w-1 rounded-full bg-white" />
+                          <span className="h-1 w-1 rounded-full bg-white" />
+                          <span className="h-1 w-1 rounded-full bg-white" />
+                        </span>
+                      </button>
+
+                      {openPisoPhotoMenuId === foto.id ? (
+                        <div
+                          className="absolute right-3 top-12 z-30 min-w-[180px] rounded-lg border border-ui-border bg-white p-2 shadow-modal"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-sky-100"
+                            onClick={(event) => openPisoPhotoOrderEditor(foto.id, event)}
+                          >
+                            Cambiar orden
+                          </button>
+
+                          <button
+                            type="button"
+                            className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-red-100"
+                            onClick={(event) => requestDeletePisoPhoto(foto, event)}
+                          >
+                            Eliminar foto
+                          </button>
+                        </div>
+                      ) : null}
+
                       <div className="card-body space-y-3">
-                        <img
-                          src={buildImageUrl(foto.url)}
-                          alt={`Foto del piso ${foto.orden}`}
-                          className="aspect-[4/3] w-full rounded-md object-cover"
-                        />
+                        <button
+                          type="button"
+                          className="block w-full"
+                          onClick={() => openPisoPhotoModal(index)}
+                        >
+                          <img
+                            src={buildImageUrl(foto.url)}
+                            alt={`Foto del piso ${foto.orden}`}
+                            className="aspect-[4/3] w-full rounded-md object-cover"
+                          />
+                        </button>
 
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs text-ui-text-secondary">ID #{foto.id}</span>
+                          <span className="text-xs text-ui-text-secondary">Orden #{foto.orden}</span>
                         </div>
 
-                        <div className="space-y-3">
-                          <div>
-                            <label className="label" htmlFor={`orden-piso-foto-${foto.id}`}>
-                              Orden
-                            </label>
-                            <input
-                              id={`orden-piso-foto-${foto.id}`}
-                              type="number"
-                              min="0"
-                              className="input"
-                              value={pisoPhotoOrderValues[foto.id] ?? ""}
-                              onChange={(event) =>
-                                handlePisoPhotoOrderValueChange(foto.id, event.target.value)
-                              }
-                              disabled={
-                                updatingPisoPhotoId === foto.id || deletingPisoPhotoId === foto.id
-                              }
-                            />
-                          </div>
-
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              className="btn btn-sm border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                              disabled={
-                                updatingPisoPhotoId === foto.id || deletingPisoPhotoId === foto.id
-                              }
-                              onClick={() => handleSavePisoPhotoOrder(foto)}
-                            >
-                              {updatingPisoPhotoId === foto.id ? "Guardando..." : "Guardar orden"}
-                            </button>
-
-                            <button
-                              type="button"
-                              className="btn btn-danger btn-sm"
-                              disabled={
-                                deletingPisoPhotoId === foto.id || updatingPisoPhotoId === foto.id
-                              }
-                              onClick={() => requestDeletePisoPhoto(foto)}
-                            >
-                              {deletingPisoPhotoId === foto.id ? "Eliminando..." : "Eliminar foto"}
-                            </button>
-                          </div>
-
-                          {pisoPhotoFeedback[foto.id] ? (
-                            <div
-                              className={
-                                pisoPhotoFeedback[foto.id].type === "success"
-                                  ? "alert-success"
-                                  : "alert-error"
-                              }
-                            >
-                              {pisoPhotoFeedback[foto.id].message}
+                        {editingPisoPhotoOrderId === foto.id ? (
+                          <div className="space-y-3">
+                            <div>
+                              <label className="label" htmlFor={`orden-piso-foto-${foto.id}`}>
+                                Orden
+                              </label>
+                              <input
+                                id={`orden-piso-foto-${foto.id}`}
+                                type="number"
+                                min="0"
+                                className="input"
+                                value={pisoPhotoOrderValues[foto.id] ?? ""}
+                                onChange={(event) =>
+                                  handlePisoPhotoOrderValueChange(foto.id, event.target.value)
+                                }
+                                disabled={
+                                  updatingPisoPhotoId === foto.id ||
+                                  deletingPisoPhotoId === foto.id
+                                }
+                              />
                             </div>
-                          ) : null}
-                        </div>
+
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={(event) => closePisoPhotoOrderEditor(foto.id, event)}
+                                disabled={
+                                  updatingPisoPhotoId === foto.id ||
+                                  deletingPisoPhotoId === foto.id
+                                }
+                              >
+                                Cancelar
+                              </button>
+
+                              <button
+                                type="button"
+                                className="btn btn-sm border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                                disabled={
+                                  updatingPisoPhotoId === foto.id ||
+                                  deletingPisoPhotoId === foto.id
+                                }
+                                onClick={() => handleSavePisoPhotoOrder(foto)}
+                              >
+                                {updatingPisoPhotoId === foto.id ? "Guardando..." : "Guardar orden"}
+                              </button>
+                            </div>
+                          </div>
+                        ) : null}
+
+                        {pisoPhotoFeedback[foto.id] ? (
+                          <div
+                            className={
+                              pisoPhotoFeedback[foto.id].type === "success"
+                                ? "alert-success"
+                                : "alert-error"
+                            }
+                          >
+                            {pisoPhotoFeedback[foto.id].message}
+                          </div>
+                        ) : null}
                       </div>
                     </article>
                   ))}
@@ -1240,87 +1400,121 @@ export default function PisoManagerDetail() {
                     return (
                       <article
                         key={habitacion.id}
-                        className={`card flex h-full flex-col transition-opacity ${
-                          isInactive ? "opacity-45" : ""
-                        }`}
+                        className="card card-hover relative flex h-full flex-col"
                       >
-                        <div className="card-body flex flex-1 flex-col gap-3">
-                          {roomCover ? (
-                            <img
-                              src={roomCover}
-                              alt={habitacion.titulo || `Habitación ${habitacion.id}`}
-                              className="aspect-[4/3] w-full rounded-md object-cover"
-                            />
-                          ) : (
-                            <div className="skeleton aspect-[4/3] w-full rounded-md" />
-                          )}
+                        <button
+                          type="button"
+                          className="absolute right-[10px] top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300 bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.35)] transition-all hover:from-sky-500 hover:via-blue-600 hover:to-indigo-700 hover:shadow-[0_0_0_4px_rgba(59,130,246,0.4)]"
+                          onClick={(event) => toggleHabitacionMenu(habitacion.id, event)}
+                          aria-label="Más acciones"
+                        >
+                          <span className="flex items-center justify-center gap-0.5">
+                            <span className="h-1 w-1 rounded-full bg-white" />
+                            <span className="h-1 w-1 rounded-full bg-white" />
+                            <span className="h-1 w-1 rounded-full bg-white" />
+                          </span>
+                        </button>
 
-                          <div className="flex items-start justify-between gap-2">
-                            <h4 className="min-h-[56px] text-base font-semibold text-ui-text">
-                              {habitacion.titulo || "Sin título"}
-                            </h4>
-
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                              <span
-                                className={
-                                  habitacion.activo ? "badge badge-success" : "badge badge-neutral"
-                                }
-                              >
-                                {habitacion.activo ? "Activa" : "Inactiva"}
-                              </span>
-
-                              <span
-                                className={
-                                  habitacion.disponible ? "badge badge-info" : "badge badge-warning"
-                                }
-                              >
-                                {habitacion.disponible ? "Disponible" : "No disponible"}
-                              </span>
-                            </div>
-                          </div>
-
-                          <p className="text-sm text-ui-text-secondary">
-                            <span className="font-medium text-ui-text">
-                              {formatEur(habitacion.precio_mensual)}
-                            </span>{" "}
-                            / mes
-                            {habitacion.tamano_m2 ? ` · ${habitacion.tamano_m2} m²` : ""}
-                          </p>
-
-                          <p className="text-xs text-ui-text-secondary">
-                            {habitacion.amueblada ? "Amueblada · " : ""}
-                            {habitacion.bano ? "Baño · " : ""}
-                            {habitacion.balcon ? "Balcón" : ""}
-                          </p>
-
-                          <div className="mt-auto flex items-center justify-end gap-2 pt-1">
-                            <Link
-                              to={`/manager/habitacion/${habitacion.id}`}
-                              className="btn btn-sm border border-blue-300 bg-blue-100 text-brand-primary hover:bg-blue-200"
-                            >
-                              Gestionar
-                            </Link>
-
+                        {openHabitacionMenuId === habitacion.id ? (
+                          <div
+                            className="absolute right-3 top-12 z-30 min-w-[180px] rounded-lg border border-ui-border bg-white p-2 shadow-modal"
+                            onClick={(event) => event.stopPropagation()}
+                          >
                             {habitacion.activo ? (
                               <button
                                 type="button"
-                                className="btn btn-danger btn-sm"
-                                disabled={changingId === habitacion.id}
-                                onClick={() => requestDeactivateHabitacion(habitacion)}
+                                className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-red-100"
+                                onClick={(event) => requestDeactivateHabitacion(habitacion, event)}
                               >
-                                {changingId === habitacion.id ? "Desactivando..." : "Desactivar"}
+                                Desactivar habitación
                               </button>
                             ) : (
                               <button
                                 type="button"
-                                className="btn btn-primary btn-sm"
-                                disabled={changingId === habitacion.id}
-                                onClick={() => handleReactivateHabitacion(habitacion)}
+                                className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-green-100"
+                                onClick={(event) => handleReactivateHabitacion(habitacion, event)}
                               >
-                                {changingId === habitacion.id ? "Reactivando..." : "Reactivar"}
+                                Reactivar habitación
                               </button>
                             )}
                           </div>
+                        ) : null}
+
+                        <div className="card-body flex flex-1 flex-col">
+                          <div
+                            role="button"
+                            tabIndex={0}
+                            className={`flex flex-1 flex-col gap-3 ${
+                              isInactive ? "opacity-25" : ""
+                            }`}
+                            onClick={() => openHabitacionDetail(habitacion.id)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                openHabitacionDetail(habitacion.id);
+                              }
+                            }}
+                          >
+                            {roomCover ? (
+                              <img
+                                src={roomCover}
+                                alt={habitacion.titulo || `Habitación ${habitacion.id}`}
+                                className="aspect-[4/3] w-full rounded-md object-cover"
+                              />
+                            ) : (
+                              <div className="skeleton aspect-[4/3] w-full rounded-md" />
+                            )}
+
+                            <div className="flex items-start justify-between gap-2">
+                              <h4 className="min-h-[56px] text-base font-semibold text-ui-text">
+                                {habitacion.titulo || "Sin título"}
+                              </h4>
+
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                <span
+                                  className={
+                                    habitacion.activo ? "badge badge-success" : "badge badge-neutral"
+                                  }
+                                >
+                                  {habitacion.activo ? "Activa" : "Inactiva"}
+                                </span>
+
+                                <span
+                                  className={
+                                    habitacion.disponible ? "badge badge-info" : "badge badge-warning"
+                                  }
+                                >
+                                  {habitacion.disponible ? "Disponible" : "No disponible"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <p className="text-sm text-ui-text-secondary">
+                              <span className="font-medium text-ui-text">
+                                {formatEur(habitacion.precio_mensual)}
+                              </span>{" "}
+                              / mes
+                              {habitacion.tamano_m2 ? ` · ${habitacion.tamano_m2} m²` : ""}
+                            </p>
+
+                            <p className="text-xs text-ui-text-secondary">
+                              {habitacion.amueblada ? "Amueblada · " : ""}
+                              {habitacion.bano ? "Baño · " : ""}
+                              {habitacion.balcon ? "Balcón" : ""}
+                            </p>
+                          </div>
+
+                          {habitacionCardFeedback[habitacion.id] ? (
+                            <div
+                              className={`mt-4 ${
+                                habitacionCardFeedback[habitacion.id].type === "success"
+                                  ? "alert-success"
+                                  : "alert-error"
+                              }`}
+                            >
+                              {habitacionCardFeedback[habitacion.id].message}
+                            </div>
+                          ) : null}
                         </div>
                       </article>
                     );
@@ -1370,6 +1564,49 @@ export default function PisoManagerDetail() {
               disabled={Boolean(changingId)}
             >
               {changingId ? "Desactivando..." : "Sí, desactivar"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={Boolean(pisoPhotoToDelete)}
+        title="Confirmar eliminación"
+        onClose={closeDeletePisoPhotoModal}
+        size="md"
+        tone="danger"
+        closeLabel="Cancelar"
+        closeOnOverlay={false}
+        showCloseButton={false}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-ui-text-secondary">
+            Vas a eliminar esta foto del piso de forma permanente.
+          </p>
+
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+            <p className="text-sm font-semibold text-red-700">
+              Foto #{pisoPhotoToDelete?.id ?? "—"}
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={closeDeletePisoPhotoModal}
+              disabled={Boolean(deletingPisoPhotoId)}
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              onClick={handleConfirmDeletePisoPhoto}
+              disabled={Boolean(deletingPisoPhotoId)}
+            >
+              {deletingPisoPhotoId ? "Eliminando..." : "Sí, eliminar"}
             </button>
           </div>
         </div>

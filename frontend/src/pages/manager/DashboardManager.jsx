@@ -429,14 +429,14 @@ export default function DashboardManager() {
                   >
                     <button
                       type="button"
-                      className="absolute right-[10px] top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300 bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.35)] transition-all animate-[pulse_3.2s_ease-in-out_infinite] hover:from-sky-500 hover:via-blue-600 hover:to-indigo-700 hover:shadow-[0_0_0_4px_rgba(59,130,246,0.4)]"
+                      className="absolute right-[10px] top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300 bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.35)] transition-all hover:from-sky-500 hover:via-blue-600 hover:to-indigo-700 hover:shadow-[0_0_0_4px_rgba(59,130,246,0.4)]"
                       onClick={(event) => togglePisoMenu(piso.id, event)}
                       aria-label="Más acciones"
                     >
                       <span className="flex items-center justify-center gap-0.5">
-                        <span className="h-0.5 w-0.5 rounded-full bg-white" />
-                        <span className="h-0.5 w-0.5 rounded-full bg-white" />
-                        <span className="h-0.5 w-0.5 rounded-full bg-white" />
+                        <span className="h-1 w-1 rounded-full bg-white" />
+                        <span className="h-1 w-1 rounded-full bg-white" />
+                        <span className="h-1 w-1 rounded-full bg-white" />
                       </span>
                     </button>
 
@@ -456,7 +456,7 @@ export default function DashboardManager() {
                         ) : (
                           <button
                             type="button"
-                            className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-slate-50"
+                            className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-green-100"
                             onClick={(event) => openPisoActionModal(piso, "reactivate", event)}
                           >
                             Reactivar piso
@@ -468,8 +468,8 @@ export default function DashboardManager() {
                     <div
                       role="button"
                       tabIndex={0}
-                      className={`card-body space-y-3 pr-12 ${
-                        !piso.activo ? "opacity-45" : ""
+                      className={`card-body space-y-3 ${
+                        !piso.activo ? "opacity-25" : ""
                       }`}
                       onClick={() => {
                         setOpenMenuPisoId(null);
