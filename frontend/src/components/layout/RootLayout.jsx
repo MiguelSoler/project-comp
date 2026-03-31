@@ -1,10 +1,12 @@
 import { Outlet } from "react-router-dom";
 import Navbar from "./Navbar.jsx";
 import Container from "./Container.jsx";
+import ScrollToTop from "./ScrollToTop.jsx";
 
 export default function RootLayout() {
     return (
         <div className="min-h-screen flex flex-col">
+            <ScrollToTop />
             <Navbar />
 
             <main className="flex-1">

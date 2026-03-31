@@ -61,7 +61,7 @@ function buildFormFromHabitacion(habitacion) {
   };
 }
 
-export default function HabitacionManagerDetail() {
+export default function HabitacionAdminDetail() {
   const { habitacionId } = useParams();
   const navigate = useNavigate();
 
@@ -445,7 +445,7 @@ export default function HabitacionManagerDetail() {
     <>
       <PageShell
         title="Detalle de habitación"
-        subtitle="Consulta y edita la información completa de la habitación."
+        subtitle="Consulta y gestiona esta habitación como administrador."
         variant="plain"
         contentClassName="space-y-6"
         actions={

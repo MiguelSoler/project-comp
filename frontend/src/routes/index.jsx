@@ -15,13 +15,17 @@ import VotarConviviente from "../pages/usuario/VotarConviviente.jsx";
 import MisVotos from "../pages/usuario/MisVotos.jsx";
 import MiReputacion from "../pages/usuario/MiReputacion.jsx";
 import VotosRecibidos from "../pages/usuario/VotosRecibidos.jsx";
-import HabitacionManagerDetail from "../pages/manager/HabitacionManagerDetail.jsx";
 
+import HabitacionManagerDetail from "../pages/manager/HabitacionManagerDetail.jsx";
 import DashboardManager from "../pages/manager/DashboardManager.jsx";
 import PisoManagerDetail from "../pages/manager/PisoManagerDetail.jsx";
+
 import DashboardAdmin from "../pages/admin/DashboardAdmin.jsx";
+import PisoAdminDetail from "../pages/admin/PisoAdminDetail.jsx";
+import HabitacionAdminDetail from "../pages/admin/HabitacionAdminDetail.jsx";
 
 import NotFound from "../pages/NotFound.jsx";
+import ScrollToTop from "../components/layout/ScrollToTop.jsx";
 
 import AuthGuard from "../middleware/authGuard.jsx";
 import RoleGuard from "../middleware/roleGuard.jsx";
@@ -32,6 +36,7 @@ export default function AppRoutes() {
       <Route element={<RootLayout />}>
         {/* Entrada principal: mostrar contenido directamente */}
         <Route index element={<HabitacionesList />} />
+        <Route element={<ScrollToTop />} />
 
         {/* Auth */}
         <Route path="login" element={<Login />} />
@@ -58,6 +63,8 @@ export default function AppRoutes() {
 
           <Route element={<RoleGuard allowedRoles={["admin"]} />}>
             <Route path="admin" element={<DashboardAdmin />} />
+            <Route path="admin/piso/:pisoId" element={<PisoAdminDetail />} />
+            <Route path="admin/habitacion/:habitacionId" element={<HabitacionAdminDetail />} />
           </Route>
         </Route>
 
