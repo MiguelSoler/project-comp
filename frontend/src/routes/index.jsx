@@ -21,7 +21,9 @@ import DashboardManager from "../pages/manager/DashboardManager.jsx";
 import PisoManagerDetail from "../pages/manager/PisoManagerDetail.jsx";
 
 import DashboardAdmin from "../pages/admin/DashboardAdmin.jsx";
+import AdminPisosList from "../pages/admin/AdminPisosList.jsx";
 import PisoAdminDetail from "../pages/admin/PisoAdminDetail.jsx";
+import AdminHabitacionesList from "../pages/admin/AdminHabitacionesList.jsx";
 import HabitacionAdminDetail from "../pages/admin/HabitacionAdminDetail.jsx";
 
 import NotFound from "../pages/NotFound.jsx";
@@ -55,6 +57,7 @@ export default function AppRoutes() {
           <Route path="mis-votos" element={<MisVotos />} />
           <Route path="mi-reputacion" element={<MiReputacion />} />
           <Route path="votos-recibidos" element={<VotosRecibidos />} />
+
           <Route element={<RoleGuard allowedRoles={["advertiser"]} />}>
             <Route path="manager" element={<DashboardManager />} />
             <Route path="manager/piso/:pisoId" element={<PisoManagerDetail />} />
@@ -63,7 +66,9 @@ export default function AppRoutes() {
 
           <Route element={<RoleGuard allowedRoles={["admin"]} />}>
             <Route path="admin" element={<DashboardAdmin />} />
+            <Route path="admin/pisos" element={<AdminPisosList />} />
             <Route path="admin/piso/:pisoId" element={<PisoAdminDetail />} />
+            <Route path="admin/habitaciones" element={<AdminHabitacionesList />} />
             <Route path="admin/habitacion/:habitacionId" element={<HabitacionAdminDetail />} />
           </Route>
         </Route>

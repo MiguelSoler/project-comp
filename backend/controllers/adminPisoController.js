@@ -60,6 +60,9 @@ const listPisosAdmin = async (req, res) => {
 
         const activoRaw = String(req.query.activo || "all").toLowerCase(); // all|true|false
         const ciudad = (req.query.ciudad || "").trim();
+        const direccion = (req.query.direccion || "").trim();
+        const codigoPostal = (req.query.codigo_postal || "").trim();
+        const descripcion = (req.query.descripcion || "").trim();
 
         const sort = String(req.query.sort || "newest");
         const sortMap = {
@@ -92,8 +95,23 @@ const listPisosAdmin = async (req, res) => {
 
         // Filtro ciudad (exact match)
         if (ciudad) {
-            params.push(ciudad);
-            where.push(`p.ciudad = $${i++}`);
+                params.push(ciudad);
+                where.push(`LOWER(p.ciudad) = LOWER($${i++})`);
+            }
+        
+            if (direccion) {
+          params.push(`%${direccion}%`);
+          where.push(`p.direccion ILIKE $${i++}`);
+        }
+    
+        if (codigoPostal) {
+          params.push(codigoPostal);
+          where.push(`p.codigo_postal = $${i++}`);
+        }
+    
+        if (descripcion) {
+          params.push(`%${descripcion}%`);
+          where.push(`COALESCE(p.descripcion, '') ILIKE $${i++}`);
         }
 
         params.push(limit);
@@ -115,6 +133,7 @@ const listPisosAdmin = async (req, res) => {
         p.updated_at,
         u.nombre AS manager_nombre,
         u.apellidos AS manager_apellidos,
+        u.email AS manager_email,
         (SELECT fp.url
          FROM foto_piso fp
          WHERE fp.piso_id = p.id
@@ -133,18 +152,17 @@ const listPisosAdmin = async (req, res) => {
         const total = q.rowCount ? Number(q.rows[0].total_count) : 0;
         const totalPages = total ? Math.ceil(total / limit) : 0;
 
-        const items = q.rows.map(({ total_count, ...row }) => ({
-            ...row,
-            manager: {
-                id: row.manager_usuario_id,
-                nombre: row.manager_nombre,
-                apellidos: row.manager_apellidos,
-            },
-        })).map((row) => {
-            // limpiamos duplicados ya anidados
-            const { manager_nombre, manager_apellidos, ...clean } = row;
-            return clean;
-        });
+        const items = q.rows.map(
+            ({ total_count, manager_nombre, manager_apellidos, manager_email, ...row }) => ({
+                ...row,
+                manager: {
+                    id: row.manager_usuario_id,
+                    nombre: manager_nombre,
+                    apellidos: manager_apellidos,
+                    email: manager_email,
+                },
+            })
+        );
 
         return res.json({ page, limit, total, totalPages, items });
     } catch (error) {

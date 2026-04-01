@@ -4,8 +4,11 @@ import { del, get, patch, post } from "./apiClient.js";
 export function listAdminPisos({
   page = 1,
   limit = 10,
-  activo = "all",
   ciudad,
+  direccion,
+  codigo_postal,
+  descripcion,
+  activo = "all",
   sort = "newest",
 } = {}) {
   const params = new URLSearchParams();
@@ -17,6 +20,18 @@ export function listAdminPisos({
 
   if (ciudad) {
     params.set("ciudad", ciudad);
+  }
+
+  if (direccion) {
+    params.set("direccion", direccion);
+  }
+
+  if (codigo_postal) {
+    params.set("codigo_postal", codigo_postal);
+  }
+
+  if (descripcion) {
+    params.set("descripcion", descripcion);
   }
 
   return get(`/api/admin/piso?${params.toString()}`);

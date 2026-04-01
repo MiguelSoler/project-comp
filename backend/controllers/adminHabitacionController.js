@@ -129,15 +129,50 @@ const listHabitacionesAdmin = async (req, res) => {
     const limit = Math.min(100, Math.max(1, toInt(req.query.limit, 10)));
     const offset = (page - 1) * limit;
 
-    const activoRaw = String(req.query.activo || "all").toLowerCase(); // all|true|false
-    const disponibleRaw = String(req.query.disponible || "all").toLowerCase(); // all|true|false
+    const activoRaw = String(req.query.activo || "all").toLowerCase();
+    const disponibleRaw = String(req.query.disponible || "all").toLowerCase();
+    const amuebladaRaw = String(req.query.amueblada || "all").toLowerCase();
+    const banoRaw = String(req.query.bano || "all").toLowerCase();
+    const balconRaw = String(req.query.balcon || "all").toLowerCase();
+
     const ciudad = (req.query.ciudad || "").trim();
     const qText = (req.query.q || "").trim();
 
     const pisoId =
       req.query.pisoId !== undefined ? toInt(req.query.pisoId, NaN) : undefined;
+
+    const precioMin =
+      req.query.precioMin !== undefined ? toInt(req.query.precioMin, NaN) : undefined;
+
+    const precioMax =
+      req.query.precioMax !== undefined ? toInt(req.query.precioMax, NaN) : undefined;
+
+    const tamanoMin =
+      req.query.tamanoMin !== undefined ? toInt(req.query.tamanoMin, NaN) : undefined;
+
     if (req.query.pisoId !== undefined && !Number.isFinite(pisoId)) {
       return badRequest(res, ["pisoId"]);
+    }
+
+    if (
+      req.query.precioMin !== undefined &&
+      (!Number.isFinite(precioMin) || precioMin < 0)
+    ) {
+      return badRequest(res, ["precioMin"]);
+    }
+
+    if (
+      req.query.precioMax !== undefined &&
+      (!Number.isFinite(precioMax) || precioMax < 0)
+    ) {
+      return badRequest(res, ["precioMax"]);
+    }
+
+    if (
+      req.query.tamanoMin !== undefined &&
+      (!Number.isFinite(tamanoMin) || tamanoMin <= 0)
+    ) {
+      return badRequest(res, ["tamanoMin"]);
     }
 
     const sort = String(req.query.sort || "newest");
@@ -153,13 +188,11 @@ const listHabitacionesAdmin = async (req, res) => {
     const params = [];
     let i = 1;
 
-    // Manager: solo sus pisos
     if (requesterRol !== "admin") {
       params.push(requesterId);
       where.push(`p.manager_usuario_id = $${i++}`);
     }
 
-    // Filtro activo (habitacion)
     if (activoRaw !== "all") {
       if (activoRaw !== "true" && activoRaw !== "false") {
         return badRequest(res, ["activo"]);
@@ -168,13 +201,36 @@ const listHabitacionesAdmin = async (req, res) => {
       where.push(`h.activo = $${i++}`);
     }
 
-    // Filtro disponible (habitacion)
     if (disponibleRaw !== "all") {
       if (disponibleRaw !== "true" && disponibleRaw !== "false") {
         return badRequest(res, ["disponible"]);
       }
       params.push(disponibleRaw === "true");
       where.push(`h.disponible = $${i++}`);
+    }
+
+    if (amuebladaRaw !== "all") {
+      if (amuebladaRaw !== "true" && amuebladaRaw !== "false") {
+        return badRequest(res, ["amueblada"]);
+      }
+      params.push(amuebladaRaw === "true");
+      where.push(`h.amueblada = $${i++}`);
+    }
+
+    if (banoRaw !== "all") {
+      if (banoRaw !== "true" && banoRaw !== "false") {
+        return badRequest(res, ["bano"]);
+      }
+      params.push(banoRaw === "true");
+      where.push(`h.bano = $${i++}`);
+    }
+
+    if (balconRaw !== "all") {
+      if (balconRaw !== "true" && balconRaw !== "false") {
+        return badRequest(res, ["balcon"]);
+      }
+      params.push(balconRaw === "true");
+      where.push(`h.balcon = $${i++}`);
     }
 
     if (Number.isFinite(pisoId)) {
@@ -184,14 +240,28 @@ const listHabitacionesAdmin = async (req, res) => {
 
     if (ciudad) {
       params.push(ciudad);
-      where.push(`p.ciudad = $${i++}`);
+      where.push(`LOWER(p.ciudad) = LOWER($${i++})`);
+    }
+
+    if (Number.isFinite(precioMin)) {
+      params.push(precioMin);
+      where.push(`h.precio_mensual >= $${i++}`);
+    }
+
+    if (Number.isFinite(precioMax)) {
+      params.push(precioMax);
+      where.push(`h.precio_mensual <= $${i++}`);
+    }
+
+    if (Number.isFinite(tamanoMin)) {
+      params.push(tamanoMin);
+      where.push(`h.tamano_m2 >= $${i++}`);
     }
 
     if (qText) {
-      params.push(qText);
-      where.push(
-        `to_tsvector('spanish', coalesce(h.titulo,'') || ' ' || coalesce(h.descripcion,'')) @@ plainto_tsquery('spanish', $${i++})`
-      );
+      params.push(`%${qText}%`);
+      params.push(`%${qText}%`);
+      where.push(`(h.titulo ILIKE $${i++} OR h.descripcion ILIKE $${i++})`);
     }
 
     params.push(limit);
