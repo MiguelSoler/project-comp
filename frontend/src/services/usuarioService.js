@@ -1,4 +1,4 @@
-import { del, get, patch } from "./apiClient.js";
+import { del, get, post, patch } from "./apiClient.js";
 
 // GET /api/usuario/me
 export function getMyProfile() {
@@ -23,4 +23,12 @@ export function getMyStay() {
 // DELETE /api/usuario/me
 export function deleteMyAccount() {
     return del("/api/usuario/me");
+}
+
+export function convertirmeEnAdvertiser(payload) {
+  return post("/api/usuario/convertirse-anunciante", payload);
+}
+
+export function dejarDeSerAdvertiser() {
+  return post("/api/usuario/dejar-de-ser-anunciante", {});
 }

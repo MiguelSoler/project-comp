@@ -18,6 +18,32 @@ const sanitizeUser = (row) => ({
   fecha_registro: row.fecha_registro,
 });
 
+async function userHasActiveStay(client, userId) {
+  const q = await client.query(
+    `SELECT id
+     FROM usuario_habitacion
+     WHERE usuario_id = $1
+       AND fecha_salida IS NULL
+     LIMIT 1`,
+    [userId]
+  );
+
+  return q.rowCount > 0;
+}
+
+async function userHasActivePisos(client, userId) {
+  const q = await client.query(
+    `SELECT id
+     FROM piso
+     WHERE manager_usuario_id = $1
+       AND activo = true
+     LIMIT 1`,
+    [userId]
+  );
+
+  return q.rowCount > 0;
+}
+
 function deleteUploadedFileByUrl(url) {
   try {
     const cleanUrl = typeof url === "string" ? url.trim() : "";
@@ -59,6 +85,274 @@ const getMe = async (req, res) => {
   } catch (error) {
     console.error("Me error:", error);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+};
+
+// POST /api/usuario/convertirse-anunciante
+const convertirmeEnAdvertiser = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const userId = req.user.id;
+
+    const direccion =
+      typeof req.body?.direccion === "string" ? req.body.direccion.trim() : "";
+    const ciudad =
+      typeof req.body?.ciudad === "string" ? req.body.ciudad.trim() : "";
+    const codigoPostal =
+      typeof req.body?.codigo_postal === "string"
+        ? req.body.codigo_postal.trim()
+        : "";
+    const descripcion =
+      typeof req.body?.descripcion === "string"
+        ? req.body.descripcion.trim()
+        : "";
+
+    const invalidFields = [];
+    if (!direccion) invalidFields.push("direccion");
+    if (!ciudad) invalidFields.push("ciudad");
+
+    if (invalidFields.length > 0) {
+      return res.status(400).json({
+        error: "VALIDATION_ERROR",
+        details: invalidFields,
+      });
+    }
+
+    await client.query("BEGIN");
+
+    const userResult = await client.query(
+      `SELECT
+         id,
+         nombre,
+         apellidos,
+         email,
+         rol,
+         telefono,
+         foto_perfil_url,
+         activo,
+         token_version,
+         fecha_registro
+       FROM usuario
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    const user = userResult.rows[0];
+
+    if (!user.activo) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "USER_INACTIVE" });
+    }
+
+    if (user.rol !== "user") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "ROLE_ALREADY_UPGRADED" });
+    }
+
+    const hasActiveStay = await userHasActiveStay(client, userId);
+    if (hasActiveStay) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "USER_HAS_ACTIVE_STAY" });
+    }
+
+    const pisoResult = await client.query(
+      `INSERT INTO piso (
+         direccion,
+         ciudad,
+         codigo_postal,
+         descripcion,
+         manager_usuario_id,
+         activo
+       )
+       VALUES ($1, $2, $3, $4, $5, true)
+       RETURNING
+         id,
+         direccion,
+         ciudad,
+         codigo_postal,
+         descripcion,
+         manager_usuario_id,
+         activo,
+         created_at,
+         updated_at`,
+      [
+        direccion,
+        ciudad,
+        codigoPostal || null,
+        descripcion || null,
+        userId,
+      ]
+    );
+
+    const updatedUserResult = await client.query(
+      `UPDATE usuario
+       SET rol = 'advertiser',
+           token_version = token_version + 1
+       WHERE id = $1
+       RETURNING
+         id,
+         nombre,
+         apellidos,
+         email,
+         rol,
+         telefono,
+         foto_perfil_url,
+         activo,
+         token_version,
+         fecha_registro`,
+      [userId]
+    );
+
+    await client.query("COMMIT");
+
+    const updatedUser = updatedUserResult.rows[0];
+
+    const secret = process.env.JWT_SECRET;
+    const expiresIn = process.env.JWT_EXPIRES_IN || "7d";
+
+    if (!secret) {
+      return res.status(500).json({ error: "INVALID_SERVER_CONFIG" });
+    }
+
+    const token = jwt.sign(
+      {
+        id: updatedUser.id,
+        rol: updatedUser.rol,
+        token_version: updatedUser.token_version,
+      },
+      secret,
+      { expiresIn }
+    );
+
+    return res.status(201).json({
+      token,
+      user: sanitizeUser(updatedUser),
+      piso: pisoResult.rows[0],
+    });
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+
+    console.error("convertirmeEnAdvertiser error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  } finally {
+    client.release();
+  }
+};
+
+// POST /api/usuario/dejar-de-ser-anunciante
+const dejarDeSerAdvertiser = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const userId = req.user.id;
+
+    await client.query("BEGIN");
+
+    const userResult = await client.query(
+      `SELECT
+         id,
+         nombre,
+         apellidos,
+         email,
+         rol,
+         telefono,
+         foto_perfil_url,
+         activo,
+         token_version,
+         fecha_registro
+       FROM usuario
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    const user = userResult.rows[0];
+
+    if (!user.activo) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ error: "USER_INACTIVE" });
+    }
+
+    if (user.rol !== "advertiser") {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "ROLE_NOT_ADVERTISER" });
+    }
+
+    const hasActivePisos = await userHasActivePisos(client, userId);
+    if (hasActivePisos) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "USER_HAS_ACTIVE_PISOS" });
+    }
+
+    const updatedUserResult = await client.query(
+      `UPDATE usuario
+       SET rol = 'user',
+           token_version = token_version + 1
+       WHERE id = $1
+       RETURNING
+         id,
+         nombre,
+         apellidos,
+         email,
+         rol,
+         telefono,
+         foto_perfil_url,
+         activo,
+         token_version,
+         fecha_registro`,
+      [userId]
+    );
+
+    await client.query("COMMIT");
+
+    const updatedUser = updatedUserResult.rows[0];
+
+    const secret = process.env.JWT_SECRET;
+    const expiresIn = process.env.JWT_EXPIRES_IN || "7d";
+
+    if (!secret) {
+      return res.status(500).json({ error: "INVALID_SERVER_CONFIG" });
+    }
+
+    const token = jwt.sign(
+      {
+        id: updatedUser.id,
+        rol: updatedUser.rol,
+        token_version: updatedUser.token_version,
+      },
+      secret,
+      { expiresIn }
+    );
+
+    return res.status(200).json({
+      token,
+      user: sanitizeUser(updatedUser),
+    });
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+
+    console.error("dejarDeSerAdvertiser error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  } finally {
+    client.release();
   }
 };
 
@@ -438,4 +732,6 @@ module.exports = {
   deleteMeFoto,
   deleteMe,
   changeMePassword,
+  convertirmeEnAdvertiser,
+  dejarDeSerAdvertiser
 };

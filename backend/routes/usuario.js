@@ -2,13 +2,19 @@ const express = require("express");
 const router = express.Router();
 const auth = require("../middleware/authMiddleware");
 const { uploadPerfilPhoto } = require("../middleware/uploadPerfilPhoto");
-const { getMe, getMeEstancia, updateMe, updateMeFoto, deleteMeFoto, deleteMe, changeMePassword } = require("../controllers/usuarioController");
+const { getMe, getMeEstancia, updateMe, updateMeFoto, deleteMeFoto, deleteMe, changeMePassword, convertirmeEnAdvertiser, dejarDeSerAdvertiser } = require("../controllers/usuarioController");
 
 // ======================================================
 // SELF · Endpoints del propio usuario autenticado (/me)
 // ======================================================
 // GET /api/usuario/me
 router.get("/me", auth.requireAuth, getMe);
+
+// POST /api/usuario/convertirse-anunciante
+router.post("/convertirse-anunciante", auth.requireAuth, convertirmeEnAdvertiser);
+
+// POST /api/usuario/dejar-de-ser-anunciante
+router.post("/dejar-de-ser-anunciante", auth.requireAuth, dejarDeSerAdvertiser);
 
 // PATCH /api/usuario/me
 router.patch("/me", auth.requireAuth, updateMe);

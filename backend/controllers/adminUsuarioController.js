@@ -157,6 +157,20 @@ const patchUserById = async (req, res) => {
       return res.status(400).json({ error: "INVALID_ID" });
     }
 
+    const currentUserResult = await pool.query(
+      `SELECT id, rol
+       FROM usuario
+       WHERE id = $1
+       LIMIT 1`,
+      [id]
+    );
+
+    if (currentUserResult.rowCount === 0) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+
+    const currentUser = currentUserResult.rows[0];
+
     const nombre =
       typeof req.body?.nombre === "string" ? req.body.nombre.trim() : undefined;
 
@@ -220,9 +234,38 @@ const patchUserById = async (req, res) => {
 
     if (rol !== undefined) {
       const allowed = new Set(["user", "advertiser", "admin"]);
-      if (!allowed.has(rol)) {
-        return res.status(400).json({ error: "INVALID_ROL" });
+      if (!allowed.has(rol)) return res.status(400).json({ error: "INVALID_ROL" });
+        
+      if (rol !== "user") {
+        const activeStayQ = await pool.query(
+          `SELECT id
+           FROM usuario_habitacion
+           WHERE usuario_id = $1
+             AND fecha_salida IS NULL
+           LIMIT 1`,
+          [id]
+        );
+      
+        if (activeStayQ.rowCount > 0) {
+          return res.status(409).json({ error: "USER_HAS_ACTIVE_STAY" });
+        }
       }
+    
+      if (currentUser.rol === "advertiser" && rol === "user") {
+        const activePisosQ = await pool.query(
+          `SELECT id
+           FROM piso
+           WHERE manager_usuario_id = $1
+             AND activo = true
+           LIMIT 1`,
+          [id]
+        );
+      
+        if (activePisosQ.rowCount > 0) {
+          return res.status(409).json({ error: "USER_HAS_ACTIVE_PISOS" });
+        }
+      }
+    
       params.push(rol);
       updates.push(`rol = $${idx++}`);
     }

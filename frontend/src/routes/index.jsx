@@ -27,6 +27,7 @@ import HabitacionAdminDetail from "../pages/admin/HabitacionAdminDetail.jsx";
 import AdminHabitacionesList from "../pages/admin/AdminHabitacionesList.jsx";
 import AdminUsuariosList from "../pages/admin/AdminUsuariosList.jsx";
 import UsuarioAdminDetail from "../pages/admin/UsuarioAdminDetail.jsx";
+import ConvertirseEnAdvertiser from "../pages/usuario/ConvertirseEnAdvertiser.jsx";
 
 import NotFound from "../pages/NotFound.jsx";
 import ScrollToTop from "../components/layout/ScrollToTop.jsx";
@@ -59,6 +60,11 @@ export default function AppRoutes() {
           <Route path="mis-votos" element={<MisVotos />} />
           <Route path="mi-reputacion" element={<MiReputacion />} />
           <Route path="votos-recibidos" element={<VotosRecibidos />} />
+          <Route path="convertirse-anunciante" element={<ConvertirseEnAdvertiser />} />
+          
+          <Route element={<RoleGuard allowedRoles={["user"]} />}>
+            <Route path="convertirse-anunciante" element={<ConvertirseEnAdvertiser />} />
+          </Route>
 
           <Route element={<RoleGuard allowedRoles={["advertiser"]} />}>
             <Route path="manager" element={<DashboardManager />} />
