@@ -1,11 +1,15 @@
+const fs = require("fs");
+const path = require("path");
 const pool = require("../db/pool");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+
 const SALT_ROUNDS = Number(process.env.BCRYPT_SALT_ROUNDS || 10);
 
 const sanitizeUser = (row) => ({
   id: row.id,
   nombre: row.nombre,
+  apellidos: row.apellidos,
   email: row.email,
   rol: row.rol,
   telefono: row.telefono,
@@ -14,13 +18,33 @@ const sanitizeUser = (row) => ({
   fecha_registro: row.fecha_registro,
 });
 
+function deleteUploadedFileByUrl(url) {
+  try {
+    const cleanUrl = typeof url === "string" ? url.trim() : "";
+    if (!cleanUrl || !cleanUrl.startsWith("/uploads/")) return;
+
+    const absolutePath = path.resolve(
+      __dirname,
+      "..",
+      "..",
+      cleanUrl.replace(/^\/+/, "")
+    );
+
+    if (fs.existsSync(absolutePath)) {
+      fs.unlinkSync(absolutePath);
+    }
+  } catch (error) {
+    console.error("deleteUploadedFileByUrl error:", error);
+  }
+}
+
 // GET /api/usuario/me
 const getMe = async (req, res) => {
   try {
     const userId = req.user.id;
 
     const result = await pool.query(
-      `SELECT id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro
+      `SELECT id, nombre, apellidos, email, rol, telefono, foto_perfil_url, activo, fecha_registro
        FROM usuario
        WHERE id = $1
        LIMIT 1`,
@@ -43,9 +67,23 @@ const updateMe = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const nombre = typeof req.body?.nombre === "string" ? req.body.nombre.trim() : undefined;
-    const telefono = typeof req.body?.telefono === "string" ? req.body.telefono.trim() : undefined;
-    const fotoPerfilUrl = typeof req.body?.foto_perfil_url === "string" ? req.body.foto_perfil_url.trim() : undefined;
+    const nombre =
+      typeof req.body?.nombre === "string" ? req.body.nombre.trim() : undefined;
+
+    const apellidos =
+      typeof req.body?.apellidos === "string"
+        ? req.body.apellidos.trim()
+        : undefined;
+
+    const email =
+      typeof req.body?.email === "string"
+        ? req.body.email.trim().toLowerCase()
+        : undefined;
+
+    const telefono =
+      typeof req.body?.telefono === "string"
+        ? req.body.telefono.trim()
+        : undefined;
 
     const setClauses = [];
     const values = [];
@@ -59,17 +97,26 @@ const updateMe = async (req, res) => {
       values.push(nombre);
     }
 
+    if (apellidos !== undefined) {
+      if (!apellidos) {
+        return res.status(400).json({ error: "VALIDATION_ERROR", details: ["apellidos"] });
+      }
+      setClauses.push(`apellidos = $${i++}`);
+      values.push(apellidos);
+    }
+
+    if (email !== undefined) {
+      if (!email || !email.includes("@")) {
+        return res.status(400).json({ error: "VALIDATION_ERROR", details: ["email"] });
+      }
+      setClauses.push(`email = $${i++}`);
+      values.push(email);
+    }
+
     if (telefono !== undefined) {
-      // permitimos string vacío -> lo convertimos a NULL
       const telValue = telefono === "" ? null : telefono;
       setClauses.push(`telefono = $${i++}`);
       values.push(telValue);
-    }
-
-    if (fotoPerfilUrl !== undefined) {
-      const urlValue = fotoPerfilUrl === "" ? null : fotoPerfilUrl;
-      setClauses.push(`foto_perfil_url = $${i++}`);
-      values.push(urlValue);
     }
 
     if (setClauses.length === 0) {
@@ -82,7 +129,7 @@ const updateMe = async (req, res) => {
       `UPDATE usuario
        SET ${setClauses.join(", ")}
        WHERE id = $${i}
-       RETURNING id, nombre, email, rol, telefono, foto_perfil_url, activo, fecha_registro`,
+       RETURNING id, nombre, apellidos, email, rol, telefono, foto_perfil_url, activo, fecha_registro`,
       values
     );
 
@@ -92,8 +139,127 @@ const updateMe = async (req, res) => {
 
     return res.status(200).json({ user: sanitizeUser(result.rows[0]) });
   } catch (error) {
+    if (error?.code === "23505") {
+      return res.status(409).json({ error: "DUPLICATE_EMAIL" });
+    }
+
     console.error("Patch me error:", error);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+};
+
+// PATCH /api/usuario/me/foto
+const updateMeFoto = async (req, res) => {
+  const client = await pool.connect();
+  let nextFotoUrl = null;
+
+  try {
+    const userId = req.user.id;
+
+    if (!req.file) {
+      return res.status(400).json({ error: "VALIDATION_ERROR", details: ["foto"] });
+    }
+
+    nextFotoUrl = `/uploads/perfiles/${req.file.filename}`;
+
+    await client.query("BEGIN");
+
+    const currentResult = await client.query(
+      `SELECT id, foto_perfil_url
+       FROM usuario
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [userId]
+    );
+
+    if (currentResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      deleteUploadedFileByUrl(nextFotoUrl);
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    const previousFotoUrl = currentResult.rows[0].foto_perfil_url;
+
+    const updateResult = await client.query(
+      `UPDATE usuario
+       SET foto_perfil_url = $1
+       WHERE id = $2
+       RETURNING id, nombre, apellidos, email, rol, telefono, foto_perfil_url, activo, fecha_registro`,
+      [nextFotoUrl, userId]
+    );
+
+    await client.query("COMMIT");
+
+    if (previousFotoUrl && previousFotoUrl !== nextFotoUrl) {
+      deleteUploadedFileByUrl(previousFotoUrl);
+    }
+
+    return res.status(200).json({ user: sanitizeUser(updateResult.rows[0]) });
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+
+    if (nextFotoUrl) {
+      deleteUploadedFileByUrl(nextFotoUrl);
+    }
+
+    console.error("updateMeFoto error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  } finally {
+    client.release();
+  }
+};
+
+// DELETE /api/usuario/me/foto
+const deleteMeFoto = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const userId = req.user.id;
+
+    await client.query("BEGIN");
+
+    const currentResult = await client.query(
+      `SELECT id, foto_perfil_url
+       FROM usuario
+       WHERE id = $1
+       LIMIT 1
+       FOR UPDATE`,
+      [userId]
+    );
+
+    if (currentResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    const previousFotoUrl = currentResult.rows[0].foto_perfil_url;
+
+    await client.query(
+      `UPDATE usuario
+       SET foto_perfil_url = NULL
+       WHERE id = $1`,
+      [userId]
+    );
+
+    await client.query("COMMIT");
+
+    if (previousFotoUrl) {
+      deleteUploadedFileByUrl(previousFotoUrl);
+    }
+
+    return res.status(200).json({ deleted: true });
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+
+    console.error("deleteMeFoto error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  } finally {
+    client.release();
   }
 };
 
@@ -117,7 +283,6 @@ const changeMePassword = async (req, res) => {
 
     await client.query("BEGIN");
 
-    // Bloqueamos fila para evitar carreras y para actualizar token_version de forma segura
     const result = await client.query(
       `SELECT id, password_hash, activo, token_version
        FROM usuario
@@ -145,7 +310,6 @@ const changeMePassword = async (req, res) => {
       return res.status(401).json({ error: "INVALID_CREDENTIALS" });
     }
 
-    // Evitar cambiar a la misma contraseña
     const sameAsOld = await bcrypt.compare(newPassword, user.password_hash);
     if (sameAsOld) {
       await client.query("ROLLBACK");
@@ -154,7 +318,6 @@ const changeMePassword = async (req, res) => {
 
     const newHash = await bcrypt.hash(newPassword, SALT_ROUNDS);
 
-    // Subimos token_version => revoca TODOS los tokens antiguos
     const updated = await client.query(
       `UPDATE usuario
        SET password_hash = $1,
@@ -166,10 +329,8 @@ const changeMePassword = async (req, res) => {
 
     await client.query("COMMIT");
 
-    // Emitimos token nuevo para que el usuario siga logueado
     const refreshedUser = updated.rows[0];
-    const getJwtSecret = () => process.env.JWT_SECRET;
-    const secret = getJwtSecret();
+    const secret = process.env.JWT_SECRET;
     const expiresIn = process.env.JWT_EXPIRES_IN || "7d";
 
     if (!secret) {
@@ -177,14 +338,21 @@ const changeMePassword = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: refreshedUser.id, rol: refreshedUser.rol, token_version: refreshedUser.token_version },
+      {
+        id: refreshedUser.id,
+        rol: refreshedUser.rol,
+        token_version: refreshedUser.token_version,
+      },
       secret,
       { expiresIn }
     );
 
     return res.status(200).json({ token });
   } catch (error) {
-    try { await client.query("ROLLBACK"); } catch (_) {}
+    try {
+      await client.query("ROLLBACK");
+    } catch (_) {}
+
     console.error("changeMyPassword error:", error);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
   } finally {
@@ -192,12 +360,11 @@ const changeMePassword = async (req, res) => {
   }
 };
 
-// DELETE /api/usuario/me  (soft delete => activo=false)
+// DELETE /api/usuario/me
 const deleteMe = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // Idempotente: si ya estaba inactivo, no pasa nada (204 igual)
     const result = await pool.query(
       `UPDATE usuario
        SET activo = false
@@ -210,8 +377,11 @@ const deleteMe = async (req, res) => {
       return res.status(204).send();
     }
 
-    // Si no actualizó nada, puede ser porque ya estaba inactivo o porque no existe
-    const exists = await pool.query(`SELECT id FROM usuario WHERE id = $1 LIMIT 1`, [userId]);
+    const exists = await pool.query(
+      `SELECT id FROM usuario WHERE id = $1 LIMIT 1`,
+      [userId]
+    );
+
     if (exists.rows.length === 0) {
       return res.status(404).json({ error: "USER_NOT_FOUND" });
     }
@@ -230,18 +400,16 @@ const getMeEstancia = async (req, res) => {
 
     const result = await pool.query(
       `SELECT
+         uh.id,
+         uh.usuario_id,
+         uh.habitacion_id,
          uh.fecha_entrada,
-         h.id AS habitacion_id,
+         uh.fecha_salida,
+         uh.estado,
          h.titulo AS habitacion_titulo,
-         h.precio_mensual AS habitacion_precio_mensual,
-         h.disponible AS habitacion_disponible,
-         h.tamano_m2 AS habitacion_tamano_m2,
-         h.amueblada AS habitacion_amueblada,
          p.id AS piso_id,
-         p.direccion AS piso_direccion,
-         p.ciudad AS piso_ciudad,
-         p.codigo_postal AS piso_codigo_postal,
-         p.activo AS piso_activo
+         p.ciudad,
+         p.direccion
        FROM usuario_habitacion uh
        JOIN habitacion h ON h.id = uh.habitacion_id
        JOIN piso p ON p.id = h.piso_id
@@ -252,42 +420,22 @@ const getMeEstancia = async (req, res) => {
     );
 
     if (result.rows.length === 0) {
-      return res.status(200).json({ estancia: null });
+      return res.status(200).json({ stay: null });
     }
 
-    const row = result.rows[0];
-
-    return res.status(200).json({
-      estancia: {
-        fecha_entrada: row.fecha_entrada,
-        habitacion: {
-          id: row.habitacion_id,
-          titulo: row.habitacion_titulo,
-          precio_mensual: row.habitacion_precio_mensual,
-          disponible: row.habitacion_disponible,
-          tamano_m2: row.habitacion_tamano_m2,
-          amueblada: row.habitacion_amueblada,
-        },
-        piso: {
-          id: row.piso_id,
-          direccion: row.piso_direccion,
-          ciudad: row.piso_ciudad,
-          codigo_postal: row.piso_codigo_postal,
-          activo: row.piso_activo,
-        },
-      },
-    });
+    return res.status(200).json({ stay: result.rows[0] });
   } catch (error) {
     console.error("Me estancia error:", error);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
   }
 };
 
-
 module.exports = {
   getMe,
   getMeEstancia,
   updateMe,
+  updateMeFoto,
+  deleteMeFoto,
   deleteMe,
-  changeMePassword
+  changeMePassword,
 };

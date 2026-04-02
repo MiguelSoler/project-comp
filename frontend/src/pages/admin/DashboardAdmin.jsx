@@ -28,8 +28,8 @@ export default function DashboardAdmin() {
       title: "Gestión de usuarios",
       description:
         "Administra usuarios de la app, edítalos, actívalos o desactívalos y gestiona sus asignaciones a habitaciones.",
-      badge: "Pendiente",
-      badgeClassName: "badge badge-warning",
+      badge: "Disponible",
+      badgeClassName: "badge badge-success",
       onClick: () => navigate("/admin/usuarios"),
     },
   ];

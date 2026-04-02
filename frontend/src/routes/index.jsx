@@ -23,8 +23,10 @@ import PisoManagerDetail from "../pages/manager/PisoManagerDetail.jsx";
 import DashboardAdmin from "../pages/admin/DashboardAdmin.jsx";
 import AdminPisosList from "../pages/admin/AdminPisosList.jsx";
 import PisoAdminDetail from "../pages/admin/PisoAdminDetail.jsx";
-import AdminHabitacionesList from "../pages/admin/AdminHabitacionesList.jsx";
 import HabitacionAdminDetail from "../pages/admin/HabitacionAdminDetail.jsx";
+import AdminHabitacionesList from "../pages/admin/AdminHabitacionesList.jsx";
+import AdminUsuariosList from "../pages/admin/AdminUsuariosList.jsx";
+import UsuarioAdminDetail from "../pages/admin/UsuarioAdminDetail.jsx";
 
 import NotFound from "../pages/NotFound.jsx";
 import ScrollToTop from "../components/layout/ScrollToTop.jsx";
@@ -70,6 +72,8 @@ export default function AppRoutes() {
             <Route path="admin/piso/:pisoId" element={<PisoAdminDetail />} />
             <Route path="admin/habitaciones" element={<AdminHabitacionesList />} />
             <Route path="admin/habitacion/:habitacionId" element={<HabitacionAdminDetail />} />
+            <Route path="admin/usuarios" element={<AdminUsuariosList />} />
+            <Route path="admin/usuario/:usuarioId" element={<UsuarioAdminDetail />} />
           </Route>
         </Route>
 
