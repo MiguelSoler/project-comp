@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { getMyStay } from "../../services/usuarioService.js";
 import { listConvivientesByPiso } from "../../services/usuarioHabitacionService.js";
-import { createOrUpdateVote, listMyVotes } from "../../services/votoUsuarioAuthService.js";
+import {
+  createOrUpdateVote,
+  listMyVotes,
+} from "../../services/votoUsuarioAuthService.js";
 import useAuth from "../../hooks/useAuth.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
@@ -19,7 +22,23 @@ function buildImageUrl(url) {
   return `${API_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
+function getVoteErrorMessage(err) {
+  switch (err?.error) {
+    case "SELF_VOTE_NOT_ALLOWED":
+      return "No puedes votarte a ti mismo.";
+    case "NO_COHABITATION":
+      return "No puedes votar a este usuario porque no consta convivencia válida en el mismo piso.";
+    case "VALIDATION_ERROR":
+      return "Revisa los valores del voto antes de guardarlo.";
+    case "NOT_FOUND":
+      return "No se encontró la información necesaria para guardar el voto.";
+    default:
+      return err?.message || "No se pudo guardar el voto.";
+  }
+}
+
 export default function VotarConviviente() {
+  const navigate = useNavigate();
   const { usuarioId } = useParams();
   const { user } = useAuth();
 
@@ -42,36 +61,40 @@ export default function VotarConviviente() {
         setSuccess("");
 
         const stayData = await getMyStay();
-        const estancia = stayData?.estancia || null;
+        const currentStay = stayData?.stay || null;
 
         if (!isMounted) return;
-        setStay(estancia);
+        setStay(currentStay);
 
-        const pisoId = estancia?.piso?.id;
+        const pisoId = currentStay?.piso_id;
         if (!pisoId) {
           setConvivientes([]);
+          setForm(INITIAL_FORM);
           return;
         }
 
         const convivientesData = await listConvivientesByPiso(pisoId);
 
         if (!isMounted) return;
-        setConvivientes(
-          Array.isArray(convivientesData?.convivientes) ? convivientesData.convivientes : []
-        );
+
+        const convivientesItems = Array.isArray(convivientesData?.convivientes)
+          ? convivientesData.convivientes
+          : [];
+
+        setConvivientes(convivientesItems);
 
         const votosData = await listMyVotes({
           page: 1,
           limit: 100,
           pisoId,
         });
-        
+
         if (!isMounted) return;
-        
+
         const existingVote = Array.isArray(votosData?.items)
           ? votosData.items.find((item) => Number(item.votado_id) === Number(usuarioId))
           : null;
-        
+
         setForm(
           existingVote
             ? {
@@ -109,7 +132,7 @@ export default function VotarConviviente() {
   async function handleSubmit(event) {
     event.preventDefault();
 
-    if (!stay?.piso?.id || !conviviente?.id) {
+    if (!stay?.piso_id || !conviviente?.id) {
       setError("No se ha encontrado un conviviente válido para votar.");
       return;
     }
@@ -120,7 +143,7 @@ export default function VotarConviviente() {
       setSuccess("");
 
       const payload = {
-        piso_id: stay.piso.id,
+        piso_id: stay.piso_id,
         votado_id: conviviente.id,
         limpieza: Number(form.limpieza),
         ruido: Number(form.ruido),
@@ -135,7 +158,7 @@ export default function VotarConviviente() {
           : "Tu voto se ha guardado correctamente."
       );
     } catch (err) {
-      setError(err?.error || err?.message || "No se pudo guardar el voto.");
+      setError(getVoteErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -198,21 +221,30 @@ export default function VotarConviviente() {
   }
 
   const isSelf = Number(conviviente.id) === Number(user?.id);
-  const nombreCompleto = [conviviente.nombre, conviviente.apellidos].filter(Boolean).join(" ");
+  const nombreCompleto = [conviviente.nombre, conviviente.apellidos]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <section className="section">
       <div className="app-container">
         <div className="mx-auto max-w-3xl space-y-6">
-          <header className="space-y-2">
-            <h1>Votar conviviente</h1>
-            <p className="text-sm text-ui-text-secondary">
-              Valora convivencia en limpieza, ruido y puntualidad de pagos.
-            </p>
-            <div className="flex justify-end">
-              <Link to="/convivientes" className="btn btn-secondary btn-sm">
+          <header className="space-y-3">
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => navigate(-1)}
+              >
                 Volver
-              </Link>
+              </button>
+            </div>
+            
+            <div>
+              <h1>Votar conviviente</h1>
+              <p className="text-sm text-ui-text-secondary">
+                Valora convivencia en limpieza, ruido y puntualidad de pagos.
+              </p>
             </div>
           </header>
 
@@ -235,7 +267,9 @@ export default function VotarConviviente() {
                 )}
 
                 <div>
-                  <h2 className="text-lg font-semibold">{nombreCompleto || "Sin nombre"}</h2>
+                  <h2 className="text-lg font-semibold">
+                    {nombreCompleto || "Sin nombre"}
+                  </h2>
                   <p className="text-sm text-ui-text-secondary">
                     Habitación #{conviviente.habitacion_id}
                   </p>
@@ -311,7 +345,7 @@ export default function VotarConviviente() {
                   <div className="flex items-center justify-end">
                     <button
                       type="submit"
-                      className="btn-primary"
+                      className="btn btn-primary"
                       disabled={saving}
                       aria-busy={saving}
                     >

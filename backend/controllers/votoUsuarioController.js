@@ -16,7 +16,7 @@ const notFound = (res) => res.status(404).json({ error: "NOT_FOUND" });
 async function assertPublicUserExists(usuarioId) {
   const q = await pool.query(
     `
-    SELECT id, nombre, apellidos, foto_perfil_url
+    SELECT id, nombre, apellidos, rol, foto_perfil_url
     FROM usuario
     WHERE id = $1
       AND activo = true
@@ -79,6 +79,7 @@ const getResumenVotosUsuario = async (req, res) => {
         id: usuario.id,
         nombre: usuario.nombre,
         apellidos: usuario.apellidos,
+        rol: usuario.rol,
         foto_perfil_url: usuario.foto_perfil_url,
       },
       resumen: {
@@ -203,6 +204,7 @@ const listVotosRecibidosUsuario = async (req, res) => {
         id: row.votante_id,
         nombre: row.votante_nombre,
         apellidos: row.votante_apellidos,
+        rol: row.rol,
         foto_perfil_url: row.votante_foto_perfil_url,
       },
       piso: {

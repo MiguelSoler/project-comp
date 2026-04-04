@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getMyStay } from "../../services/usuarioService.js";
 import { listConvivientesByPiso } from "../../services/usuarioHabitacionService.js";
-
+import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -17,6 +17,7 @@ function buildImageUrl(url) {
 }
 
 export default function Convivientes() {
+  const navigate = useNavigate();
   const [stay, setStay] = useState(null);
   const [convivientes, setConvivientes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,13 +32,13 @@ export default function Convivientes() {
         setError("");
 
         const stayData = await getMyStay();
-        const estancia = stayData?.estancia || null;
+        const currentStay = stayData?.stay || null;
 
         if (!isMounted) return;
 
-        setStay(estancia);
+        setStay(currentStay);
 
-        const pisoId = estancia?.piso?.id;
+        const pisoId = currentStay?.piso_id;
         if (!pisoId) {
           setConvivientes([]);
           return;
@@ -46,7 +47,16 @@ export default function Convivientes() {
         const convivientesData = await listConvivientesByPiso(pisoId);
 
         if (!isMounted) return;
-        setConvivientes(Array.isArray(convivientesData?.convivientes) ? convivientesData.convivientes : []);
+
+        const items = Array.isArray(convivientesData?.convivientes)
+          ? convivientesData.convivientes
+          : [];
+
+        setConvivientes(
+          items.filter(
+            (item) => Number(item?.usuario_habitacion_id) !== Number(currentStay?.id)
+          )
+        );
       } catch (err) {
         if (!isMounted) return;
         setError(err?.message || "No se pudieron cargar los convivientes.");
@@ -83,11 +93,23 @@ export default function Convivientes() {
     <section className="section">
       <div className="app-container">
         <div className="mx-auto max-w-4xl space-y-6">
-          <header className="space-y-2">
-            <h1>Mis convivientes</h1>
-            <p className="text-sm text-ui-text-secondary">
-              Personas que conviven actualmente contigo en el piso.
-            </p>
+          <header className="space-y-3">
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => navigate(-1)}
+              >
+                Volver
+              </button>
+            </div>
+
+            <div>
+              <h1>Mis convivientes</h1>
+              <p className="text-sm text-ui-text-secondary">
+                Personas que conviven actualmente contigo en el piso.
+              </p>
+            </div>
           </header>
 
           {error ? <div className="alert-error">{error}</div> : null}
@@ -122,28 +144,33 @@ export default function Convivientes() {
                 return (
                   <article key={conviviente.usuario_habitacion_id} className="card">
                     <div className="card-body space-y-4">
-                      <div className="flex items-start gap-4">
-                        {conviviente.foto_perfil_url ? (
-                          <img
-                            src={buildImageUrl(conviviente.foto_perfil_url)}
-                            alt={nombreCompleto || "Conviviente"}
-                            className="h-16 w-16 rounded-full border border-ui-border object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary">
-                            {conviviente.nombre?.slice(0, 1)?.toUpperCase() || "?"}
-                          </div>
-                        )}
+                      <Link
+                        to={`/usuarios/${conviviente.id}`}
+                        className="group block rounded-xl border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
+                      >
+                        <div className="flex items-start gap-4">
+                          {conviviente.foto_perfil_url ? (
+                            <img
+                              src={buildImageUrl(conviviente.foto_perfil_url)}
+                              alt={nombreCompleto || "Conviviente"}
+                              className="h-16 w-16 rounded-full border border-ui-border object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary">
+                              {conviviente.nombre?.slice(0, 1)?.toUpperCase() || "?"}
+                            </div>
+                          )}
 
-                        <div className="min-w-0">
-                          <h2 className="text-lg font-semibold text-ui-text">
-                            {nombreCompleto || "Sin nombre"}
-                          </h2>
-                          <p className="text-sm text-ui-text-secondary">
-                            Habitación #{conviviente.habitacion_id}
-                          </p>
+                          <div className="min-w-0">
+                            <h2 className="text-lg font-semibold text-ui-text group-hover:text-brand-primary">
+                              {nombreCompleto || "Sin nombre"}
+                            </h2>
+                            <p className="text-sm text-ui-text-secondary">
+                              Habitación #{conviviente.habitacion_id}
+                            </p>
+                          </div>
                         </div>
-                      </div>
+                      </Link>
 
                       <div>
                         <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
@@ -155,6 +182,7 @@ export default function Convivientes() {
                             : "—"}
                         </p>
                       </div>
+
                       <div className="flex items-center justify-end">
                         <Link
                           to={`/convivientes/${conviviente.id}/votar`}

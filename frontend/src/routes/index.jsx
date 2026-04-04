@@ -4,6 +4,7 @@ import RootLayout from "../components/layout/RootLayout.jsx";
 import Home from "../pages/public/Home.jsx";
 import HabitacionesList from "../pages/public/HabitacionesList.jsx";
 import HabitacionDetail from "../pages/public/HabitacionDetail.jsx";
+import UsuarioPublicDetail from "../pages/public/UsuarioPublicDetail.jsx";
 
 import Login from "../pages/auth/Login.jsx";
 import Register from "../pages/auth/Register.jsx";
@@ -50,6 +51,7 @@ export default function AppRoutes() {
         {/* Público: producto = habitaciones */}
         <Route path="habitaciones" element={<HabitacionesList />} />
         <Route path="habitaciones/:habitacionId" element={<HabitacionDetail />} />
+        <Route path="usuarios/:usuarioId" element={<UsuarioPublicDetail />} />
 
         {/* Privado */}
         <Route element={<AuthGuard />}>
@@ -59,8 +61,7 @@ export default function AppRoutes() {
           <Route path="convivientes/:usuarioId/votar" element={<VotarConviviente />} />
           <Route path="mis-votos" element={<MisVotos />} />
           <Route path="mi-reputacion" element={<MiReputacion />} />
-          <Route path="votos-recibidos" element={<VotosRecibidos />} />
-          <Route path="convertirse-anunciante" element={<ConvertirseEnAdvertiser />} />
+          <Route path="votos-recibidos" element={<VotosRecibidos />} />          
           
           <Route element={<RoleGuard allowedRoles={["user"]} />}>
             <Route path="convertirse-anunciante" element={<ConvertirseEnAdvertiser />} />
