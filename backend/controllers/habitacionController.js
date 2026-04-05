@@ -68,6 +68,14 @@ const listHabitaciones = async (req, res) => {
     where.push("p.activo = true");
     where.push("h.activo = true");
 
+    // Público: excluir habitaciones con estancia activa
+    where.push(`NOT EXISTS (
+      SELECT 1
+      FROM usuario_habitacion uh
+      WHERE uh.habitacion_id = h.id
+        AND uh.fecha_salida IS NULL
+    )`);
+
     if (ciudad) {
       params.push(ciudad);
       where.push(`LOWER(p.ciudad) = LOWER($${i++})`);
@@ -218,6 +226,12 @@ const listHabitacionesByPiso = async (req, res) => {
         AND p.activo = true
         AND h.activo = true
         AND h.disponible = true
+        AND NOT EXISTS (
+          SELECT 1
+          FROM usuario_habitacion uh
+          WHERE uh.habitacion_id = h.id
+            AND uh.fecha_salida IS NULL
+        )
       ORDER BY ${orderBy}
       LIMIT $2 OFFSET $3
     `;

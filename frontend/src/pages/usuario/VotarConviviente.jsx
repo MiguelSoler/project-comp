@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { getMyStay } from "../../services/usuarioService.js";
 import { listConvivientesByPiso } from "../../services/usuarioHabitacionService.js";
 import {
@@ -14,6 +14,30 @@ const INITIAL_FORM = {
   limpieza: "3",
   ruido: "3",
   puntualidad_pagos: "3",
+};
+
+const RATING_LABELS = {
+  limpieza: {
+    1: "Muy mala",
+    2: "Mala",
+    3: "Normal",
+    4: "Buena",
+    5: "Muy buena",
+  },
+  ruido: {
+    1: "Muy molesto",
+    2: "Molesto",
+    3: "Normal",
+    4: "Bastante respetuoso",
+    5: "Muy respetuoso",
+  },
+  puntualidad_pagos: {
+    1: "Muy impuntual",
+    2: "Impuntual",
+    3: "Normal",
+    4: "Puntual",
+    5: "Muy puntual",
+  },
 };
 
 function buildImageUrl(url) {
@@ -37,9 +61,70 @@ function getVoteErrorMessage(err) {
   }
 }
 
+function RatingField({ name, title, value, onChange, disabled }) {
+  const numericValue = Number(value) || 0;
+  const currentLabel = RATING_LABELS[name]?.[numericValue] || "Sin valorar";
+
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+      <div className="space-y-3">
+        <div>
+          <label className="label mb-0">{title}</label>
+          <p className="mt-1 text-xs text-ui-text-secondary">
+            Selecciona de 1 a 5 estrellas.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            {[1, 2, 3, 4, 5].map((score) => {
+              const active = score <= numericValue;
+
+              return (
+                <button
+                  key={score}
+                  type="button"
+                  onClick={() => onChange(name, String(score))}
+                  disabled={disabled}
+                  aria-label={`${title}: ${score} estrellas`}
+                  aria-pressed={score === numericValue}
+                  className={`group relative flex h-11 w-11 items-center justify-center rounded-full border text-[30px] transition-all duration-200 ${
+                    active
+                      ? "border-amber-300 bg-amber-50 text-amber-500 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_4px_10px_rgba(245,158,11,0.12)]"
+                      : "border-slate-300    : border-slate-300 bg-white text-slate-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_2px_6px_rgba(15,23,42,0.05)] hover:border-amber-200 hover:bg-amber-50/70 hover:text-amber-400 hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_4px_10px_rgba(245,158,11,0.08)]"
+                  } ${
+                    disabled ? "cursor-not-allowed opacity-70" : "hover:-translate-y-0.5"
+                  }`}
+                >
+                  <span
+                    className={`transition-transform duration-200 ${
+                      active ? "scale-105" : "scale-100 group-hover:scale-105"
+                    }`}
+                  >
+                    ★
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="min-w-[170px] rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+            <span className="font-semibold text-ui-text">{numericValue}</span>
+            <span className="text-ui-text-secondary"> · {currentLabel}</span>
+          </div>
+        </div>
+
+        <div className="text-xs text-ui-text-secondary">
+          1 = {RATING_LABELS[name][1]}  ·  2 = {RATING_LABELS[name][2]}  ·  3 = {RATING_LABELS[name][3]}  ·  4 = {RATING_LABELS[name][4]}  ·  5 = {RATING_LABELS[name][5]}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function VotarConviviente() {
-  const navigate = useNavigate();
   const { usuarioId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
 
   const [stay, setStay] = useState(null);
@@ -124,8 +209,7 @@ export default function VotarConviviente() {
     return convivientes.find((item) => Number(item.id) === targetId) || null;
   }, [convivientes, usuarioId]);
 
-  function handleChange(event) {
-    const { name, value } = event.target;
+  function handleRatingChange(name, value) {
     setForm((prev) => ({ ...prev, [name]: value }));
   }
 
@@ -168,13 +252,13 @@ export default function VotarConviviente() {
     return (
       <section className="section">
         <div className="app-container">
-          <div className="card">
+          <div className="card mx-auto max-w-4xl">
             <div className="card-body space-y-4">
               <div className="skeleton h-8 w-64" />
               <div className="skeleton h-24 w-full" />
-              <div className="skeleton h-10 w-full" />
-              <div className="skeleton h-10 w-full" />
-              <div className="skeleton h-10 w-full" />
+              <div className="skeleton h-32 w-full" />
+              <div className="skeleton h-32 w-full" />
+              <div className="skeleton h-32 w-full" />
             </div>
           </div>
         </div>
@@ -186,7 +270,17 @@ export default function VotarConviviente() {
     return (
       <section className="section">
         <div className="app-container">
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto max-w-3xl space-y-4">
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => navigate(-1)}
+              >
+                Volver
+              </button>
+            </div>
+
             <div className="card">
               <div className="card-body">
                 <h1>Votar conviviente</h1>
@@ -205,7 +299,17 @@ export default function VotarConviviente() {
     return (
       <section className="section">
         <div className="app-container">
-          <div className="mx-auto max-w-3xl">
+          <div className="mx-auto max-w-3xl space-y-4">
+            <div className="flex items-center justify-end">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => navigate(-1)}
+              >
+                Volver
+              </button>
+            </div>
+
             <div className="card">
               <div className="card-body">
                 <h1>Votar conviviente</h1>
@@ -228,7 +332,7 @@ export default function VotarConviviente() {
   return (
     <section className="section">
       <div className="app-container">
-        <div className="mx-auto max-w-3xl space-y-6">
+        <div className="mx-auto max-w-5xl space-y-6">
           <header className="space-y-3">
             <div className="flex items-center justify-end">
               <button
@@ -239,7 +343,7 @@ export default function VotarConviviente() {
                 Volver
               </button>
             </div>
-            
+
             <div>
               <h1>Votar conviviente</h1>
               <p className="text-sm text-ui-text-secondary">
@@ -253,26 +357,28 @@ export default function VotarConviviente() {
 
           <div className="card">
             <div className="card-body space-y-6">
-              <div className="flex items-start gap-4">
-                {conviviente.foto_perfil_url ? (
-                  <img
-                    src={buildImageUrl(conviviente.foto_perfil_url)}
-                    alt={nombreCompleto || "Conviviente"}
-                    className="h-20 w-20 rounded-full border border-ui-border object-cover"
-                  />
-                ) : (
-                  <div className="flex h-20 w-20 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-lg font-semibold text-ui-text-secondary">
-                    {conviviente.nombre?.slice(0, 1)?.toUpperCase() || "?"}
-                  </div>
-                )}
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-start gap-4">
+                  {conviviente.foto_perfil_url ? (
+                    <img
+                      src={buildImageUrl(conviviente.foto_perfil_url)}
+                      alt={nombreCompleto || "Conviviente"}
+                      className="h-20 w-20 rounded-full border border-ui-border object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-100 text-lg font-semibold text-brand-primary">
+                      {conviviente.nombre?.slice(0, 1)?.toUpperCase() || "?"}
+                    </div>
+                  )}
 
-                <div>
-                  <h2 className="text-lg font-semibold">
-                    {nombreCompleto || "Sin nombre"}
-                  </h2>
-                  <p className="text-sm text-ui-text-secondary">
-                    Habitación #{conviviente.habitacion_id}
-                  </p>
+                  <div className="min-w-0">
+                    <h2 className="text-2xl font-semibold text-ui-text">
+                      {nombreCompleto || "Sin nombre"}
+                    </h2>
+                    <p className="mt-1 text-sm text-ui-text-secondary">
+                      Habitación #{conviviente.habitacion_id}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -282,65 +388,29 @@ export default function VotarConviviente() {
                 </div>
               ) : (
                 <form className="space-y-4" onSubmit={handleSubmit}>
-                  <div>
-                    <label className="label" htmlFor="limpieza">
-                      Limpieza
-                    </label>
-                    <select
-                      id="limpieza"
-                      name="limpieza"
-                      className="select"
-                      value={form.limpieza}
-                      onChange={handleChange}
-                      disabled={saving}
-                    >
-                      <option value="1">1 - Muy mala</option>
-                      <option value="2">2 - Mala</option>
-                      <option value="3">3 - Normal</option>
-                      <option value="4">4 - Buena</option>
-                      <option value="5">5 - Muy buena</option>
-                    </select>
-                  </div>
+                  <RatingField
+                    name="limpieza"
+                    title="Limpieza"
+                    value={form.limpieza}
+                    onChange={handleRatingChange}
+                    disabled={saving}
+                  />
 
-                  <div>
-                    <label className="label" htmlFor="ruido">
-                      Ruido
-                    </label>
-                    <select
-                      id="ruido"
-                      name="ruido"
-                      className="select"
-                      value={form.ruido}
-                      onChange={handleChange}
-                      disabled={saving}
-                    >
-                      <option value="1">1 - Muy molesto</option>
-                      <option value="2">2 - Molesto</option>
-                      <option value="3">3 - Normal</option>
-                      <option value="4">4 - Bastante respetuoso</option>
-                      <option value="5">5 - Muy respetuoso</option>
-                    </select>
-                  </div>
+                  <RatingField
+                    name="ruido"
+                    title="Ruido"
+                    value={form.ruido}
+                    onChange={handleRatingChange}
+                    disabled={saving}
+                  />
 
-                  <div>
-                    <label className="label" htmlFor="puntualidad_pagos">
-                      Puntualidad de pagos
-                    </label>
-                    <select
-                      id="puntualidad_pagos"
-                      name="puntualidad_pagos"
-                      className="select"
-                      value={form.puntualidad_pagos}
-                      onChange={handleChange}
-                      disabled={saving}
-                    >
-                      <option value="1">1 - Muy impuntual</option>
-                      <option value="2">2 - Impuntual</option>
-                      <option value="3">3 - Normal</option>
-                      <option value="4">4 - Puntual</option>
-                      <option value="5">5 - Muy puntual</option>
-                    </select>
-                  </div>
+                  <RatingField
+                    name="puntualidad_pagos"
+                    title="Puntualidad de pagos"
+                    value={form.puntualidad_pagos}
+                    onChange={handleRatingChange}
+                    disabled={saving}
+                  />
 
                   <div className="flex items-center justify-end">
                     <button
