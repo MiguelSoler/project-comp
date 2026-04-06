@@ -1,6 +1,8 @@
-// backend/controllers/usuarioHabitacionController.js
-
 const pool = require("../db/pool");
+
+function toNullableNumber(value) {
+  return value === null ? null : Number(value);
+}
 
 function toInt(value, fallback = NaN) {
   const n = parseInt(value, 10);
@@ -37,6 +39,244 @@ async function getUserByIdOrEmail(client, { usuarioId, email }) {
   }
 
   return null;
+}
+
+/**
+ * GET /api/usuario-habitacion/search-user
+ *
+ * Query:
+ * - habitacionId
+ * - email
+ *
+ * Permisos:
+ * - admin: OK
+ * - advertiser: solo si la habitación pertenece a uno de sus pisos
+ *
+ * Devuelve:
+ * - ficha básica del usuario
+ * - validación de estado activo
+ * - estado de asignación (si ya tiene estancia activa)
+ * - reputación global
+ * - reputación por piso
+ * - historial de estancias
+ *
+ * Nota:
+ * - La reputación se agrupa por piso, no por habitación, porque voto_usuario
+ *   solo referencia piso_id.
+ */
+async function searchAssignableUserByEmail(req, res) {
+  const requesterId = req.user?.id;
+  const habitacionId = toInt(req.query?.habitacionId);
+  const email = normEmail(req.query?.email);
+
+  if (!Number.isFinite(habitacionId)) {
+    return res.status(400).json({ error: "VALIDATION_ERROR", details: ["habitacionId"] });
+  }
+
+  if (!email) {
+    return res.status(400).json({ error: "VALIDATION_ERROR", details: ["email"] });
+  }
+
+  if (!isAdmin(req) && !isAdvertiser(req)) {
+    return res.status(403).json({ error: "FORBIDDEN" });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    // 1) Validar habitación + piso + ownership si advertiser
+    const roomQ = await client.query(
+      `SELECT
+         h.id AS habitacion_id,
+         h.piso_id,
+         h.disponible,
+         h.activo AS habitacion_activo,
+         p.activo AS piso_activo,
+         p.manager_usuario_id
+       FROM habitacion h
+       JOIN piso p ON p.id = h.piso_id
+       WHERE h.id = $1`,
+      [habitacionId]
+    );
+
+    if (roomQ.rowCount === 0) {
+      return res.status(404).json({ error: "HABITACION_NOT_FOUND" });
+    }
+
+    const room = roomQ.rows[0];
+
+    if (!room.piso_activo) {
+      return res.status(409).json({ error: "PISO_INACTIVE" });
+    }
+
+    if (!room.habitacion_activo) {
+      return res.status(409).json({ error: "HABITACION_INACTIVE" });
+    }
+
+    if (isAdvertiser(req) && room.manager_usuario_id !== requesterId) {
+      return res.status(403).json({ error: "FORBIDDEN_NOT_OWNER" });
+    }
+
+    // 2) Buscar usuario por email exacto
+    const userQ = await client.query(
+      `SELECT
+         id,
+         nombre,
+         apellidos,
+         email,
+         rol,
+         telefono,
+         foto_perfil_url,
+         activo,
+         fecha_registro
+       FROM usuario
+       WHERE LOWER(email) = LOWER($1)
+       LIMIT 1`,
+      [email]
+    );
+
+    if (userQ.rowCount === 0) {
+      return res.status(404).json({ error: "USER_NOT_FOUND" });
+    }
+
+    const user = userQ.rows[0];
+
+    // Validación pedida: usuario activo
+    if (!user.activo) {
+      return res.status(409).json({ error: "USER_INACTIVE" });
+    }
+
+    // Solo usuarios normales pueden ser asignados como convivientes
+    if (user.rol !== "user") {
+      return res.status(409).json({ error: "ROLE_NOT_ALLOWED_FOR_STAY" });
+    }
+
+    // 3) Ver si ya tiene estancia activa
+    const activeStayQ = await client.query(
+      `SELECT
+         uh.id,
+         uh.usuario_id,
+         uh.habitacion_id,
+         uh.fecha_entrada,
+         uh.fecha_salida,
+         uh.estado,
+         h.titulo AS habitacion_titulo,
+         h.piso_id,
+         p.ciudad,
+         p.direccion
+       FROM usuario_habitacion uh
+       JOIN habitacion h ON h.id = uh.habitacion_id
+       JOIN piso p ON p.id = h.piso_id
+       WHERE uh.usuario_id = $1
+         AND uh.fecha_salida IS NULL
+       LIMIT 1`,
+      [user.id]
+    );
+
+    const activeStay = activeStayQ.rows[0] || null;
+
+    // 4) Reputación global
+    const resumenQ = await client.query(
+      `SELECT
+         COUNT(*)::int AS total_votos,
+         ROUND(AVG(vu.limpieza)::numeric, 2) AS media_limpieza,
+         ROUND(AVG(vu.ruido)::numeric, 2) AS media_ruido,
+         ROUND(AVG(vu.puntualidad_pagos)::numeric, 2) AS media_puntualidad_pagos
+       FROM voto_usuario vu
+       WHERE vu.votado_id = $1`,
+      [user.id]
+    );
+
+    const resumen = resumenQ.rows[0];
+
+    // 5) Reputación por piso
+    const reputacionPorPisoQ = await client.query(
+      `SELECT
+         p.id AS piso_id,
+         p.ciudad,
+         p.direccion,
+         COUNT(vu.id)::int AS total_votos,
+         ROUND(AVG(vu.limpieza)::numeric, 2) AS media_limpieza,
+         ROUND(AVG(vu.ruido)::numeric, 2) AS media_ruido,
+         ROUND(AVG(vu.puntualidad_pagos)::numeric, 2) AS media_puntualidad_pagos,
+         MAX(vu.created_at) AS last_vote_at
+       FROM voto_usuario vu
+       JOIN piso p ON p.id = vu.piso_id
+       WHERE vu.votado_id = $1
+       GROUP BY p.id, p.ciudad, p.direccion
+       ORDER BY last_vote_at DESC, p.id DESC`,
+      [user.id]
+    );
+
+    // 6) Historial de estancias
+    const staysQ = await client.query(
+      `SELECT
+         uh.id AS usuario_habitacion_id,
+         uh.habitacion_id,
+         uh.fecha_entrada,
+         uh.fecha_salida,
+         uh.estado,
+         h.titulo AS habitacion_titulo,
+         p.id AS piso_id,
+         p.ciudad,
+         p.direccion
+       FROM usuario_habitacion uh
+       JOIN habitacion h ON h.id = uh.habitacion_id
+       JOIN piso p ON p.id = h.piso_id
+       WHERE uh.usuario_id = $1
+       ORDER BY uh.fecha_entrada DESC, uh.id DESC`,
+      [user.id]
+    );
+
+    return res.status(200).json({
+      user: {
+        id: user.id,
+        nombre: user.nombre,
+        apellidos: user.apellidos,
+        email: user.email,
+        rol: user.rol,
+        telefono: user.telefono,
+        foto_perfil_url: user.foto_perfil_url,
+        activo: user.activo,
+        fecha_registro: user.fecha_registro,
+      },
+      assignment: {
+        can_assign: activeStay === null,
+        has_active_stay: activeStay !== null,
+        active_stay: activeStay,
+      },
+      reputacion: {
+        global: {
+          total_votos: resumen.total_votos,
+          medias: {
+            limpieza: toNullableNumber(resumen.media_limpieza),
+            ruido: toNullableNumber(resumen.media_ruido),
+            puntualidad_pagos: toNullableNumber(resumen.media_puntualidad_pagos),
+          },
+        },
+        por_piso: reputacionPorPisoQ.rows.map((row) => ({
+          piso: {
+            id: row.piso_id,
+            ciudad: row.ciudad,
+            direccion: row.direccion,
+          },
+          total_votos: row.total_votos,
+          medias: {
+            limpieza: toNullableNumber(row.media_limpieza),
+            ruido: toNullableNumber(row.media_ruido),
+            puntualidad_pagos: toNullableNumber(row.media_puntualidad_pagos),
+          },
+          last_vote_at: row.last_vote_at,
+        })),
+      },
+      historial_estancias: staysQ.rows,
+    });
+  } catch (error) {
+    console.error("searchAssignableUserByEmail error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  } finally {
+    client.release();
+  }
 }
 
 /**
@@ -424,6 +664,7 @@ async function getConvivientesByPiso(req, res) {
 }
 
 module.exports = {
+  searchAssignableUserByEmail,
   joinHabitacion,
   leaveHabitacion,
   kickFromHabitacion,
