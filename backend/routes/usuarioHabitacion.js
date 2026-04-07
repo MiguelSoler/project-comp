@@ -1,9 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const { requireAuth } = require("../middleware/authMiddleware");
-const { joinHabitacion, leaveHabitacion, kickFromHabitacion, getMyStay, getConvivientesByPiso } = require("../controllers/usuarioHabitacionController");
+const { searchAssignableUserByEmail, joinHabitacion, leaveHabitacion, kickFromHabitacion, getMyStay, getConvivientesByPiso } = require("../controllers/usuarioHabitacionController");
 
 // Todas requieren login
+router.get("/search-user", requireAuth, searchAssignableUserByEmail);
+
 router.post("/join", requireAuth, joinHabitacion);
 router.patch("/leave", requireAuth, leaveHabitacion);
 router.patch("/kick/:usuarioHabitacionId", requireAuth, kickFromHabitacion);
