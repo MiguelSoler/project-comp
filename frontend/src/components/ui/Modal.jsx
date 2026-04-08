@@ -1,5 +1,53 @@
 import { useEffect, useState } from "react";
 
+function getToneStyles(tone) {
+  switch (tone) {
+    case "danger":
+      return {
+        headerClass:
+          "flex items-center justify-between gap-3 border-b border-red-200 bg-red-50 p-4",
+        titleClass: "text-base font-semibold text-red-700",
+        closeBtnClass:
+          "btn btn-sm border border-red-200 bg-white text-red-700 hover:bg-red-50",
+      };
+
+    case "warning":
+      return {
+        headerClass:
+          "flex items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 p-4",
+        titleClass: "text-base font-semibold text-amber-800",
+        closeBtnClass:
+          "btn btn-sm border border-amber-200 bg-white text-amber-800 hover:bg-amber-50",
+      };
+
+    case "info":
+      return {
+        headerClass:
+          "flex items-center justify-between gap-3 border-b border-sky-200 bg-sky-50 p-4",
+        titleClass: "text-base font-semibold text-sky-800",
+        closeBtnClass:
+          "btn btn-sm border border-sky-200 bg-white text-sky-800 hover:bg-sky-50",
+      };
+
+    case "success":
+      return {
+        headerClass:
+          "flex items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-50 p-4",
+        titleClass: "text-base font-semibold text-emerald-800",
+        closeBtnClass:
+          "btn btn-sm border border-emerald-200 bg-white text-emerald-800 hover:bg-emerald-50",
+      };
+
+    default:
+      return {
+        headerClass:
+          "flex items-center justify-between gap-3 border-b border-ui-border p-4",
+        titleClass: "text-base font-semibold text-ui-text",
+        closeBtnClass: "btn btn-ghost btn-sm",
+      };
+  }
+}
+
 export default function Modal({
   open,
   title,
@@ -56,23 +104,10 @@ export default function Modal({
     size === "md"
       ? "w-full max-w-xl"
       : size === "lg"
-      ? "w-full max-w-3xl"
-      : "w-[75vw] max-w-none";
+        ? "w-full max-w-3xl"
+        : "w-[75vw] max-w-none";
 
-  const headerClass =
-    tone === "danger"
-      ? "flex items-center justify-between gap-3 border-b border-red-200 bg-red-50 p-4"
-      : "flex items-center justify-between gap-3 border-b border-ui-border p-4";
-
-  const titleClass =
-    tone === "danger"
-      ? "text-base font-semibold text-red-700"
-      : "text-base font-semibold text-ui-text";
-
-  const closeBtnClass =
-    tone === "danger"
-      ? "btn btn-sm border border-red-200 bg-white text-red-700 hover:bg-red-50"
-      : "btn btn-ghost btn-sm";
+  const { headerClass, titleClass, closeBtnClass } = getToneStyles(tone);
 
   function handleOverlayClick() {
     if (closeOnOverlay) onClose?.();
@@ -98,6 +133,7 @@ export default function Modal({
       >
         <div className={headerClass}>
           <h3 className={titleClass}>{title || ""}</h3>
+
           {showCloseButton ? (
             <button className={closeBtnClass} type="button" onClick={() => onClose?.()}>
               {closeLabel}

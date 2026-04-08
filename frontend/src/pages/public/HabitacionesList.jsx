@@ -11,6 +11,12 @@ function formatEur(value) {
   return new Intl.NumberFormat("es-ES").format(n) + " €";
 }
 
+function formatMetric(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return n.toFixed(1);
+}
+
 function buildImageUrl(pathOrNull) {
   if (!pathOrNull) return null;
   if (pathOrNull.startsWith("http")) return pathOrNull;
@@ -75,6 +81,7 @@ export default function HabitacionesList() {
     }
 
     load();
+
     return () => {
       cancelled = true;
     };
@@ -98,13 +105,14 @@ export default function HabitacionesList() {
   }, [page, totalPages, total]);
 
   function handleFilterChange(event) {
-  const { name, value } = event.target;
-  setFilters((prev) => ({ ...prev, [name]: value }));
-}
+    const { name, value } = event.target;
+    setFilters((prev) => ({ ...prev, [name]: value }));
+  }
 
-function resetFilters() {
-  setFilters(INITIAL_FILTERS);
-}
+  function resetFilters() {
+    setFilters(INITIAL_FILTERS);
+  }
+
   return (
     <PageShell
       title="Habitaciones"
@@ -120,6 +128,7 @@ function resetFilters() {
           >
             Anterior
           </button>
+
           <button
             className="btn btn-secondary btn-sm"
             type="button"
@@ -131,193 +140,198 @@ function resetFilters() {
         </div>
       }
     >
-    <div className="card mb-4">
-      <div className="card-body space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold">Búsqueda y filtros</h2>
+      <div className="card mb-4">
+        <div className="card-body space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold">Búsqueda y filtros</h2>
 
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={resetFilters}
-          >
-            Limpiar filtros
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
-          <div>
-            <label className="label" htmlFor="q">
-              Buscar
-            </label>
-            <input
-              id="q"
-              name="q"
-              type="text"
-              className="input"
-              placeholder="Título o descripción"
-              value={filters.q}
-              onChange={handleFilterChange}
-            />
-          </div>
-
-          <div>
-            <label className="label" htmlFor="ciudad">
-              Ciudad
-            </label>
-            <input
-              id="ciudad"
-              name="ciudad"
-              type="text"
-              className="input"
-              placeholder="Ej. Madrid"
-              value={filters.ciudad}
-              onChange={handleFilterChange}
-            />
-          </div>
-
-          <div>
-            <label className="label" htmlFor="precioMax">
-              Precio máximo
-            </label>
-            <input
-              id="precioMax"
-              name="precioMax"
-              type="number"
-              min="0"
-              className="input"
-              placeholder="Ej. 500"
-              value={filters.precioMax}
-              onChange={handleFilterChange}
-            />
-          </div>
-
-          <div>
-            <label className="label" htmlFor="tamanoMin">
-              Tamaño mínimo (m²)
-            </label>
-            <input
-              id="tamanoMin"
-              name="tamanoMin"
-              type="number"
-              min="0"
-              className="input"
-              placeholder="Ej. 10"
-              value={filters.tamanoMin}
-              onChange={handleFilterChange}
-            />
-          </div>
-          
-          <div>
-            <label className="label" htmlFor="sort">
-              Ordenar por
-            </label>
-            <select
-              id="sort"
-              name="sort"
-              className="select"
-              value={filters.sort}
-              onChange={handleFilterChange}
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={resetFilters}
             >
-              <option value="precio_asc">Precio: menor a mayor</option>
-              <option value="precio_desc">Precio: mayor a menor</option>
-              <option value="newest">Más recientes</option>
-              <option value="tamano_desc">Tamaño: mayor a menor</option>
-            </select>
+              Limpiar filtros
+            </button>
           </div>
 
-          <div>
-            <label className="label" htmlFor="tamanoMax">
-              Tamaño máximo (m²)
-            </label>
-            <input
-              id="tamanoMax"
-              name="tamanoMax"
-              type="number"
-              min="0"
-              className="input"
-              placeholder="Ej. 25"
-              value={filters.tamanoMax}
-              onChange={handleFilterChange}
-            />
-          </div>
-
-          {isAdmin ? (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
             <div>
-              <label className="label" htmlFor="disponible">
-                Disponibilidad
+              <label className="label" htmlFor="q">
+                Buscar
+              </label>
+              <input
+                id="q"
+                name="q"
+                type="text"
+                className="input"
+                placeholder="Título o descripción"
+                value={filters.q}
+                onChange={handleFilterChange}
+              />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="ciudad">
+                Ciudad
+              </label>
+              <input
+                id="ciudad"
+                name="ciudad"
+                type="text"
+                className="input"
+                placeholder="Ej. Madrid"
+                value={filters.ciudad}
+                onChange={handleFilterChange}
+              />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="precioMax">
+                Precio máximo
+              </label>
+              <input
+                id="precioMax"
+                name="precioMax"
+                type="number"
+                min="0"
+                className="input"
+                placeholder="Ej. 500"
+                value={filters.precioMax}
+                onChange={handleFilterChange}
+              />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="tamanoMin">
+                Tamaño mínimo (m²)
+              </label>
+              <input
+                id="tamanoMin"
+                name="tamanoMin"
+                type="number"
+                min="0"
+                className="input"
+                placeholder="Ej. 10"
+                value={filters.tamanoMin}
+                onChange={handleFilterChange}
+              />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="sort">
+                Ordenar por
               </label>
               <select
-                id="disponible"
-                name="disponible"
+                id="sort"
+                name="sort"
                 className="select"
-                value={filters.disponible}
+                value={filters.sort}
                 onChange={handleFilterChange}
               >
-                <option value="true">Solo disponibles</option>
-                <option value="false">Solo no disponibles</option>
-                <option value="">Todas</option>
+                <option value="precio_asc">Precio: menor a mayor</option>
+                <option value="precio_desc">Precio: mayor a menor</option>
+                <option value="newest">Más recientes</option>
+                <option value="tamano_desc">Tamaño: mayor a menor</option>
               </select>
             </div>
-          ) : null}
 
-          <div>
-            <label className="label" htmlFor="amueblada">
-              Amueblada
-            </label>
-            <select
-              id="amueblada"
-              name="amueblada"
-              className="select"
-              value={filters.amueblada}
-              onChange={handleFilterChange}
-            >
-              <option value="">Todas</option>
-              <option value="true">Sí</option>
-              <option value="false">No</option>
-            </select>
-          </div>
+            <div>
+              <label className="label" htmlFor="tamanoMax">
+                Tamaño máximo (m²)
+              </label>
+              <input
+                id="tamanoMax"
+                name="tamanoMax"
+                type="number"
+                min="0"
+                className="input"
+                placeholder="Ej. 25"
+                value={filters.tamanoMax}
+                onChange={handleFilterChange}
+              />
+            </div>
 
-          <div>
-            <label className="label" htmlFor="bano">
-              Baño
-            </label>
-            <select
-              id="bano"
-              name="bano"
-              className="select"
-              value={filters.bano}
-              onChange={handleFilterChange}
-            >
-              <option value="">Todas</option>
-              <option value="true">Sí</option>
-              <option value="false">No</option>
-            </select>
-          </div>
+            {isAdmin ? (
+              <div>
+                <label className="label" htmlFor="disponible">
+                  Disponibilidad
+                </label>
+                <select
+                  id="disponible"
+                  name="disponible"
+                  className="select"
+                  value={filters.disponible}
+                  onChange={handleFilterChange}
+                >
+                  <option value="true">Solo disponibles</option>
+                  <option value="false">Solo no disponibles</option>
+                  <option value="">Todas</option>
+                </select>
+              </div>
+            ) : null}
 
-          <div>
-            <label className="label" htmlFor="balcon">
-              Balcón
-            </label>
-            <select
-              id="balcon"
-              name="balcon"
-              className="select"
-              value={filters.balcon}
-              onChange={handleFilterChange}
-            >
-              <option value="">Todas</option>
-              <option value="true">Sí</option>
-              <option value="false">No</option>
-            </select>
+            <div>
+              <label className="label" htmlFor="amueblada">
+                Amueblada
+              </label>
+              <select
+                id="amueblada"
+                name="amueblada"
+                className="select"
+                value={filters.amueblada}
+                onChange={handleFilterChange}
+              >
+                <option value="">Todas</option>
+                <option value="true">Sí</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label" htmlFor="bano">
+                Baño
+              </label>
+              <select
+                id="bano"
+                name="bano"
+                className="select"
+                value={filters.bano}
+                onChange={handleFilterChange}
+              >
+                <option value="">Todas</option>
+                <option value="true">Sí</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label" htmlFor="balcon">
+                Balcón
+              </label>
+              <select
+                id="balcon"
+                name="balcon"
+                className="select"
+                value={filters.balcon}
+                onChange={handleFilterChange}
+              >
+                <option value="">Todas</option>
+                <option value="true">Sí</option>
+                <option value="false">No</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+
       {errorMsg ? (
         <div className="alert-error">
           {errorMsg}{" "}
-          <button className="btn btn-ghost btn-sm" type="button" onClick={() => setPage((p) => p)}>
+          <button
+            className="btn btn-ghost btn-sm"
+            type="button"
+            onClick={() => setPage((p) => p)}
+          >
             Reintentar
           </button>
         </div>
@@ -338,7 +352,9 @@ function resetFilters() {
       ) : items.length === 0 ? (
         <div className="card">
           <div className="card-body">
-            <p className="text-sm text-ui-text-secondary">No hay habitaciones para mostrar.</p>
+            <p className="text-sm text-ui-text-secondary">
+              No hay habitaciones para mostrar.
+            </p>
           </div>
         </div>
       ) : (
@@ -346,11 +362,21 @@ function resetFilters() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
             {items.map((h) => {
               const disponible = Boolean(h.disponible) && !Boolean(h.ocupada);
-              const cover = buildImageUrl(h.cover_foto_habitacion_url || h.cover_foto_piso_url);
+              const cover = buildImageUrl(
+                h.cover_foto_habitacion_url || h.cover_foto_piso_url
+              );
+
+              const convivenciaMedia = formatMetric(h.convivencia_media_global);
+              const convivientesActuales = Number(h.convivencia_convivientes_actuales || 0);
+              const convivientesConVotos = Number(h.convivencia_convivientes_con_votos || 0);
 
               return (
-                <Link key={h.id} to={`/habitaciones/${h.id}`} className="card card-hover">
-                  <div className="card-body space-y-2">
+                <Link
+                  key={h.id}
+                  to={`/habitaciones/${h.id}`}
+                  className="card card-hover overflow-hidden"
+                >
+                  <div className="card-body space-y-3">
                     {cover ? (
                       <img
                         className="aspect-[4/3] w-full rounded-md object-cover"
@@ -364,13 +390,16 @@ function resetFilters() {
 
                     <div className="flex items-start justify-between gap-2">
                       <h3 className="text-base font-semibold">{h.titulo}</h3>
+
                       <span className={disponible ? "badge badge-success" : "badge badge-neutral"}>
                         {disponible ? "Disponible" : "No disponible"}
                       </span>
                     </div>
 
                     <p className="text-sm text-ui-text-secondary">
-                      <span className="font-medium text-ui-text">{formatEur(h.precio_mensual)}</span>{" "}
+                      <span className="font-medium text-ui-text">
+                        {formatEur(h.precio_mensual)}
+                      </span>{" "}
                       / mes
                       {h.tamano_m2 ? ` · ${h.tamano_m2} m²` : ""}
                     </p>
@@ -381,6 +410,32 @@ function resetFilters() {
                       {h.bano ? "Baño · " : ""}
                       {h.balcon ? "Balcón" : ""}
                     </p>
+
+                    {/* Resumen público compacto del ambiente del piso */}
+                    <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs font-medium uppercase tracking-wide text-sky-700">
+                          Ambiente del piso
+                        </span>
+
+                        <span className="text-lg font-bold text-ui-text">
+                          {convivenciaMedia}
+                        </span>
+                      </div>
+
+                      <p className="mt-2 text-xs text-ui-text-secondary">
+                        {convivientesConVotos > 0
+                          ? `Basado en ${convivientesConVotos} conviviente${convivientesConVotos === 1 ? "" : "s"} actual${convivientesConVotos === 1 ? "" : "es"} con votos`
+                          : "Todavía no hay votos de convivientes actuales"}
+                      </p>
+
+                      <p className="mt-1 text-xs text-ui-text-secondary">
+                        Convivientes actuales:{" "}
+                        <span className="font-medium text-ui-text">
+                          {convivientesActuales}
+                        </span>
+                      </p>
+                    </div>
                   </div>
                 </Link>
               );
@@ -403,6 +458,7 @@ function resetFilters() {
               >
                 Anterior
               </button>
+
               <button
                 className="btn btn-secondary btn-sm"
                 type="button"

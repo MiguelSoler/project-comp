@@ -46,6 +46,27 @@ function formatEur(value) {
   return `${new Intl.NumberFormat("es-ES").format(n)} €`;
 }
 
+function formatDateTime(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatMetric(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return n.toFixed(1);
+}
+
 function buildFormFromHabitacion(habitacion) {
   if (!habitacion) return EMPTY_FORM;
 
@@ -67,12 +88,49 @@ function buildFormFromHabitacion(habitacion) {
   };
 }
 
-// Devuelve un mensaje legible a partir del error recibido del backend
+function formatDisplayName(entity) {
+  const nombre = entity?.nombre || "";
+  const apellidos = entity?.apellidos || "";
+  const fullName = `${nombre} ${apellidos}`.trim();
+
+  if (fullName) return fullName;
+  if (entity?.email) return entity.email;
+  return `Usuario #${entity?.id ?? "—"}`;
+}
+
+function getInitials(entity) {
+  return formatDisplayName(entity)
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
+}
+
+function buildPersonAvatar(entity) {
+  const photoUrl = buildImageUrl(entity?.foto_perfil_url);
+
+  if (photoUrl) {
+    return (
+      <img
+        src={photoUrl}
+        alt={formatDisplayName(entity)}
+        className="h-14 w-14 rounded-full object-cover"
+      />
+    );
+  }
+
+  return (
+    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-brand-primary">
+      {getInitials(entity)}
+    </div>
+  );
+}
+
 function getFriendlyErrorMessage(error, fallback) {
   return error?.error || error?.message || fallback;
 }
 
-// Traduce errores del endpoint de búsqueda de usuario asignable
 function getSearchUserErrorMessage(error) {
   switch (error?.error) {
     case "USER_NOT_FOUND":
@@ -94,7 +152,6 @@ function getSearchUserErrorMessage(error) {
   }
 }
 
-// Traduce errores del endpoint de asignación
 function getAssignUserErrorMessage(error) {
   switch (error?.error) {
     case "USER_NOT_FOUND":
@@ -124,12 +181,45 @@ function getAssignUserErrorMessage(error) {
   }
 }
 
-// Busca al ocupante actual de esta habitación dentro del listado de convivientes del piso
 function getCurrentOccupantFromConvivientes(convivientes, habitacionId) {
   return (
     convivientes.find(
       (item) => Number(item.habitacion_id) === Number(habitacionId)
     ) || null
+  );
+}
+
+function getStayStateLabel(state) {
+  if (state === "active") return "Activa";
+  if (state === "left") return "Finalizada";
+  if (state === "kicked") return "Expulsado";
+  return "—";
+}
+
+function getStayStateBadgeClass(state) {
+  if (state === "active") return "badge badge-success";
+  if (state === "left") return "badge badge-neutral";
+  if (state === "kicked") return "badge badge-warning";
+  return "badge badge-neutral";
+}
+
+function MetricCard({ title, value, tone = "neutral" }) {
+  const toneClasses =
+    tone === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : tone === "info"
+          ? "border-sky-200 bg-sky-50 text-sky-700"
+          : tone === "violet"
+            ? "border-violet-200 bg-violet-50 text-violet-700"
+            : "border-slate-200 bg-slate-50 text-slate-700";
+
+  return (
+    <div className={`rounded-lg border p-4 ${toneClasses}`}>
+      <p className="text-xs font-medium uppercase tracking-wide">{title}</p>
+      <p className="mt-2 text-2xl font-bold text-ui-text">{value}</p>
+    </div>
   );
 }
 
@@ -163,17 +253,21 @@ export default function HabitacionManagerDetail() {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
-  // Estado de la tab de ocupación
+  // Estado de ocupación
   const [currentOccupant, setCurrentOccupant] = useState(null);
   const [searchEmail, setSearchEmail] = useState("");
   const [candidateResult, setCandidateResult] = useState(null);
   const [occupancyFeedback, setOccupancyFeedback] = useState(null);
 
-  // Estados de carga para búsqueda, asignación y refresco de ocupación
+  // Estados de carga de ocupación
   const [occupancyLoading, setOccupancyLoading] = useState(false);
   const [searchingUser, setSearchingUser] = useState(false);
   const [assigningUser, setAssigningUser] = useState(false);
   const [removingOccupant, setRemovingOccupant] = useState(false);
+
+  // Modales de confirmación
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isRemoveOccupantModalOpen, setIsRemoveOccupantModalOpen] = useState(false);
 
   const [error, setError] = useState("");
 
@@ -220,7 +314,7 @@ export default function HabitacionManagerDetail() {
     );
   }, [fotos]);
 
-  // Carga el ocupante actual de esta habitación filtrando los convivientes activos del piso
+  // Carga el ocupante actual filtrando los convivientes activos del piso
   const refreshOccupancy = useCallback(async (room, { showError = false } = {}) => {
     if (!room?.piso_id || !room?.id) {
       setCurrentOccupant(null);
@@ -253,7 +347,6 @@ export default function HabitacionManagerDetail() {
     }
   }, []);
 
-  // Cuando cargamos la habitación, también cargamos quién la ocupa ahora mismo
   useEffect(() => {
     if (!habitacion?.id || !habitacion?.piso_id) {
       setCurrentOccupant(null);
@@ -271,7 +364,6 @@ export default function HabitacionManagerDetail() {
       setEditingPhotoOrderId(null);
     }
 
-    // Al salir de la tab de ocupación, limpiamos solo el feedback visual
     if (nextTab !== "ocupacion") {
       setOccupancyFeedback(null);
     }
@@ -571,7 +663,7 @@ export default function HabitacionManagerDetail() {
     }
   }
 
-  // Busca un usuario por email para evaluar si se puede asignar a esta habitación
+  // Busca un usuario por email para revisar su ficha antes de asignarlo
   async function handleSearchAssignableUser(event) {
     event.preventDefault();
 
@@ -620,6 +712,26 @@ export default function HabitacionManagerDetail() {
     }
   }
 
+  function openAssignModal() {
+    if (!candidateResult?.user?.email) return;
+    setIsAssignModalOpen(true);
+  }
+
+  function closeAssignModal() {
+    if (assigningUser) return;
+    setIsAssignModalOpen(false);
+  }
+
+  function openRemoveOccupantModal() {
+    if (!currentOccupant?.usuario_habitacion_id) return;
+    setIsRemoveOccupantModalOpen(true);
+  }
+
+  function closeRemoveOccupantModal() {
+    if (removingOccupant) return;
+    setIsRemoveOccupantModalOpen(false);
+  }
+
   // Asigna el usuario encontrado a la habitación actual
   async function handleAssignUserToRoom() {
     const email = candidateResult?.user?.email;
@@ -635,7 +747,6 @@ export default function HabitacionManagerDetail() {
         email,
       });
 
-      // Reflejamos inmediatamente que la habitación deja de estar disponible
       setHabitacion((prev) =>
         prev
           ? {
@@ -650,9 +761,9 @@ export default function HabitacionManagerDetail() {
         disponible: "false",
       }));
 
-      // Limpiamos el buscador y volvemos a cargar la ocupación actual
       setSearchEmail("");
       setCandidateResult(null);
+      setIsAssignModalOpen(false);
 
       await refreshOccupancy(
         {
@@ -676,7 +787,7 @@ export default function HabitacionManagerDetail() {
     }
   }
 
-  // Quita de la habitación al ocupante actual
+  // Quita al ocupante actual de la habitación
   async function handleRemoveOccupantFromRoom() {
     const usuarioHabitacionId = currentOccupant?.usuario_habitacion_id;
 
@@ -688,7 +799,6 @@ export default function HabitacionManagerDetail() {
 
       await kickFromHabitacion(usuarioHabitacionId, {});
 
-      // Reflejamos inmediatamente que la habitación vuelve a estar disponible
       setHabitacion((prev) =>
         prev
           ? {
@@ -702,6 +812,8 @@ export default function HabitacionManagerDetail() {
         ...prev,
         disponible: "true",
       }));
+
+      setIsRemoveOccupantModalOpen(false);
 
       await refreshOccupancy(
         {
@@ -729,6 +841,11 @@ export default function HabitacionManagerDetail() {
   }
 
   const fotoCount = fotos.length;
+  const canOpenAssignModal =
+    Boolean(candidateResult?.user?.email) &&
+    Boolean(candidateResult?.assignment?.can_assign) &&
+    Boolean(habitacion?.activo) &&
+    Boolean(habitacion?.disponible);
 
   return (
     <>
@@ -1135,7 +1252,7 @@ export default function HabitacionManagerDetail() {
                 ) : null}
 
                 {activeTab === "ocupacion" ? (
-                  <section className="space-y-4">
+                  <section className="space-y-6">
                     <div>
                       <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
                         Ocupación de la habitación
@@ -1146,38 +1263,21 @@ export default function HabitacionManagerDetail() {
                     </div>
 
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      <div className="rounded-lg border border-emerald-300 bg-emerald-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
-                            Estado de ocupación
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            {currentOccupant ? "Ocupada" : "Libre"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-lg border border-sky-300 bg-sky-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
-                            Disponibilidad
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            {habitacion.disponible ? "Disponible" : "No disponible"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-lg border border-violet-300 bg-violet-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
-                            Estado de la habitación
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            {habitacion.activo ? "Activa" : "Inactiva"}
-                          </p>
-                        </div>
-                      </div>
+                      <MetricCard
+                        title="Estado de ocupación"
+                        value={currentOccupant ? "Ocupada" : "Libre"}
+                        tone="success"
+                      />
+                      <MetricCard
+                        title="Disponibilidad"
+                        value={habitacion.disponible ? "Disponible" : "No disponible"}
+                        tone="info"
+                      />
+                      <MetricCard
+                        title="Estado de la habitación"
+                        value={habitacion.activo ? "Activa" : "Inactiva"}
+                        tone="violet"
+                      />
                     </div>
 
                     {occupancyFeedback ? (
@@ -1205,47 +1305,42 @@ export default function HabitacionManagerDetail() {
                     {currentOccupant ? (
                       <div className="card">
                         <div className="card-body space-y-4">
-                          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div>
-                              <h4 className="text-lg font-semibold text-ui-text">
-                                Ocupante actual
-                              </h4>
-                              <p className="mt-1 text-sm text-ui-text-secondary">
-                                Esta habitación ya tiene un usuario asignado.
-                              </p>
+                          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                            <div className="flex items-center gap-4">
+                              {buildPersonAvatar(currentOccupant)}
+
+                              <div className="space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <h4 className="text-lg font-semibold text-ui-text">
+                                    {formatDisplayName(currentOccupant)}
+                                  </h4>
+                                  <span className="badge badge-success">Ocupante actual</span>
+                                </div>
+
+                                <p className="text-sm text-ui-text-secondary">
+                                  Habitación #{currentOccupant.habitacion_id}
+                                </p>
+
+                                <p className="text-sm text-ui-text-secondary">
+                                  Entrada: {formatDateTime(currentOccupant.fecha_entrada)}
+                                </p>
+                              </div>
                             </div>
 
                             <button
                               type="button"
                               className="btn btn-danger btn-sm"
-                              onClick={handleRemoveOccupantFromRoom}
+                              onClick={openRemoveOccupantModal}
                               disabled={removingOccupant}
                             >
-                              {removingOccupant
-                                ? "Quitando..."
-                                : "Quitar de la habitación"}
+                              Quitar de la habitación
                             </button>
                           </div>
 
-                          <div className="rounded-lg border border-ui-border bg-slate-50 p-4">
-                            <div className="space-y-2">
-                              <p className="text-sm text-ui-text">
-                                <span className="font-semibold">Nombre:</span>{" "}
-                                {currentOccupant.nombre} {currentOccupant.apellidos}
-                              </p>
-
-                              <p className="text-sm text-ui-text">
-                                <span className="font-semibold">Habitación:</span>{" "}
-                                #{currentOccupant.habitacion_id}
-                              </p>
-
-                              <p className="text-sm text-ui-text">
-                                <span className="font-semibold">Fecha de entrada:</span>{" "}
-                                {currentOccupant.fecha_entrada
-                                  ? new Date(currentOccupant.fecha_entrada).toLocaleString("es-ES")
-                                  : "—"}
-                              </p>
-                            </div>
+                          <div className="rounded-xl border border-amber-sky bg-amber-50 p-4">
+                            <p className="text-sm text-amber-800">
+                              Esta acción cerrará la estancia activa del usuario en esta habitación y volverá a marcarla como disponible.
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -1292,244 +1387,358 @@ export default function HabitacionManagerDetail() {
                         </div>
 
                         {candidateResult ? (
-                          <div className="card">
-                            <div className="card-body space-y-6">
-                              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                <div>
-                                  <h4 className="text-lg font-semibold text-ui-text">
-                                    Usuario encontrado
-                                  </h4>
-                                  <p className="mt-1 text-sm text-ui-text-secondary">
-                                    Revisa la información antes de asignarlo a esta habitación.
-                                  </p>
+                          <div className="space-y-4">
+                            <div className="card">
+                              <div className="card-body space-y-5">
+                                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                  <div className="flex items-center gap-4">
+                                    {buildPersonAvatar(candidateResult.user)}
+
+                                    <div className="space-y-2">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <h4 className="text-lg font-semibold text-ui-text">
+                                          {formatDisplayName(candidateResult.user)}
+                                        </h4>
+
+                                        <span className="badge badge-info">
+                                          {candidateResult.user.rol}
+                                        </span>
+
+                                        <span
+                                          className={
+                                            candidateResult.user.activo
+                                              ? "badge badge-success"
+                                              : "badge badge-neutral"
+                                          }
+                                        >
+                                          {candidateResult.user.activo ? "Activo" : "Inactivo"}
+                                        </span>
+
+                                        <span
+                                          className={
+                                            candidateResult.assignment?.can_assign
+                                              ? "badge badge-success"
+                                              : "badge badge-warning"
+                                          }
+                                        >
+                                          {candidateResult.assignment?.can_assign
+                                            ? "Asignable"
+                                            : "No asignable"}
+                                        </span>
+                                      </div>
+
+                                      <p className="text-sm text-ui-text-secondary">
+                                        {candidateResult.user.email}
+                                      </p>
+
+                                      <p className="text-sm text-ui-text-secondary">
+                                        {candidateResult.user.telefono || "Sin teléfono"}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary btn-sm"
+                                    onClick={openAssignModal}
+                                    disabled={!canOpenAssignModal}
+                                  >
+                                    Asignar a esta habitación
+                                  </button>
                                 </div>
 
-                                <button
-                                  type="button"
-                                  className="btn btn-primary btn-sm"
-                                  onClick={handleAssignUserToRoom}
-                                  disabled={
-                                    assigningUser ||
-                                    !candidateResult.assignment?.can_assign ||
-                                    !habitacion.activo ||
-                                    !habitacion.disponible
-                                  }
-                                >
-                                  {assigningUser
-                                    ? "Asignando..."
-                                    : "Asignar a esta habitación"}
-                                </button>
-                              </div>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                                  <MetricCard
+                                    title="Total votos"
+                                    value={candidateResult.reputacion?.global?.total_votos ?? 0}
+                                    tone="violet"
+                                  />
+                                  <MetricCard
+                                    title="Limpieza"
+                                    value={formatMetric(
+                                      candidateResult.reputacion?.global?.medias?.limpieza
+                                    )}
+                                    tone="success"
+                                  />
+                                  <MetricCard
+                                    title="Ruido"
+                                    value={formatMetric(
+                                      candidateResult.reputacion?.global?.medias?.ruido
+                                    )}
+                                    tone="warning"
+                                  />
+                                  <MetricCard
+                                    title="Pagos"
+                                    value={formatMetric(
+                                      candidateResult.reputacion?.global?.medias?.puntualidad_pagos
+                                    )}
+                                    tone="info"
+                                  />
+                                </div>
 
-                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <div className="rounded-lg border border-ui-border bg-slate-50 p-4">
-                                  <h5 className="text-base font-semibold text-ui-text">
-                                    Datos del usuario
+                                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                  <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+                                    <h5 className="text-base font-semibold text-sky-800">
+                                      Datos del usuario
+                                    </h5>
+
+                                    <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                      <div className="rounded-lg border border-sky-200 bg-white p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
+                                          Nombre
+                                        </p>
+                                        <p className="mt-1 text-sm font-semibold text-ui-text">
+                                          {formatDisplayName(candidateResult.user)}
+                                        </p>
+                                      </div>
+
+                                      <div className="rounded-lg border border-sky-200 bg-white p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
+                                          Email
+                                        </p>
+                                        <p className="mt-1 text-sm font-semibold text-ui-text break-all">
+                                          {candidateResult.user.email}
+                                        </p>
+                                      </div>
+
+                                      <div className="rounded-lg border border-sky-200 bg-white p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
+                                          Teléfono
+                                        </p>
+                                        <p className="mt-1 text-sm font-semibold text-ui-text">
+                                          {candidateResult.user.telefono || "—"}
+                                        </p>
+                                      </div>
+
+                                      <div className="rounded-lg border border-sky-200 bg-white p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
+                                          Fecha de registro
+                                        </p>
+                                        <p className="mt-1 text-sm font-semibold text-ui-text">
+                                          {formatDateTime(candidateResult.user.fecha_registro)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div
+                                    className={`rounded-xl p-4 ${
+                                      candidateResult.assignment?.can_assign
+                                        ? "border border-emerald-200 bg-emerald-50"
+                                        : "border border-amber-200 bg-amber-50"
+                                    }`}
+                                  >
+                                    <h5
+                                      className={`text-base font-semibold ${
+                                        candidateResult.assignment?.can_assign
+                                          ? "text-emerald-800"
+                                          : "text-amber-800"
+                                      }`}
+                                    >
+                                      Estado de asignación
+                                    </h5>
+
+                                    <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                      <div className="rounded-lg border border-white/80 bg-white p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                                          Se puede asignar
+                                        </p>
+                                        <p className="mt-1 text-sm font-semibold text-ui-text">
+                                          {candidateResult.assignment?.can_assign ? "Sí" : "No"}
+                                        </p>
+                                      </div>
+
+                                      <div className="rounded-lg border border-white/80 bg-white p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                                          Tiene estancia activa
+                                        </p>
+                                        <p className="mt-1 text-sm font-semibold text-ui-text">
+                                          {candidateResult.assignment?.has_active_stay ? "Sí" : "No"}
+                                        </p>
+                                      </div>
+
+                                      {candidateResult.assignment?.active_stay ? (
+                                        <>
+                                          <div className="rounded-lg border border-white/80 bg-white p-3 md:col-span-2">
+                                            <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                                              Piso actual
+                                            </p>
+                                            <p className="mt-1 text-sm font-semibold text-ui-text">
+                                              {candidateResult.assignment.active_stay.ciudad || "—"} ·{" "}
+                                              {candidateResult.assignment.active_stay.direccion || "—"}
+                                            </p>
+                                          </div>
+
+                                          <div className="rounded-lg border border-white/80 bg-white p-3 md:col-span-2">
+                                            <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                                              Habitación actual
+                                            </p>
+                                            <p className="mt-1 text-sm font-semibold text-ui-text">
+                                              {candidateResult.assignment.active_stay.habitacion_titulo || "—"}
+                                            </p>
+                                          </div>
+                                        </>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="card">
+                              <div className="card-body space-y-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <h5 className="text-lg font-semibold text-ui-text">
+                                    Reputación por piso
                                   </h5>
-
-                                  <div className="mt-3 space-y-2 text-sm text-ui-text">
-                                    <p>
-                                      <span className="font-semibold">Nombre:</span>{" "}
-                                      {candidateResult.user.nombre} {candidateResult.user.apellidos}
-                                    </p>
-
-                                    <p>
-                                      <span className="font-semibold">Email:</span>{" "}
-                                      {candidateResult.user.email}
-                                    </p>
-
-                                    <p>
-                                      <span className="font-semibold">Teléfono:</span>{" "}
-                                      {candidateResult.user.telefono || "—"}
-                                    </p>
-
-                                    <p>
-                                      <span className="font-semibold">Rol:</span>{" "}
-                                      {candidateResult.user.rol}
-                                    </p>
-
-                                    <p>
-                                      <span className="font-semibold">Estado:</span>{" "}
-                                      {candidateResult.user.activo ? "Activo" : "Inactivo"}
-                                    </p>
-                                  </div>
+                                  <span className="text-xs text-ui-text-secondary">
+                                    Total: {candidateResult.reputacion?.por_piso?.length || 0}
+                                  </span>
                                 </div>
-
-                                <div className="rounded-lg border border-ui-border bg-slate-50 p-4">
-                                  <h5 className="text-base font-semibold text-ui-text">
-                                    Estado de asignación
-                                  </h5>
-
-                                  <div className="mt-3 space-y-2 text-sm text-ui-text">
-                                    <p>
-                                      <span className="font-semibold">Se puede asignar:</span>{" "}
-                                      {candidateResult.assignment?.can_assign ? "Sí" : "No"}
-                                    </p>
-
-                                    <p>
-                                      <span className="font-semibold">Tiene estancia activa:</span>{" "}
-                                      {candidateResult.assignment?.has_active_stay ? "Sí" : "No"}
-                                    </p>
-
-                                    {candidateResult.assignment?.active_stay ? (
-                                      <>
-                                        <p>
-                                          <span className="font-semibold">Ciudad actual:</span>{" "}
-                                          {candidateResult.assignment.active_stay.ciudad || "—"}
-                                        </p>
-
-                                        <p>
-                                          <span className="font-semibold">Dirección actual:</span>{" "}
-                                          {candidateResult.assignment.active_stay.direccion || "—"}
-                                        </p>
-
-                                        <p>
-                                          <span className="font-semibold">Habitación actual:</span>{" "}
-                                          {candidateResult.assignment.active_stay.habitacion_titulo || "—"}
-                                        </p>
-                                      </>
-                                    ) : null}
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="rounded-lg border border-ui-border bg-slate-50 p-4">
-                                <h5 className="text-base font-semibold text-ui-text">
-                                  Reputación global
-                                </h5>
-
-                                <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-4">
-                                  <div>
-                                    <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-                                      Total votos
-                                    </p>
-                                    <p className="mt-1 text-lg font-bold text-ui-text">
-                                      {candidateResult.reputacion?.global?.total_votos ?? 0}
-                                    </p>
-                                  </div>
-
-                                  <div>
-                                    <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-                                      Limpieza
-                                    </p>
-                                    <p className="mt-1 text-lg font-bold text-ui-text">
-                                      {candidateResult.reputacion?.global?.medias?.limpieza ?? "—"}
-                                    </p>
-                                  </div>
-
-                                  <div>
-                                    <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-                                      Ruido
-                                    </p>
-                                    <p className="mt-1 text-lg font-bold text-ui-text">
-                                      {candidateResult.reputacion?.global?.medias?.ruido ?? "—"}
-                                    </p>
-                                  </div>
-
-                                  <div>
-                                    <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-                                      Pagos
-                                    </p>
-                                    <p className="mt-1 text-lg font-bold text-ui-text">
-                                      {candidateResult.reputacion?.global?.medias?.puntualidad_pagos ?? "—"}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div className="rounded-lg border border-ui-border bg-slate-50 p-4">
-                                <h5 className="text-base font-semibold text-ui-text">
-                                  Reputación por piso
-                                </h5>
 
                                 {candidateResult.reputacion?.por_piso?.length > 0 ? (
-                                  <div className="mt-3 space-y-3">
+                                  <div className="space-y-4">
                                     {candidateResult.reputacion.por_piso.map((item) => (
                                       <div
                                         key={item.piso.id}
-                                        className="rounded-lg border border-ui-border bg-white p-4"
+                                        className="rounded-xl border border-slate-300 bg-slate-50 p-4"
                                       >
-                                        <div className="space-y-2 text-sm text-ui-text">
-                                          <p>
-                                            <span className="font-semibold">Piso:</span>{" "}
-                                            #{item.piso.id} · {item.piso.ciudad || "—"} ·{" "}
-                                            {item.piso.direccion || "—"}
-                                          </p>
+                                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                          <div>
+                                            <p className="text-sm font-semibold text-ui-text">
+                                              Piso #{item.piso.id}
+                                            </p>
+                                            <p className="mt-1 text-sm text-ui-text-secondary">
+                                              {item.piso.ciudad || "—"} · {item.piso.direccion || "—"}
+                                            </p>
+                                          </div>
 
-                                          <p>
-                                            <span className="font-semibold">Total votos:</span>{" "}
-                                            {item.total_votos}
-                                          </p>
-
-                                          <p>
-                                            <span className="font-semibold">Limpieza:</span>{" "}
-                                            {item.medias?.limpieza ?? "—"} ·{" "}
-                                            <span className="font-semibold">Ruido:</span>{" "}
-                                            {item.medias?.ruido ?? "—"} ·{" "}
-                                            <span className="font-semibold">Pagos:</span>{" "}
-                                            {item.medias?.puntualidad_pagos ?? "—"}
-                                          </p>
+                                          <span className="badge badge-neutral">
+                                            {item.total_votos} votos
+                                          </span>
                                         </div>
+
+                                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                                          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                                            <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">
+                                              Limpieza
+                                            </p>
+                                            <p className="mt-1 text-lg font-bold text-ui-text">
+                                              {formatMetric(item.medias?.limpieza)}
+                                            </p>
+                                          </div>
+
+                                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                            <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+                                              Ruido
+                                            </p>
+                                            <p className="mt-1 text-lg font-bold text-ui-text">
+                                              {formatMetric(item.medias?.ruido)}
+                                            </p>
+                                          </div>
+
+                                          <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                                            <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
+                                              Pagos
+                                            </p>
+                                            <p className="mt-1 text-lg font-bold text-ui-text">
+                                              {formatMetric(item.medias?.puntualidad_pagos)}
+                                            </p>
+                                          </div>
+                                        </div>
+
+                                        <p className="mt-3 text-xs text-ui-text-secondary">
+                                          Último voto: {formatDateTime(item.last_vote_at)}
+                                        </p>
                                       </div>
                                     ))}
                                   </div>
                                 ) : (
-                                  <p className="mt-3 text-sm text-ui-text-secondary">
-                                    Este usuario todavía no tiene reputación por piso.
-                                  </p>
+                                  <div className="rounded-xl border border-slate-300 bg-slate-50">
+                                    <div className="card-body">
+                                      <p className="text-sm text-ui-text-secondary">
+                                        Este usuario todavía no tiene reputación por piso.
+                                      </p>
+                                    </div>
+                                  </div>
                                 )}
                               </div>
+                            </div>
 
-                              <div className="rounded-lg border border-ui-border bg-slate-50 p-4">
-                                <h5 className="text-base font-semibold text-ui-text">
-                                  Historial de estancias
-                                </h5>
+                            <div className="card">
+                              <div className="card-body space-y-4">
+                                <div className="flex items-center justify-between gap-3">
+                                  <h5 className="text-lg font-semibold text-ui-text">
+                                    Historial de estancias
+                                  </h5>
+                                  <span className="text-xs text-ui-text-secondary">
+                                    Total: {candidateResult.historial_estancias?.length || 0}
+                                  </span>
+                                </div>
 
                                 {candidateResult.historial_estancias?.length > 0 ? (
-                                  <div className="mt-3 space-y-3">
+                                  <div className="space-y-4">
                                     {candidateResult.historial_estancias.map((stay) => (
                                       <div
                                         key={stay.usuario_habitacion_id}
-                                        className="rounded-lg border border-ui-border bg-white p-4"
+                                        className="rounded-xl border border-slate-300 bg-slate-50 p-4"
                                       >
-                                        <div className="space-y-2 text-sm text-ui-text">
-                                          <p>
-                                            <span className="font-semibold">Piso:</span>{" "}
-                                            #{stay.piso_id} · {stay.ciudad || "—"} ·{" "}
-                                            {stay.direccion || "—"}
-                                          </p>
+                                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                          <div>
+                                            <p className="text-sm font-semibold text-ui-text">
+                                              Piso #{stay.piso_id}
+                                            </p>
+                                            <p className="mt-1 text-sm text-ui-text-secondary">
+                                              {stay.ciudad || "—"} · {stay.direccion || "—"}
+                                            </p>
+                                          </div>
 
-                                          <p>
-                                            <span className="font-semibold">Habitación:</span>{" "}
-                                            {stay.habitacion_titulo || `#${stay.habitacion_id}`}
-                                          </p>
+                                          <span className={getStayStateBadgeClass(stay.estado)}>
+                                            {getStayStateLabel(stay.estado)}
+                                          </span>
+                                        </div>
 
-                                          <p>
-                                            <span className="font-semibold">Entrada:</span>{" "}
-                                            {stay.fecha_entrada
-                                              ? new Date(stay.fecha_entrada).toLocaleString("es-ES")
-                                              : "—"}
-                                          </p>
+                                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                                          <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                            <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                                              Habitación
+                                            </p>
+                                            <p className="mt-1 text-sm font-semibold text-ui-text">
+                                              {stay.habitacion_titulo || `#${stay.habitacion_id}`}
+                                            </p>
+                                          </div>
 
-                                          <p>
-                                            <span className="font-semibold">Salida:</span>{" "}
-                                            {stay.fecha_salida
-                                              ? new Date(stay.fecha_salida).toLocaleString("es-ES")
-                                              : "Activa"}
-                                          </p>
+                                          <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                            <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                                              Entrada
+                                            </p>
+                                            <p className="mt-1 text-sm font-semibold text-ui-text">
+                                              {formatDateTime(stay.fecha_entrada)}
+                                            </p>
+                                          </div>
 
-                                          <p>
-                                            <span className="font-semibold">Estado:</span>{" "}
-                                            {stay.estado}
-                                          </p>
+                                          <div className="rounded-lg border border-slate-200 bg-white p-3">
+                                            <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                                              Salida
+                                            </p>
+                                            <p className="mt-1 text-sm font-semibold text-ui-text">
+                                              {stay.fecha_salida
+                                                ? formatDateTime(stay.fecha_salida)
+                                                : "Activa"}
+                                            </p>
+                                          </div>
                                         </div>
                                       </div>
                                     ))}
                                   </div>
                                 ) : (
-                                  <p className="mt-3 text-sm text-ui-text-secondary">
-                                    Este usuario todavía no tiene estancias registradas.
-                                  </p>
+                                  <div className="rounded-xl border border-slate-300 bg-slate-50">
+                                    <div className="card-body">
+                                      <p className="text-sm text-ui-text-secondary">
+                                        Este usuario todavía no tiene estancias registradas.
+                                      </p>
+                                    </div>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1820,6 +2029,116 @@ export default function HabitacionManagerDetail() {
               disabled={Boolean(deletingPhotoId)}
             >
               {deletingPhotoId ? "Eliminando..." : "Sí, eliminar"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={isAssignModalOpen}
+        title="Confirmar asignación"
+        onClose={closeAssignModal}
+        size="md"
+        tone="info"
+        closeLabel="Cancelar"
+        closeOnOverlay={false}
+        showCloseButton={false}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-ui-text-secondary">
+            Vas a asignar este usuario a la habitación actual.
+          </p>
+
+          <div className="rounded-lg border border-sky-200 bg-sky-50 p-4">
+            <p className="text-sm font-semibold text-sky-800">
+              {formatDisplayName(candidateResult?.user)}
+            </p>
+            <p className="mt-1 text-sm text-sky-800">
+              {candidateResult?.user?.email || "—"}
+            </p>
+            <p className="mt-1 text-sm text-sky-800">
+              Habitación: {habitacion?.titulo || `#${habitacionId}`}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-sm text-emerald-800">
+              Al confirmar, la estancia activa se creará y la habitación pasará a no disponible.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={closeAssignModal}
+              disabled={assigningUser}
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-sm border border-sky-300 bg-sky-100 text-sky-800 hover:bg-sky-200"
+              onClick={handleAssignUserToRoom}
+              disabled={assigningUser}
+            >
+              {assigningUser ? "Asignando..." : "Sí, asignar"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={isRemoveOccupantModalOpen}
+        title="Confirmar salida de la habitación"
+        onClose={closeRemoveOccupantModal}
+        size="md"
+        tone="danger"
+        closeLabel="Cancelar"
+        closeOnOverlay={false}
+        showCloseButton={false}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-ui-text-secondary">
+            Vas a quitar a este usuario de la habitación actual.
+          </p>
+
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+            <p className="text-sm font-semibold text-red-700">
+              {formatDisplayName(currentOccupant)}
+            </p>
+            <p className="mt-1 text-sm text-red-700">
+              Habitación: {habitacion?.titulo || `#${habitacionId}`}
+            </p>
+            <p className="mt-1 text-sm text-red-700">
+              Entrada: {formatDateTime(currentOccupant?.fecha_entrada)}
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <p className="text-sm text-amber-800">
+              Esta acción cerrará la estancia activa del usuario y volverá a dejar la habitación como disponible.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={closeRemoveOccupantModal}
+              disabled={removingOccupant}
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              onClick={handleRemoveOccupantFromRoom}
+              disabled={removingOccupant}
+            >
+              {removingOccupant ? "Quitando..." : "Sí, quitar"}
             </button>
           </div>
         </div>

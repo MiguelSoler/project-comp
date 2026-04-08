@@ -1,5 +1,5 @@
-// Controllers PÚBLICOS de Habitacion (catálogo)
-// Nota: GET /api/habitacion/:habitacionId devuelve detalle + fotos
+// Controllers PÚBLICOS de habitacion (catálogo)
+// Nota: GET /api/habitacion/:habitacionId devuelve detalle + fotos + convivencia actual
 
 const pool = require("../db/pool");
 
@@ -24,11 +24,68 @@ const badRequest = (res, details = []) =>
 const notFound = (res) => res.status(404).json({ error: "NOT_FOUND" });
 
 // ---------------------------------------------------------
+// SQL reutilizable: resumen de convivencia actual de un piso
+// - Selecciona solo ocupantes actuales del piso
+// - Calcula la reputación media GLOBAL de cada ocupante
+// - Después resume el piso a partir de esos ocupantes actuales
+//
+// Nota importante de producto:
+// - Solo contamos convivientes actuales del piso
+// - La reputación de cada conviviente sale de sus votos recibidos
+// ---------------------------------------------------------
+const CURRENT_OCCUPANTS_SUMMARY_SQL = `
+  WITH current_occupants AS (
+    SELECT DISTINCT u.id
+    FROM usuario_habitacion uh2
+    JOIN habitacion h2 ON h2.id = uh2.habitacion_id
+    JOIN usuario u ON u.id = uh2.usuario_id
+    WHERE h2.piso_id = p.id
+      AND uh2.fecha_salida IS NULL
+      AND uh2.estado = 'active'
+      AND u.activo = true
+  ),
+  occupant_scores AS (
+    SELECT
+      co.id AS usuario_id,
+      COUNT(vu.id)::int AS total_votos,
+      ROUND(
+        AVG(
+          ((vu.limpieza + vu.ruido + vu.puntualidad_pagos)::numeric / 3)
+        ),
+        2
+      ) AS media_global,
+      ROUND(AVG(vu.limpieza)::numeric, 2) AS media_limpieza,
+      ROUND(AVG(vu.ruido)::numeric, 2) AS media_ruido,
+      ROUND(AVG(vu.puntualidad_pagos)::numeric, 2) AS media_puntualidad_pagos
+    FROM current_occupants co
+    LEFT JOIN voto_usuario vu ON vu.votado_id = co.id
+    GROUP BY co.id
+  )
+  SELECT
+    COUNT(*)::int AS convivientes_actuales,
+    COUNT(*) FILTER (WHERE os.total_votos > 0)::int AS convivientes_con_votos,
+    ROUND(AVG(os.media_global) FILTER (WHERE os.total_votos > 0), 2) AS media_global,
+    ROUND(AVG(os.media_limpieza) FILTER (WHERE os.total_votos > 0), 2) AS media_limpieza,
+    ROUND(AVG(os.media_ruido) FILTER (WHERE os.total_votos > 0), 2) AS media_ruido,
+    ROUND(
+      AVG(os.media_puntualidad_pagos) FILTER (WHERE os.total_votos > 0),
+      2
+    ) AS media_puntualidad_pagos
+  FROM current_occupants co
+  LEFT JOIN occupant_scores os ON os.usuario_id = co.id
+`;
+
+// ---------------------------------------------------------
 // GET /api/habitacion (public)
 // Filtros: ciudad, precioMax, disponible, bano, balcon, amueblada,
 //         tamanoMin, tamanoMax, q
 // Paginación: page, limit
 // Orden: sort=precio_asc|precio_desc|newest|tamano_desc
+//
+// Devuelve además:
+// - media global de convivencia actual del piso
+// - número de convivientes actuales
+// - número de convivientes con votos
 // ---------------------------------------------------------
 const listHabitaciones = async (req, res) => {
   try {
@@ -98,10 +155,12 @@ const listHabitaciones = async (req, res) => {
       params.push(bano);
       where.push(`h.bano = $${i++}`);
     }
+
     if (balcon !== undefined) {
       params.push(balcon);
       where.push(`h.balcon = $${i++}`);
     }
+
     if (amueblada !== undefined) {
       params.push(amueblada);
       where.push(`h.amueblada = $${i++}`);
@@ -111,6 +170,7 @@ const listHabitaciones = async (req, res) => {
       params.push(tamanoMin);
       where.push(`h.tamano_m2 >= $${i++}`);
     }
+
     if (Number.isFinite(tamanoMax)) {
       params.push(tamanoMax);
       where.push(`h.tamano_m2 <= $${i++}`);
@@ -143,29 +203,41 @@ const listHabitaciones = async (req, res) => {
         h.balcon,
         h.created_at,
         h.updated_at,
+
         p.ciudad,
         p.direccion,
         p.codigo_postal,
         p.manager_usuario_id,
+
         EXISTS (
           SELECT 1
           FROM usuario_habitacion uh
           WHERE uh.habitacion_id = h.id
             AND uh.fecha_salida IS NULL
         ) AS ocupada,
+
         (SELECT fh.url
          FROM foto_habitacion fh
          WHERE fh.habitacion_id = h.id
          ORDER BY fh.orden ASC, fh.id ASC
          LIMIT 1) AS cover_foto_habitacion_url,
+
         (SELECT fp.url
          FROM foto_piso fp
          WHERE fp.piso_id = p.id
          ORDER BY fp.orden ASC, fp.id ASC
          LIMIT 1) AS cover_foto_piso_url,
+
+        convivencia.media_global AS convivencia_media_global,
+        convivencia.convivientes_actuales AS convivencia_convivientes_actuales,
+        convivencia.convivientes_con_votos AS convivencia_convivientes_con_votos,
+
         COUNT(*) OVER() AS total_count
       FROM habitacion h
       JOIN piso p ON p.id = h.piso_id
+      LEFT JOIN LATERAL (
+        ${CURRENT_OCCUPANTS_SUMMARY_SQL}
+      ) convivencia ON true
       ${whereSql}
       ORDER BY ${orderBy}
       LIMIT $${i++} OFFSET $${i++}
@@ -252,6 +324,14 @@ const listHabitacionesByPiso = async (req, res) => {
 
 // ---------------------------------------------------------
 // GET /api/habitacion/:habitacionId (public detalle + fotos)
+//
+// Devuelve además:
+// - manager del piso (nombre, teléfono, foto)
+// - resumen de convivencia actual del piso
+// - ocupantes actuales del piso (nombre + foto + habitación + media global)
+//
+// Nota:
+// - Solo exponemos nombre (campo nombre), no apellidos, para ser menos invasivos
 // ---------------------------------------------------------
 const getHabitacionById = async (req, res) => {
   try {
@@ -262,12 +342,18 @@ const getHabitacionById = async (req, res) => {
       `
       SELECT
         h.*,
+
         p.ciudad,
         p.direccion,
         p.codigo_postal,
         p.descripcion AS piso_descripcion,
         p.manager_usuario_id,
         p.activo AS piso_activo,
+
+        m.nombre AS manager_nombre,
+        m.telefono AS manager_telefono,
+        m.foto_perfil_url AS manager_foto_perfil_url,
+
         EXISTS (
           SELECT 1
           FROM usuario_habitacion uh
@@ -276,6 +362,7 @@ const getHabitacionById = async (req, res) => {
         ) AS ocupada
       FROM habitacion h
       JOIN piso p ON p.id = h.piso_id
+      LEFT JOIN usuario m ON m.id = p.manager_usuario_id
       WHERE h.id = $1
       `,
       [habitacionId]
@@ -288,7 +375,8 @@ const getHabitacionById = async (req, res) => {
     // Público: ocultar si piso o habitación están inactivos
     if (!habitacion.piso_activo || !habitacion.activo) return notFound(res);
 
-    const fotos = await pool.query(
+    // Fotos de la habitación
+    const fotosQ = await pool.query(
       `
       SELECT id, habitacion_id, url, orden, created_at
       FROM foto_habitacion
@@ -298,7 +386,118 @@ const getHabitacionById = async (req, res) => {
       [habitacionId]
     );
 
-    return res.json({ habitacion, fotos: fotos.rows });
+    // Resumen de convivencia actual del piso
+    const convivenciaQ = await pool.query(
+      `
+      WITH current_occupants AS (
+        SELECT DISTINCT u.id
+        FROM usuario_habitacion uh2
+        JOIN habitacion h2 ON h2.id = uh2.habitacion_id
+        JOIN usuario u ON u.id = uh2.usuario_id
+        WHERE h2.piso_id = $1
+          AND uh2.fecha_salida IS NULL
+          AND uh2.estado = 'active'
+          AND u.activo = true
+      ),
+      occupant_scores AS (
+        SELECT
+          co.id AS usuario_id,
+          COUNT(vu.id)::int AS total_votos,
+          ROUND(
+            AVG(
+              ((vu.limpieza + vu.ruido + vu.puntualidad_pagos)::numeric / 3)
+            ),
+            2
+          ) AS media_global,
+          ROUND(AVG(vu.limpieza)::numeric, 2) AS media_limpieza,
+          ROUND(AVG(vu.ruido)::numeric, 2) AS media_ruido,
+          ROUND(AVG(vu.puntualidad_pagos)::numeric, 2) AS media_puntualidad_pagos
+        FROM current_occupants co
+        LEFT JOIN voto_usuario vu ON vu.votado_id = co.id
+        GROUP BY co.id
+      )
+      SELECT
+        COUNT(*)::int AS convivientes_actuales,
+        COUNT(*) FILTER (WHERE os.total_votos > 0)::int AS convivientes_con_votos,
+        ROUND(AVG(os.media_global) FILTER (WHERE os.total_votos > 0), 2) AS media_global,
+        ROUND(AVG(os.media_limpieza) FILTER (WHERE os.total_votos > 0), 2) AS media_limpieza,
+        ROUND(AVG(os.media_ruido) FILTER (WHERE os.total_votos > 0), 2) AS media_ruido,
+        ROUND(
+          AVG(os.media_puntualidad_pagos) FILTER (WHERE os.total_votos > 0),
+          2
+        ) AS media_puntualidad_pagos
+      FROM current_occupants co
+      LEFT JOIN occupant_scores os ON os.usuario_id = co.id
+      `,
+      [habitacion.piso_id]
+    );
+
+    // Ocupantes actuales del piso con nombre + foto + media global
+    const ocupantesQ = await pool.query(
+      `
+      WITH current_occupants AS (
+        SELECT
+          u.id,
+          u.nombre,
+          u.foto_perfil_url,
+          uh.habitacion_id,
+          uh.fecha_entrada
+        FROM usuario_habitacion uh
+        JOIN habitacion h ON h.id = uh.habitacion_id
+        JOIN usuario u ON u.id = uh.usuario_id
+        WHERE h.piso_id = $1
+          AND uh.fecha_salida IS NULL
+          AND uh.estado = 'active'
+          AND u.activo = true
+      ),
+      occupant_scores AS (
+        SELECT
+          co.id AS usuario_id,
+          COUNT(vu.id)::int AS total_votos,
+          ROUND(
+            AVG(
+              ((vu.limpieza + vu.ruido + vu.puntualidad_pagos)::numeric / 3)
+            ),
+            2
+          ) AS media_global
+        FROM current_occupants co
+        LEFT JOIN voto_usuario vu ON vu.votado_id = co.id
+        GROUP BY co.id
+      )
+      SELECT
+        co.id,
+        co.nombre,
+        co.foto_perfil_url,
+        co.habitacion_id,
+        co.fecha_entrada,
+        os.total_votos,
+        os.media_global
+      FROM current_occupants co
+      LEFT JOIN occupant_scores os ON os.usuario_id = co.id
+      ORDER BY co.fecha_entrada ASC, co.id ASC
+      `,
+      [habitacion.piso_id]
+    );
+
+    return res.json({
+      habitacion,
+      fotos: fotosQ.rows,
+      manager: {
+        id: habitacion.manager_usuario_id,
+        nombre: habitacion.manager_nombre,
+        telefono: habitacion.manager_telefono,
+        foto_perfil_url: habitacion.manager_foto_perfil_url,
+      },
+      convivencia_actual: convivenciaQ.rows[0] || {
+        convivientes_actuales: 0,
+        convivientes_con_votos: 0,
+        media_global: null,
+        media_limpieza: null,
+        media_ruido: null,
+        media_puntualidad_pagos: null,
+      },
+      ocupantes_actuales: ocupantesQ.rows,
+    });
   } catch (error) {
     console.error("getHabitacionById error:", error);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
@@ -307,14 +506,12 @@ const getHabitacionById = async (req, res) => {
 
 // ---------------------------------------------------------
 // GET /api/habitacion/:habitacionId/fotos (public)
-// (se mantiene por si quieres cargar por separado o reutilizar)
 // ---------------------------------------------------------
 const listFotosHabitacion = async (req, res) => {
   try {
     const habitacionId = toInt(req.params.habitacionId, NaN);
     if (!Number.isFinite(habitacionId)) return badRequest(res, ["habitacionId"]);
 
-    // Público: si piso o habitación están inactivos -> 404
     const check = await pool.query(
       `
       SELECT h.id
@@ -326,6 +523,7 @@ const listFotosHabitacion = async (req, res) => {
       `,
       [habitacionId]
     );
+
     if (check.rowCount === 0) return notFound(res);
 
     const fotos = await pool.query(
