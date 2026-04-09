@@ -96,6 +96,24 @@ function PersonAvatar({ entity, onOpen, sizeClassName = "h-14 w-14" }) {
   );
 }
 
+function OccupantMetric({ label, value, tone = "neutral" }) {
+  const toneClasses =
+    tone === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : tone === "info"
+          ? "border-sky-200 bg-sky-50 text-sky-700"
+          : "border-slate-200 bg-slate-50 text-slate-700";
+
+  return (
+    <div className={`rounded-lg border p-2 text-center ${toneClasses}`}>
+      <p className="text-[11px] font-medium uppercase tracking-wide">{label}</p>
+      <p className="mt-1 text-base font-bold text-ui-text">{value}</p>
+    </div>
+  );
+}
+
 export default function HabitacionDetail() {
   const { habitacionId } = useParams();
 
@@ -242,7 +260,7 @@ export default function HabitacionDetail() {
             <div className="card">
               <div className="card-body space-y-3">
                 <div className="skeleton h-5 w-1/2" />
-                <div className="skeleton h-14 w-full" />
+                <div className="skeleton h-20 w-full" />
               </div>
             </div>
           </aside>
@@ -260,7 +278,7 @@ export default function HabitacionDetail() {
           <div className="space-y-6 lg:col-span-8">
             {coverUrl ? (
               <img
-                className="cursor-zoom-in rounded-lg border border-ui-border object-cover aspect-[4/3] w-full"
+                className="aspect-[4/3] w-full cursor-zoom-in rounded-lg border border-ui-border object-cover"
                 src={coverUrl}
                 alt={habitacion.titulo}
                 loading="lazy"
@@ -362,7 +380,7 @@ export default function HabitacionDetail() {
                 />
               </div>
 
-              <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+              <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
                 <p className="text-sm text-ui-text-secondary">
                   <span className="font-semibold text-ui-text">
                     Convivientes actuales:
@@ -402,27 +420,49 @@ export default function HabitacionDetail() {
                       {ocupantesActuales.map((ocupante) => (
                         <article
                           key={ocupante.id}
-                          className="rounded-xl border border-slate-300 bg-slate-50 p-4"
+                          className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm"
                         >
-                          <div className="flex items-start gap-3">
-                            <PersonAvatar entity={ocupante} onOpen={openImage} />
+                          <div className="border-b border-slate-200 bg-gradient-to-r from-slate-50 to-blue-50 p-4">
+                            <div className="flex items-start gap-3">
+                              <PersonAvatar entity={ocupante} onOpen={openImage} />
 
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm font-semibold text-ui-text">
-                                {formatDisplayName(ocupante)}
-                              </p>
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate text-sm font-semibold text-ui-text">
+                                  {formatDisplayName(ocupante)}
+                                </p>
 
-                              <p className="mt-1 text-xs text-ui-text-secondary">
-                                Habitación #{ocupante.habitacion_id}
-                              </p>
+                                <p className="mt-1 text-xs text-ui-text-secondary">
+                                  Habitación #{ocupante.habitacion_id}
+                                </p>
 
-                              <div className="mt-3 inline-flex rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-sky-700">
-                                Media: {formatMetric(ocupante.media_global)}
+                                <div className="mt-3 inline-flex rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-medium text-violet-700">
+                                  Media global: {formatMetric(ocupante.media_global)}
+                                </div>
+
+                                <p className="mt-2 text-xs text-ui-text-secondary">
+                                  Votos: {Number(ocupante.total_votos || 0)}
+                                </p>
                               </div>
+                            </div>
+                          </div>
 
-                              <p className="mt-2 text-xs text-ui-text-secondary">
-                                Votos: {Number(ocupante.total_votos || 0)}
-                              </p>
+                          <div className="p-4">
+                            <div className="grid grid-cols-3 gap-2">
+                              <OccupantMetric
+                                label="Limpieza"
+                                value={formatMetric(ocupante.media_limpieza)}
+                                tone="success"
+                              />
+                              <OccupantMetric
+                                label="Ruido"
+                                value={formatMetric(ocupante.media_ruido)}
+                                tone="warning"
+                              />
+                              <OccupantMetric
+                                label="Pagos"
+                                value={formatMetric(ocupante.media_puntualidad_pagos)}
+                                tone="info"
+                              />
                             </div>
                           </div>
                         </article>
@@ -495,6 +535,14 @@ export default function HabitacionDetail() {
                         Llamar al manager
                       </a>
                     ) : null}
+
+                    <button
+                      className="btn btn-secondary mt-2 w-full"
+                      type="button"
+                      onClick={scrollToConvivencia}
+                    >
+                      Ver convivencia actual del piso
+                    </button>
                   </div>
                 ) : (
                   <div className="rounded-xl border border-slate-300 bg-slate-50">
@@ -505,28 +553,6 @@ export default function HabitacionDetail() {
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
-
-            <div className="card">
-              <div className="card-body space-y-3">
-                <h3 className="text-base font-semibold">Acciones</h3>
-
-                <button
-                  className="btn btn-secondary w-full"
-                  type="button"
-                  onClick={scrollToConvivencia}
-                >
-                  Ver convivencia actual del piso
-                </button>
-
-                <button className="btn btn-primary w-full" type="button" disabled>
-                  Solicitar (MVP próximamente)
-                </button>
-
-                <p className="text-xs text-ui-text-secondary">
-                  Próximamente podrás interactuar más con la habitación desde la app.
-                </p>
               </div>
             </div>
           </aside>

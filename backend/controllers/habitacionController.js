@@ -28,10 +28,6 @@ const notFound = (res) => res.status(404).json({ error: "NOT_FOUND" });
 // - Selecciona solo ocupantes actuales del piso
 // - Calcula la reputación media GLOBAL de cada ocupante
 // - Después resume el piso a partir de esos ocupantes actuales
-//
-// Nota importante de producto:
-// - Solo contamos convivientes actuales del piso
-// - La reputación de cada conviviente sale de sus votos recibidos
 // ---------------------------------------------------------
 const CURRENT_OCCUPANTS_SUMMARY_SQL = `
   WITH current_occupants AS (
@@ -328,10 +324,10 @@ const listHabitacionesByPiso = async (req, res) => {
 // Devuelve además:
 // - manager del piso (nombre, teléfono, foto)
 // - resumen de convivencia actual del piso
-// - ocupantes actuales del piso (nombre + foto + habitación + media global)
+// - ocupantes actuales del piso (nombre + foto + habitación + medias)
 //
 // Nota:
-// - Solo exponemos nombre (campo nombre), no apellidos, para ser menos invasivos
+// - Solo exponemos nombre, no apellidos, para ser menos invasivos
 // ---------------------------------------------------------
 const getHabitacionById = async (req, res) => {
   try {
@@ -432,7 +428,7 @@ const getHabitacionById = async (req, res) => {
       [habitacion.piso_id]
     );
 
-    // Ocupantes actuales del piso con nombre + foto + media global
+    // Ocupantes actuales del piso con desglose de reputación
     const ocupantesQ = await pool.query(
       `
       WITH current_occupants AS (
@@ -459,7 +455,10 @@ const getHabitacionById = async (req, res) => {
               ((vu.limpieza + vu.ruido + vu.puntualidad_pagos)::numeric / 3)
             ),
             2
-          ) AS media_global
+          ) AS media_global,
+          ROUND(AVG(vu.limpieza)::numeric, 2) AS media_limpieza,
+          ROUND(AVG(vu.ruido)::numeric, 2) AS media_ruido,
+          ROUND(AVG(vu.puntualidad_pagos)::numeric, 2) AS media_puntualidad_pagos
         FROM current_occupants co
         LEFT JOIN voto_usuario vu ON vu.votado_id = co.id
         GROUP BY co.id
@@ -471,7 +470,10 @@ const getHabitacionById = async (req, res) => {
         co.habitacion_id,
         co.fecha_entrada,
         os.total_votos,
-        os.media_global
+        os.media_global,
+        os.media_limpieza,
+        os.media_ruido,
+        os.media_puntualidad_pagos
       FROM current_occupants co
       LEFT JOIN occupant_scores os ON os.usuario_id = co.id
       ORDER BY co.fecha_entrada ASC, co.id ASC

@@ -411,29 +411,26 @@ export default function HabitacionesList() {
                       {h.balcon ? "Balcón" : ""}
                     </p>
 
-                    {/* Resumen público compacto del ambiente del piso */}
-                    <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                    <div className="rounded-xl border border-violet-300 bg-violet-50 p-3">
                       <div className="flex items-center justify-between gap-3">
-                        <span className="text-xs font-medium uppercase tracking-wide text-sky-700">
-                          Ambiente del piso
-                        </span>
+                        <div className="min-w-0">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">
+                            Ambiente del piso
+                          </p>
+                          <p className="mt-1 text-xs font-medium text-ui-text-secondary">
+                            {convivientesConVotos > 0
+                              ? `${convivientesConVotos} valorado${convivientesConVotos === 1 ? "" : "s"}`
+                              : "Sin valoraciones"}
+                          </p>
+                        </div>
 
-                        <span className="text-lg font-bold text-ui-text">
+                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-violet-200 bg-white text-xl font-bold text-violet-700 shadow-sm">
                           {convivenciaMedia}
-                        </span>
+                        </div>
                       </div>
 
                       <p className="mt-2 text-xs text-ui-text-secondary">
-                        {convivientesConVotos > 0
-                          ? `Basado en ${convivientesConVotos} conviviente${convivientesConVotos === 1 ? "" : "s"} actual${convivientesConVotos === 1 ? "" : "es"} con votos`
-                          : "Todavía no hay votos de convivientes actuales"}
-                      </p>
-
-                      <p className="mt-1 text-xs text-ui-text-secondary">
-                        Convivientes actuales:{" "}
-                        <span className="font-medium text-ui-text">
-                          {convivientesActuales}
-                        </span>
+                        {convivientesActuales} conviviente{convivientesActuales === 1 ? "" : "s"} actual{convivientesActuales === 1 ? "" : "es"}
                       </p>
                     </div>
                   </div>
