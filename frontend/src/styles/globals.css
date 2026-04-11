@@ -72,19 +72,19 @@
     }
 
     .btn-primary {
-        @apply btn bg-brand-primary text-white hover:bg-brand-primary-hover active:bg-brand-primary-active;
+        @apply btn bg-brand-primary text-white hover:bg-brand-primary-hover hover:text-white active:bg-brand-primary-active active:text-white;
     }
 
     .btn-secondary {
-        @apply btn border border-ui-border bg-white text-ui-text hover:bg-slate-50;
+        @apply btn border border-ui-border bg-white text-ui-text hover:bg-slate-50 hover:text-ui-text;
     }
 
     .btn-ghost {
-        @apply btn bg-transparent text-brand-primary hover:bg-blue-50;
+        @apply btn bg-transparent text-brand-primary hover:bg-blue-50 hover:text-brand-primary;
     }
 
     .btn-danger {
-        @apply btn bg-ui-error text-white hover:brightness-95 active:brightness-90;
+        @apply btn bg-ui-error text-white hover:brightness-95 hover:text-white active:brightness-90 active:text-white;
     }
 
     .btn-sm {

@@ -349,7 +349,7 @@ async function joinHabitacion(req, res) {
     // La habitación debe estar disponible para poder asignar a un usuario
     if (!room.disponible) {
       await client.query("ROLLBACK");
-      return res.status(409).json({ error: "ROOM_NOT_AVAILABLE" });
+      return res.status(409).json({ error: "HABITACION_NOT_AVAILABLE" });
     }
 
     if (isAdvertiser(req) && room.manager_usuario_id !== requesterId) {

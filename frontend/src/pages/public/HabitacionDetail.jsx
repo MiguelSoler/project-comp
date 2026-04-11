@@ -535,14 +535,6 @@ export default function HabitacionDetail() {
                         Llamar al manager
                       </a>
                     ) : null}
-
-                    <button
-                      className="btn btn-secondary mt-2 w-full"
-                      type="button"
-                      onClick={scrollToConvivencia}
-                    >
-                      Ver convivencia actual del piso
-                    </button>
                   </div>
                 ) : (
                   <div className="rounded-xl border border-slate-300 bg-slate-50">
@@ -553,6 +545,13 @@ export default function HabitacionDetail() {
                     </div>
                   </div>
                 )}
+                <button
+                      className="btn border border-amber-300 bg-amber-200 text-amber-800 hover:bg-amber-300 hover:text-amber-800 w-full"
+                      type="button"
+                      onClick={scrollToConvivencia}
+                    >
+                      Ver convivencia actual del piso
+                    </button>
               </div>
             </div>
           </aside>

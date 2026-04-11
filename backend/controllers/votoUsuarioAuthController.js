@@ -39,12 +39,48 @@ async function getPisoById(client, pisoId) {
   return q.rowCount ? q.rows[0] : null;
 }
 
+/**
+ * Comprueba si votante y votado conviven AHORA MISMO
+ * en el mismo piso indicado.
+ *
+ * Reglas:
+ * - ambos deben tener estancia activa
+ * - ambos deben estar activos en habitaciones de ese piso
+ *
+ * Esto bloquea la edición de votos históricos.
+ */
+async function hasCurrentCohabitationInPiso(client, { pisoId, votanteId, votadoId }) {
+  const q = await client.query(
+    `
+    SELECT 1
+    FROM usuario_habitacion uh_votante
+    JOIN habitacion h_votante ON h_votante.id = uh_votante.habitacion_id
+    JOIN usuario_habitacion uh_votado ON uh_votado.usuario_id = $2
+    JOIN habitacion h_votado ON h_votado.id = uh_votado.habitacion_id
+    WHERE uh_votante.usuario_id = $1
+      AND uh_votante.fecha_salida IS NULL
+      AND uh_votante.estado = 'active'
+      AND uh_votado.fecha_salida IS NULL
+      AND uh_votado.estado = 'active'
+      AND h_votante.piso_id = $3
+      AND h_votado.piso_id = $3
+    LIMIT 1
+    `,
+    [votanteId, votadoId, pisoId]
+  );
+
+  return q.rowCount > 0;
+}
+
 // ---------------------------------------------------------
 // POST /api/voto-usuario (private)
 // Body: { piso_id, votado_id, limpieza, ruido, puntualidad_pagos }
 // Upsert por (piso_id, votante_id, votado_id)
-// - INSERT => num_cambios = 0
-// - UPDATE => num_cambios = num_cambios + 1
+//
+// Regla importante:
+// - SOLO se puede crear/editar si la convivencia es ACTUAL
+//   en ese piso. Los votos históricos se siguen viendo,
+//   pero ya no se pueden editar.
 // ---------------------------------------------------------
 const upsertVotoUsuario = async (req, res) => {
   const votanteId = req.user?.id;
@@ -78,17 +114,36 @@ const upsertVotoUsuario = async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // Validaciones de existencia legibles (evita depender solo de FK)
+    // Validaciones de existencia legibles
     const piso = await getPisoById(client, piso_id);
     if (!piso) {
       await client.query("ROLLBACK");
       return notFound(res);
     }
 
+    if (!piso.activo) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "PISO_INACTIVE" });
+    }
+
     const votado = await getPublicUserById(client, votado_id);
     if (!votado || !votado.activo) {
       await client.query("ROLLBACK");
       return notFound(res);
+    }
+
+    // Regla crítica:
+    // solo se puede votar/editar si ambos conviven ACTUALMENTE
+    // en el piso indicado.
+    const hasCurrentCohabitation = await hasCurrentCohabitationInPiso(client, {
+      pisoId: piso_id,
+      votanteId,
+      votadoId: votado_id,
+    });
+
+    if (!hasCurrentCohabitation) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "VOTE_CLOSED_NO_CURRENT_COHABITATION" });
     }
 
     // UPSERT atómico
@@ -118,7 +173,6 @@ const upsertVotoUsuario = async (req, res) => {
 
     await client.query("COMMIT");
 
-    // En insert num_cambios = 0; en update siempre >= 1
     const created = Number(voto.num_cambios) === 0;
 
     return res.status(created ? 201 : 200).json({
@@ -128,7 +182,7 @@ const upsertVotoUsuario = async (req, res) => {
   } catch (error) {
     await client.query("ROLLBACK");
 
-    // Trigger validar_convivencia_voto()
+    // Trigger antiguo de convivencia histórica
     if (
       error?.code === "P0001" &&
       typeof error.message === "string" &&
@@ -137,10 +191,10 @@ const upsertVotoUsuario = async (req, res) => {
       return res.status(409).json({ error: "NO_COHABITATION" });
     }
 
-    // FK o checks (fallback por si se nos escapa alguna validación)
     if (error?.code === "23503") {
       return notFound(res);
     }
+
     if (error?.code === "23514") {
       return res.status(400).json({ error: "VALIDATION_ERROR" });
     }
@@ -155,6 +209,10 @@ const upsertVotoUsuario = async (req, res) => {
 // ---------------------------------------------------------
 // GET /api/voto-usuario/mis-votos (private)
 // Query params: page, limit, sort=newest|oldest, pisoId(optional)
+//
+// Devuelve además:
+// - can_edit: true solo si siguen conviviendo actualmente
+//   en el mismo piso del voto
 // ---------------------------------------------------------
 const listMisVotosEmitidos = async (req, res) => {
   try {
@@ -214,6 +272,21 @@ const listMisVotosEmitidos = async (req, res) => {
         p.direccion,
         p.activo AS piso_activo,
 
+        EXISTS (
+          SELECT 1
+          FROM usuario_habitacion uh_votante
+          JOIN habitacion h_votante ON h_votante.id = uh_votante.habitacion_id
+          JOIN usuario_habitacion uh_votado ON uh_votado.usuario_id = vu.votado_id
+          JOIN habitacion h_votado ON h_votado.id = uh_votado.habitacion_id
+          WHERE uh_votante.usuario_id = vu.votante_id
+            AND uh_votante.fecha_salida IS NULL
+            AND uh_votante.estado = 'active'
+            AND uh_votado.fecha_salida IS NULL
+            AND uh_votado.estado = 'active'
+            AND h_votante.piso_id = vu.piso_id
+            AND h_votado.piso_id = vu.piso_id
+        ) AS can_edit,
+
         COUNT(*) OVER() AS total_count
       FROM voto_usuario vu
       JOIN usuario u ON u.id = vu.votado_id
@@ -231,6 +304,7 @@ const listMisVotosEmitidos = async (req, res) => {
     const items = q.rows
       .map(({ total_count, ...row }) => ({
         ...row,
+        can_edit: Boolean(row.can_edit),
         votado: {
           id: row.votado_id_ref,
           nombre: row.votado_nombre,

@@ -133,11 +133,12 @@ export default function MisVotos() {
                   Volver
                 </button>
               </div>
+
               <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
                   <h1>Mis votos</h1>
                   <p className="text-sm text-ui-text-secondary">
-                    Revisa y edita los votos que has emitido a tus convivientes.
+                    Revisa tus votos emitidos. Solo puedes editar los de convivientes actuales.
                   </p>
                 </div>
 
@@ -159,7 +160,8 @@ export default function MisVotos() {
               </div>
 
               <p className="text-xs text-ui-text-secondary">
-                Total de votos emitidos: <span className="font-medium text-ui-text">{total}</span>
+                Total de votos emitidos:{" "}
+                <span className="font-medium text-ui-text">{total}</span>
               </p>
             </header>
 
@@ -184,6 +186,7 @@ export default function MisVotos() {
                       .join(" ");
 
                     const avatarUrl = buildImageUrl(item.votado?.foto_perfil_url);
+                    const canEdit = Boolean(item.can_edit);
 
                     return (
                       <article key={item.id} className="card">
@@ -232,14 +235,29 @@ export default function MisVotos() {
                                 Cambios: {item.num_cambios}
                               </span>
 
-                              <Link
-                                to={`/convivientes/${item.votado_id}/votar`}
-                                className="btn btn-primary btn-sm"
-                              >
-                                Editar voto
-                              </Link>
+                              {canEdit ? (
+                                <Link
+                                  to={`/convivientes/${item.votado_id}/votar`}
+                                  className="btn btn-primary btn-sm"
+                                >
+                                  Editar voto
+                                </Link>
+                              ) : (
+                                <span className="badge badge-neutral">
+                                  Voto cerrado
+                                </span>
+                              )}
                             </div>
                           </div>
+
+                          {!canEdit ? (
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                              <p className="text-sm text-ui-text-secondary">
+                                Ya no convivís actualmente en este piso, así que este voto se mantiene
+                                como histórico y no puede editarse.
+                              </p>
+                            </div>
+                          ) : null}
 
                           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                             <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
