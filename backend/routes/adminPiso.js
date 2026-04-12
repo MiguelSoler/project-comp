@@ -5,7 +5,7 @@ const router = express.Router();
 
 const { requireAuth } = require("../middleware/authMiddleware");
 
-const { listPisosAdmin, getPisoAdminById, listHabitacionesAdminByPiso, createPiso, updatePiso, deletePiso, addFotoPiso, updateFotoPiso, deleteFotoPiso } = require("../controllers/adminPisoController");
+const { getPisoConvivenciaActualAdmin, listPisosAdmin, getPisoAdminById, listHabitacionesAdminByPiso, createPiso, updatePiso, deletePiso, addFotoPiso, updateFotoPiso, deleteFotoPiso } = require("../controllers/adminPisoController");
 
 const { uploadPisoPhoto } = require("../middleware/uploadPisoPhoto");
 
@@ -16,6 +16,7 @@ router.get("/:pisoId/habitaciones", requireAuth, listHabitacionesAdminByPiso);
 router.post("/", requireAuth, createPiso);
 router.patch("/:pisoId", requireAuth, updatePiso);
 router.delete("/:pisoId", requireAuth, deletePiso);
+router.get("/:pisoId/convivencia-actual", requireAuth, getPisoConvivenciaActualAdmin);
 
 // Fotos de piso
 router.post("/:pisoId/fotos", requireAuth, uploadPisoPhoto.single("foto"), addFotoPiso);

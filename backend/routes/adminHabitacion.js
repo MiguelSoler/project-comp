@@ -5,7 +5,8 @@ const router = express.Router();
 
 const { requireAuth } = require("../middleware/authMiddleware");
 
-const { listHabitacionesAdmin, getHabitacionAdminById, createHabitacion, updateHabitacion, deactivateHabitacion, reactivateHabitacion, addFotoHabitacion, updateFotoHabitacion, deleteFotoHabitacion } = require("../controllers/adminHabitacionController");
+const { getHistorialHabitacionAdmin, listHabitacionesAdmin, getHabitacionAdminById, createHabitacion, updateHabitacion, deactivateHabitacion, 
+        reactivateHabitacion, addFotoHabitacion, updateFotoHabitacion, deleteFotoHabitacion } = require("../controllers/adminHabitacionController");
 
 const { uploadHabitacionPhoto } = require("../middleware/uploadHabitacionPhoto");
 
@@ -13,6 +14,7 @@ const { uploadHabitacionPhoto } = require("../middleware/uploadHabitacionPhoto")
 router.get("/", requireAuth, listHabitacionesAdmin);
 router.get("/:habitacionId", requireAuth, getHabitacionAdminById);
 router.post("/", requireAuth, createHabitacion);
+router.get("/:habitacionId/historial", requireAuth, getHistorialHabitacionAdmin);
 router.patch("/:habitacionId", requireAuth, updateHabitacion);
 router.delete("/:habitacionId/deactivate", requireAuth, deactivateHabitacion);
 router.patch("/:habitacionId/reactivate", requireAuth, reactivateHabitacion);

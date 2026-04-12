@@ -42,6 +42,11 @@ export function listAdminHabitaciones({
   return get(`/api/admin/habitacion?${params.toString()}`);
 }
 
+// GET /api/admin/habitacion/:habitacionId/historial
+export function getAdminHabitacionHistorial(habitacionId) {
+  return get(`/api/admin/habitacion/${habitacionId}/historial`);
+}
+
 // GET /api/admin/habitacion/:habitacionId
 export function getAdminHabitacionById(habitacionId) {
   return get(`/api/admin/habitacion/${habitacionId}`);

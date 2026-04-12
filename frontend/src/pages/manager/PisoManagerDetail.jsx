@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
@@ -6,6 +6,7 @@ import {
   addAdminPisoFoto,
   deleteAdminPisoFoto,
   getAdminPisoById,
+  getAdminPisoConvivenciaActual,
   listAdminHabitacionesByPiso,
   updateAdminPiso,
   updateAdminPisoFoto,
@@ -15,8 +16,6 @@ import {
   deactivateAdminHabitacion,
   reactivateAdminHabitacion,
 } from "../../services/adminHabitacionService.js";
-import { listConvivientesByPiso } from "../../services/usuarioHabitacionService.js";
-import { getUserVotesSummary } from "../../services/votoUsuarioService.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -74,18 +73,6 @@ function formatMetric(value) {
   return n.toFixed(1);
 }
 
-function getInitials(usuario) {
-  const source =
-    [usuario?.nombre, usuario?.apellidos].filter(Boolean).join(" ") || "U";
-
-  return source
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() || "")
-    .join("");
-}
-
 function buildPisoFormFromPiso(piso) {
   if (!piso) return EMPTY_PISO_FORM;
 
@@ -97,68 +84,72 @@ function buildPisoFormFromPiso(piso) {
   };
 }
 
-function getSummaryMetrics(summaryData) {
-  const resumen = summaryData?.resumen || summaryData || null;
-  const medias = resumen?.medias || {};
+function formatDisplayName(entity) {
+  const nombre = entity?.nombre || "";
+  const apellidos = entity?.apellidos || "";
+  const fullName = `${nombre} ${apellidos}`.trim();
 
-  return {
-    limpieza: medias.limpieza ?? null,
-    ruido: medias.ruido ?? null,
-    pagos: medias.puntualidad_pagos ?? null,
-    total: resumen?.total_votos ?? 0,
-  };
+  if (fullName) return fullName;
+  if (entity?.email) return entity.email;
+  return `Usuario #${entity?.id ?? "—"}`;
 }
 
-function getConvivenciaStats(convivientes, summaryMap) {
-  const summaries = convivientes
-    .map((item) => getSummaryMetrics(summaryMap[item.id]))
-    .filter(
-      (item) =>
-        item.limpieza !== null || item.ruido !== null || item.pagos !== null
-    );
+function getInitials(entity) {
+  return formatDisplayName(entity)
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
+}
 
-  if (summaries.length === 0) {
-    return {
-      limpieza: null,
-      ruido: null,
-      pagos: null,
-      mediaGeneral: null,
-      totalVotos: 0,
-    };
+function getMetricVoteItems(reputacionActual, metricKey) {
+  if (!reputacionActual?.detalle_votos) return [];
+  const items = reputacionActual.detalle_votos[metricKey];
+  return Array.isArray(items) ? items : [];
+}
+
+function MiniVoteList({ items = [] }) {
+  if (!items.length) {
+    return (
+      <p className="mt-2 text-xs text-ui-text-secondary">
+        Sin votos actuales.
+      </p>
+    );
   }
 
-  const avg = (values) => {
-    const valid = values.filter((value) => Number.isFinite(Number(value)));
-    if (valid.length === 0) return null;
-    return valid.reduce((acc, value) => acc + Number(value), 0) / valid.length;
-  };
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {items.map((item) => {
+        const voterName = formatDisplayName(item.votante);
+        const voterPhoto = buildImageUrl(item.votante?.foto_perfil_url);
 
-  const limpieza = avg(summaries.map((item) => item.limpieza));
-  const ruido = avg(summaries.map((item) => item.ruido));
-  const pagos = avg(summaries.map((item) => item.pagos));
+        return (
+          <div
+            key={`${item.voto_id}-${item.votante?.id}-${item.valor}`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/80 bg-white px-2 py-1 shadow-sm"
+            title={voterName}
+          >
+            {voterPhoto ? (
+              <img
+                src={voterPhoto}
+                alt={voterName}
+                className="h-6 w-6 rounded-full object-cover"
+              />
+            ) : (
+              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-ui-text-secondary">
+                {getInitials(item.votante)}
+              </div>
+            )}
 
-  const metricValues = [limpieza, ruido, pagos].filter((value) =>
-    Number.isFinite(Number(value))
+            <span className="text-xs font-semibold text-ui-text">
+              {item.valor}/5
+            </span>
+          </div>
+        );
+      })}
+    </div>
   );
-
-  const mediaGeneral =
-    metricValues.length > 0
-      ? metricValues.reduce((acc, value) => acc + Number(value), 0) /
-        metricValues.length
-      : null;
-
-  const totalVotos = summaries.reduce(
-    (acc, item) => acc + Number(item.total || 0),
-    0
-  );
-
-  return {
-    limpieza,
-    ruido,
-    pagos,
-    mediaGeneral,
-    totalVotos,
-  };
 }
 
 export default function PisoManagerDetail() {
@@ -199,21 +190,9 @@ export default function PisoManagerDetail() {
 
   const [isPisoPhotoModalOpen, setIsPisoPhotoModalOpen] = useState(false);
   const [selectedPisoPhotoIndex, setSelectedPisoPhotoIndex] = useState(0);
-  
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
 
-  // =========================================================
-  // Pestaña Convivencia
-  // MVP:
-  // - cargamos convivientes actuales del piso
-  // - para cada uno usamos su resumen GLOBAL de reputación
-  //   porque es la API que ya existe hoy
-  // - si más adelante creas un endpoint de reputación actual por piso,
-  //   aquí será fácil sustituir esta parte
-  // =========================================================
-  const [convivientes, setConvivientes] = useState([]);
-  const [convivientesSummaryMap, setConvivientesSummaryMap] = useState({});
+  const [convivenciaResumen, setConvivenciaResumen] = useState(null);
+  const [convivientesActuales, setConvivientesActuales] = useState([]);
   const [loadingConvivencia, setLoadingConvivencia] = useState(false);
   const [convivenciaError, setConvivenciaError] = useState("");
 
@@ -223,6 +202,9 @@ export default function PisoManagerDetail() {
     url: "",
     alt: "",
   });
+
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     let isMounted = true;
@@ -245,7 +227,9 @@ export default function PisoManagerDetail() {
 
         setPiso(nextPiso);
         setPisoForm(buildPisoFormFromPiso(nextPiso));
-        setHabitaciones(Array.isArray(habitacionesData?.items) ? habitacionesData.items : []);
+        setHabitaciones(
+          Array.isArray(habitacionesData?.items) ? habitacionesData.items : []
+        );
         setFotosPiso(Array.isArray(pisoData?.fotos) ? pisoData.fotos : []);
       } catch (err) {
         if (!isMounted) return;
@@ -280,41 +264,21 @@ export default function PisoManagerDetail() {
         setLoadingConvivencia(true);
         setConvivenciaError("");
 
-        const data = await listConvivientesByPiso(pisoId);
-        const nextConvivientes = Array.isArray(data?.convivientes)
-          ? data.convivientes
-          : [];
+        const data = await getAdminPisoConvivenciaActual(pisoId);
 
         if (!isMounted) return;
 
-        setConvivientes(nextConvivientes);
-
-        if (nextConvivientes.length === 0) {
-          setConvivientesSummaryMap({});
-          return;
-        }
-
-        const summaryEntries = await Promise.all(
-          nextConvivientes.map(async (conviviente) => {
-            try {
-              const summary = await getUserVotesSummary(conviviente.id);
-              return [conviviente.id, summary];
-            } catch (_) {
-              return [conviviente.id, null];
-            }
-          })
+        setConvivenciaResumen(data?.resumen || null);
+        setConvivientesActuales(
+          Array.isArray(data?.convivientes) ? data.convivientes : []
         );
-
-        if (!isMounted) return;
-
-        setConvivientesSummaryMap(Object.fromEntries(summaryEntries));
       } catch (err) {
         if (!isMounted) return;
         setConvivenciaError(
           err?.message || "No se pudo cargar la convivencia actual del piso."
         );
-        setConvivientes([]);
-        setConvivientesSummaryMap({});
+        setConvivenciaResumen(null);
+        setConvivientesActuales([]);
       } finally {
         if (isMounted) setLoadingConvivencia(false);
       }
@@ -441,7 +405,9 @@ export default function PisoManagerDetail() {
         precio_mensual: Number(habitacionForm.precio_mensual),
         disponible: habitacionForm.disponible === "true",
         tamano_m2:
-          habitacionForm.tamano_m2 === "" ? null : Number(habitacionForm.tamano_m2),
+          habitacionForm.tamano_m2 === ""
+            ? null
+            : Number(habitacionForm.tamano_m2),
         amueblada: habitacionForm.amueblada === "true",
         bano: habitacionForm.bano === "true",
         balcon: habitacionForm.balcon === "true",
@@ -513,7 +479,9 @@ export default function PisoManagerDetail() {
   function toggleHabitacionMenu(habitacionId, event) {
     event.stopPropagation();
     setOpenPisoPhotoMenuId(null);
-    setOpenHabitacionMenuId((prev) => (prev === habitacionId ? null : habitacionId));
+    setOpenHabitacionMenuId((prev) =>
+      prev === habitacionId ? null : habitacionId
+    );
   }
 
   function openHabitacionDetail(habitacionId) {
@@ -552,7 +520,8 @@ export default function PisoManagerDetail() {
         if (!prev) return prev;
 
         const wasInactive = !habitacion.activo;
-        const becomesAvailableAndActive = !habitacion.activo && habitacion.disponible;
+        const becomesAvailableAndActive =
+          !habitacion.activo && habitacion.disponible;
 
         return {
           ...prev,
@@ -577,7 +546,8 @@ export default function PisoManagerDetail() {
         ...prev,
         [habitacion.id]: {
           type: "error",
-          message: err?.error || err?.message || "No se pudo reactivar la habitación.",
+          message:
+            err?.error || err?.message || "No se pudo reactivar la habitación.",
         },
       }));
     } finally {
@@ -627,7 +597,9 @@ export default function PisoManagerDetail() {
         if (!prev) return prev;
 
         const wasActive = Boolean(habitacion.activo);
-        const wasAvailableAndActive = Boolean(habitacion.activo && habitacion.disponible);
+        const wasAvailableAndActive = Boolean(
+          habitacion.activo && habitacion.disponible
+        );
 
         return {
           ...prev,
@@ -654,7 +626,8 @@ export default function PisoManagerDetail() {
         ...prev,
         [habitacion.id]: {
           type: "error",
-          message: err?.error || err?.message || "No se pudo desactivar la habitación.",
+          message:
+            err?.error || err?.message || "No se pudo desactivar la habitación.",
         },
       }));
     } finally {
@@ -746,7 +719,9 @@ export default function PisoManagerDetail() {
       setPisoUploadForm(EMPTY_PISO_UPLOAD_FORM);
       setSuccess("Foto del piso subida correctamente.");
     } catch (err) {
-      setError(err?.error || err?.message || "No se pudo subir la foto del piso.");
+      setError(
+        err?.error || err?.message || "No se pudo subir la foto del piso."
+      );
     } finally {
       setUploadingPisoPhoto(false);
     }
@@ -851,7 +826,9 @@ export default function PisoManagerDetail() {
 
       await deleteAdminPisoFoto(pisoId, pisoPhotoToDelete.id);
 
-      setFotosPiso((prev) => prev.filter((foto) => foto.id !== pisoPhotoToDelete.id));
+      setFotosPiso((prev) =>
+        prev.filter((foto) => foto.id !== pisoPhotoToDelete.id)
+      );
 
       if (editingPisoPhotoOrderId === pisoPhotoToDelete.id) {
         setEditingPisoPhotoOrderId(null);
@@ -863,7 +840,8 @@ export default function PisoManagerDetail() {
         ...prev,
         [pisoPhotoToDelete.id]: {
           type: "error",
-          message: err?.error || err?.message || "No se pudo eliminar la foto del piso.",
+          message:
+            err?.error || err?.message || "No se pudo eliminar la foto del piso.",
         },
       }));
     } finally {
@@ -885,10 +863,6 @@ export default function PisoManagerDetail() {
   const cover = buildImageUrl(piso?.cover_foto_piso_url);
   const habitacionCount = Number(piso?.habitaciones_total ?? habitaciones.length);
   const fotoCount = fotosPiso.length;
-
-  const convivenciaStats = useMemo(() => {
-    return getConvivenciaStats(convivientes, convivientesSummaryMap);
-  }, [convivientes, convivientesSummaryMap]);
 
   return (
     <>
@@ -969,7 +943,11 @@ export default function PisoManagerDetail() {
                     </p>
                   </div>
 
-                  <span className={piso.activo ? "badge badge-success" : "badge badge-neutral"}>
+                  <span
+                    className={
+                      piso.activo ? "badge badge-success" : "badge badge-neutral"
+                    }
+                  >
                     {piso.activo ? "Activo" : "Inactivo"}
                   </span>
                 </div>
@@ -1051,7 +1029,7 @@ export default function PisoManagerDetail() {
                         : "bg-slate-100 text-ui-text-secondary"
                     }`}
                   >
-                    {convivientes.length}
+                    {convivientesActuales.length}
                   </span>
                 </button>
 
@@ -1211,15 +1189,20 @@ export default function PisoManagerDetail() {
                       <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
                         Fotos del piso
                       </h3>
-                      <span className="text-xs text-ui-text-secondary">Total: {fotosPiso.length}</span>
+                      <span className="text-xs text-ui-text-secondary">
+                        Total: {fotosPiso.length}
+                      </span>
                     </div>
 
                     <div className="card">
                       <div className="card-body space-y-4">
                         <div>
-                          <h4 className="text-base font-semibold text-ui-text">Añadir foto del piso</h4>
+                          <h4 className="text-base font-semibold text-ui-text">
+                            Añadir foto del piso
+                          </h4>
                           <p className="mt-1 text-sm text-ui-text-secondary">
-                            Selecciona o arrastra una imagen para subirla a este piso.
+                            Selecciona o arrastra una imagen para subirla a este
+                            piso.
                           </p>
                         </div>
 
@@ -1231,7 +1214,10 @@ export default function PisoManagerDetail() {
                           </div>
                         ) : null}
 
-                        <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+                        <form
+                          className="space-y-4"
+                          onSubmit={(e) => e.preventDefault()}
+                        >
                           <label
                             htmlFor="foto-piso"
                             onDragOver={handlePisoPhotoDragOver}
@@ -1250,7 +1236,8 @@ export default function PisoManagerDetail() {
                                   : "Haz clic o arrastra una foto aquí"}
                               </p>
                               <p className="text-xs text-ui-text-secondary">
-                                JPG, PNG u otros formatos de imagen · máximo 8 MB
+                                JPG, PNG u otros formatos de imagen · máximo 8
+                                MB
                               </p>
                             </div>
                           </label>
@@ -1317,7 +1304,9 @@ export default function PisoManagerDetail() {
                                 <button
                                   type="button"
                                   className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-sky-100"
-                                  onClick={(event) => openPisoPhotoOrderEditor(foto.id, event)}
+                                  onClick={(event) =>
+                                    openPisoPhotoOrderEditor(foto.id, event)
+                                  }
                                 >
                                   Cambiar orden
                                 </button>
@@ -1325,7 +1314,9 @@ export default function PisoManagerDetail() {
                                 <button
                                   type="button"
                                   className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-red-100"
-                                  onClick={(event) => requestDeletePisoPhoto(foto, event)}
+                                  onClick={(event) =>
+                                    requestDeletePisoPhoto(foto, event)
+                                  }
                                 >
                                   Eliminar foto
                                 </button>
@@ -1346,14 +1337,21 @@ export default function PisoManagerDetail() {
                               </button>
 
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs text-ui-text-secondary">ID #{foto.id}</span>
-                                <span className="text-xs text-ui-text-secondary">Orden #{foto.orden}</span>
+                                <span className="text-xs text-ui-text-secondary">
+                                  ID #{foto.id}
+                                </span>
+                                <span className="text-xs text-ui-text-secondary">
+                                  Orden #{foto.orden}
+                                </span>
                               </div>
 
                               {editingPisoPhotoOrderId === foto.id ? (
                                 <div className="space-y-3">
                                   <div>
-                                    <label className="label" htmlFor={`orden-piso-foto-${foto.id}`}>
+                                    <label
+                                      className="label"
+                                      htmlFor={`orden-piso-foto-${foto.id}`}
+                                    >
                                       Orden
                                     </label>
                                     <input
@@ -1363,7 +1361,10 @@ export default function PisoManagerDetail() {
                                       className="input"
                                       value={pisoPhotoOrderValues[foto.id] ?? ""}
                                       onChange={(event) =>
-                                        handlePisoPhotoOrderValueChange(foto.id, event.target.value)
+                                        handlePisoPhotoOrderValueChange(
+                                          foto.id,
+                                          event.target.value
+                                        )
                                       }
                                       disabled={
                                         updatingPisoPhotoId === foto.id ||
@@ -1376,7 +1377,12 @@ export default function PisoManagerDetail() {
                                     <button
                                       type="button"
                                       className="btn btn-secondary btn-sm"
-                                      onClick={(event) => closePisoPhotoOrderEditor(foto.id, event)}
+                                      onClick={(event) =>
+                                        closePisoPhotoOrderEditor(
+                                          foto.id,
+                                          event
+                                        )
+                                      }
                                       disabled={
                                         updatingPisoPhotoId === foto.id ||
                                         deletingPisoPhotoId === foto.id
@@ -1392,9 +1398,13 @@ export default function PisoManagerDetail() {
                                         updatingPisoPhotoId === foto.id ||
                                         deletingPisoPhotoId === foto.id
                                       }
-                                      onClick={() => handleSavePisoPhotoOrder(foto)}
+                                      onClick={() =>
+                                        handleSavePisoPhotoOrder(foto)
+                                      }
                                     >
-                                      {updatingPisoPhotoId === foto.id ? "Guardando..." : "Guardar orden"}
+                                      {updatingPisoPhotoId === foto.id
+                                        ? "Guardando..."
+                                        : "Guardar orden"}
                                     </button>
                                   </div>
                                 </div>
@@ -1426,7 +1436,8 @@ export default function PisoManagerDetail() {
                         Convivencia actual
                       </h3>
                       <p className="mt-1 text-sm text-ui-text-secondary">
-                        Aquí ves los convivientes actuales del piso y su reputación global resumida.
+                        Aquí ves la reputación real de la convivencia actual del
+                        piso, sin mezclar votos históricos.
                       </p>
                     </div>
 
@@ -1436,8 +1447,8 @@ export default function PisoManagerDetail() {
 
                     {loadingConvivencia ? (
                       <div className="space-y-4">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                          {Array.from({ length: 4 }).map((_, index) => (
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                          {Array.from({ length: 5 }).map((_, index) => (
                             <div
                               key={index}
                               className="rounded-xl border border-slate-300 bg-slate-50 p-4"
@@ -1461,9 +1472,9 @@ export default function PisoManagerDetail() {
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                  <div className="skeleton h-20 rounded-lg" />
-                                  <div className="skeleton h-20 rounded-lg" />
-                                  <div className="skeleton h-20 rounded-lg" />
+                                  <div className="skeleton h-28 rounded-lg" />
+                                  <div className="skeleton h-28 rounded-lg" />
+                                  <div className="skeleton h-28 rounded-lg" />
                                 </div>
                               </div>
                             </div>
@@ -1472,17 +1483,18 @@ export default function PisoManagerDetail() {
                       </div>
                     ) : (
                       <>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                          <div className="rounded-xl border border-violet-300 bg-violet-50">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
+                          
+                          <div className="rounded-xl border-4 border-fuchsia-400 bg-fuchsia-50">
                             <div className="card-body">
-                              <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
-                                Convivientes actuales
+                              <p className="text-xs font-medium uppercase tracking-wide text-fuchsia-600">
+                                Media global
                               </p>
                               <p className="mt-2 text-2xl font-bold text-ui-text">
-                                {convivientes.length}
+                                {formatMetric(convivenciaResumen?.media_global)}
                               </p>
                             </div>
-                          </div>
+                          </div>                          
 
                           <div className="rounded-xl border border-emerald-300 bg-emerald-50">
                             <div className="card-body">
@@ -1490,7 +1502,7 @@ export default function PisoManagerDetail() {
                                 Limpieza media
                               </p>
                               <p className="mt-2 text-2xl font-bold text-ui-text">
-                                {formatMetric(convivenciaStats.limpieza)}
+                                {formatMetric(convivenciaResumen?.medias?.limpieza)}
                               </p>
                             </div>
                           </div>
@@ -1501,7 +1513,7 @@ export default function PisoManagerDetail() {
                                 Ruido medio
                               </p>
                               <p className="mt-2 text-2xl font-bold text-ui-text">
-                                {formatMetric(convivenciaStats.ruido)}
+                                {formatMetric(convivenciaResumen?.medias?.ruido)}
                               </p>
                             </div>
                           </div>
@@ -1512,51 +1524,84 @@ export default function PisoManagerDetail() {
                                 Pagos medios
                               </p>
                               <p className="mt-2 text-2xl font-bold text-ui-text">
-                                {formatMetric(convivenciaStats.pagos)}
+                                {formatMetric(
+                                  convivenciaResumen?.medias?.puntualidad_pagos
+                                )}
                               </p>
                             </div>
                           </div>
+
+                          <div className="rounded-xl border border-violet-300 bg-violet-50">
+                            <div className="card-body">
+                              <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
+                                Convivientes actuales
+                              </p>
+                              <p className="mt-2 text-2xl font-bold text-ui-text">
+                                {convivenciaResumen?.convivientes_actuales ?? 0}
+                              </p>
+                            </div>
+                          </div>
+                          
                         </div>
 
                         <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
-                          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                            <div>
-                              <p className="text-sm font-semibold text-ui-text">
-                                Resumen general visible del grupo
-                              </p>
-                              <p className="mt-1 text-sm text-ui-text-secondary">
-                                Media global aproximada:{" "}
-                                <span className="font-semibold text-ui-text">
-                                  {formatMetric(convivenciaStats.mediaGeneral)}
-                                </span>
-                                {" · "}
-                                Total votos agregados:{" "}
-                                <span className="font-semibold text-ui-text">
-                                  {convivenciaStats.totalVotos}
-                                </span>
-                              </p>
-                            </div>
+                          <p className="text-sm font-semibold text-ui-text">
+                            Resumen general visible del grupo
+                          </p>
+
+                          <div className="mt-3 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-4">
+                            <p className="text-sm text-ui-text-secondary">
+                              Media global actual del piso:{" "}
+                              <span className="font-semibold text-ui-text">
+                                {formatMetric(convivenciaResumen?.media_global)}
+                              </span>
+                            </p>
+
+                            <p className="text-sm text-ui-text-secondary">
+                              Total votos actuales entre convivientes:{" "}
+                              <span className="font-semibold text-ui-text">
+                                {convivenciaResumen?.total_votos_actuales ?? 0}
+                              </span>
+                            </p>
                           </div>
                         </div>
 
-                        {convivientes.length === 0 ? (
+                        {convivientesActuales.length === 0 ? (
                           <div className="card">
                             <div className="card-body">
                               <p className="text-sm text-ui-text-secondary">
-                                Este piso no tiene convivientes activos en este momento.
+                                Este piso no tiene convivientes activos en este
+                                momento.
                               </p>
                             </div>
                           </div>
                         ) : (
                           <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                            {convivientes.map((conviviente) => {
-                              const avatarUrl = buildImageUrl(conviviente.foto_perfil_url);
-                              const summaryMetrics = getSummaryMetrics(
-                                convivientesSummaryMap[conviviente.id]
+                            {convivientesActuales.map((conviviente) => {
+                              const avatarUrl = buildImageUrl(
+                                conviviente.foto_perfil_url
+                              );
+                              const reputacionActual =
+                                conviviente.reputacion_actual || null;
+
+                              const limpiezaVotes = getMetricVoteItems(
+                                reputacionActual,
+                                "limpieza"
+                              );
+                              const ruidoVotes = getMetricVoteItems(
+                                reputacionActual,
+                                "ruido"
+                              );
+                              const pagosVotes = getMetricVoteItems(
+                                reputacionActual,
+                                "puntualidad_pagos"
                               );
 
                               return (
-                                <article key={conviviente.id} className="card">
+                                <article
+                                  key={conviviente.id}
+                                  className="card"
+                                >
                                   <div className="card-body space-y-4">
                                     <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                       <div className="flex items-center gap-4">
@@ -1598,6 +1643,9 @@ export default function PisoManagerDetail() {
                                           </p>
                                           <p className="mt-1 text-sm text-ui-text-secondary">
                                             Habitación #{conviviente.habitacion_id}
+                                            {conviviente.habitacion_titulo
+                                              ? ` · ${conviviente.habitacion_titulo}`
+                                              : ""}
                                           </p>
                                           <p className="mt-1 text-xs text-ui-text-secondary">
                                             Entrada: {formatDate(conviviente.fecha_entrada)}
@@ -1606,7 +1654,8 @@ export default function PisoManagerDetail() {
                                       </div>
 
                                       <span className="badge badge-info">
-                                        Total votos: {summaryMetrics.total}
+                                        Total votos:{" "}
+                                        {reputacionActual?.total_votos ?? 0}
                                       </span>
                                     </div>
 
@@ -1616,8 +1665,11 @@ export default function PisoManagerDetail() {
                                           Limpieza
                                         </p>
                                         <p className="mt-1 text-lg font-semibold text-ui-text">
-                                          {formatMetric(summaryMetrics.limpieza)}
+                                          {formatMetric(
+                                            reputacionActual?.medias?.limpieza
+                                          )}
                                         </p>
+                                        <MiniVoteList items={limpiezaVotes} />
                                       </div>
 
                                       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -1625,17 +1677,23 @@ export default function PisoManagerDetail() {
                                           Ruido
                                         </p>
                                         <p className="mt-1 text-lg font-semibold text-ui-text">
-                                          {formatMetric(summaryMetrics.ruido)}
+                                          {formatMetric(
+                                            reputacionActual?.medias?.ruido
+                                          )}
                                         </p>
+                                        <MiniVoteList items={ruidoVotes} />
                                       </div>
 
                                       <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
                                         <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
-                                          Puntualidad pagos
+                                          Puntualidad con los pagos
                                         </p>
                                         <p className="mt-1 text-lg font-semibold text-ui-text">
-                                          {formatMetric(summaryMetrics.pagos)}
+                                          {formatMetric(
+                                            reputacionActual?.medias?.puntualidad_pagos
+                                          )}
                                         </p>
+                                        <MiniVoteList items={pagosVotes} />
                                       </div>
                                     </div>
                                   </div>
@@ -1696,7 +1754,9 @@ export default function PisoManagerDetail() {
                     </div>
 
                     {createHabitacionSuccess ? (
-                      <div className="alert-success">{createHabitacionSuccess}</div>
+                      <div className="alert-success">
+                        {createHabitacionSuccess}
+                      </div>
                     ) : null}
 
                     <div className="space-y-4">
@@ -1727,12 +1787,16 @@ export default function PisoManagerDetail() {
                                   Nueva habitación
                                 </h4>
                                 <p className="mt-1 text-sm text-ui-text-secondary">
-                                  Completa los datos para crear una nueva habitación en este piso.
+                                  Completa los datos para crear una nueva
+                                  habitación en este piso.
                                 </p>
                               </div>
                             </div>
 
-                            <form className="space-y-4" onSubmit={handleCreateHabitacion}>
+                            <form
+                              className="space-y-4"
+                              onSubmit={handleCreateHabitacion}
+                            >
                               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div className="md:col-span-2">
                                   <label className="label" htmlFor="new-titulo">
@@ -1751,7 +1815,10 @@ export default function PisoManagerDetail() {
                                 </div>
 
                                 <div className="md:col-span-2">
-                                  <label className="label" htmlFor="new-descripcion">
+                                  <label
+                                    className="label"
+                                    htmlFor="new-descripcion"
+                                  >
                                     Descripción
                                   </label>
                                   <textarea
@@ -1766,7 +1833,10 @@ export default function PisoManagerDetail() {
                                 </div>
 
                                 <div>
-                                  <label className="label" htmlFor="new-precio_mensual">
+                                  <label
+                                    className="label"
+                                    htmlFor="new-precio_mensual"
+                                  >
                                     Precio mensual
                                   </label>
                                   <input
@@ -1782,7 +1852,10 @@ export default function PisoManagerDetail() {
                                 </div>
 
                                 <div>
-                                  <label className="label" htmlFor="new-tamano_m2">
+                                  <label
+                                    className="label"
+                                    htmlFor="new-tamano_m2"
+                                  >
                                     Tamaño (m²)
                                   </label>
                                   <input
@@ -1798,7 +1871,10 @@ export default function PisoManagerDetail() {
                                 </div>
 
                                 <div>
-                                  <label className="label" htmlFor="new-disponible">
+                                  <label
+                                    className="label"
+                                    htmlFor="new-disponible"
+                                  >
                                     Disponibilidad
                                   </label>
                                   <select
@@ -1815,7 +1891,10 @@ export default function PisoManagerDetail() {
                                 </div>
 
                                 <div>
-                                  <label className="label" htmlFor="new-amueblada">
+                                  <label
+                                    className="label"
+                                    htmlFor="new-amueblada"
+                                  >
                                     Amueblada
                                   </label>
                                   <select
@@ -1891,7 +1970,9 @@ export default function PisoManagerDetail() {
                                   disabled={creatingHabitacion}
                                   aria-busy={creatingHabitacion}
                                 >
-                                  {creatingHabitacion ? "Creando..." : "Crear habitación"}
+                                  {creatingHabitacion
+                                    ? "Creando..."
+                                    : "Crear habitación"}
                                 </button>
                               </div>
                             </form>
@@ -1911,7 +1992,9 @@ export default function PisoManagerDetail() {
                     ) : (
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                         {habitaciones.map((habitacion) => {
-                          const roomCover = buildImageUrl(habitacion.cover_foto_habitacion_url);
+                          const roomCover = buildImageUrl(
+                            habitacion.cover_foto_habitacion_url
+                          );
                           const isInactive = !habitacion.activo;
 
                           return (
@@ -1922,7 +2005,9 @@ export default function PisoManagerDetail() {
                               <button
                                 type="button"
                                 className="absolute right-[10px] top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300 bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.35)] transition-all hover:from-sky-500 hover:via-blue-600 hover:to-indigo-700 hover:shadow-[0_0_0_4px_rgba(59,130,246,0.4)]"
-                                onClick={(event) => toggleHabitacionMenu(habitacion.id, event)}
+                                onClick={(event) =>
+                                  toggleHabitacionMenu(habitacion.id, event)
+                                }
                                 aria-label="Más acciones"
                               >
                                 <span className="flex items-center justify-center gap-0.5">
@@ -1941,7 +2026,12 @@ export default function PisoManagerDetail() {
                                     <button
                                       type="button"
                                       className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-red-100"
-                                      onClick={(event) => requestDeactivateHabitacion(habitacion, event)}
+                                      onClick={(event) =>
+                                        requestDeactivateHabitacion(
+                                          habitacion,
+                                          event
+                                        )
+                                      }
                                     >
                                       Desactivar habitación
                                     </button>
@@ -1949,7 +2039,12 @@ export default function PisoManagerDetail() {
                                     <button
                                       type="button"
                                       className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-green-100"
-                                      onClick={(event) => handleReactivateHabitacion(habitacion, event)}
+                                      onClick={(event) =>
+                                        handleReactivateHabitacion(
+                                          habitacion,
+                                          event
+                                        )
+                                      }
                                     >
                                       Reactivar habitación
                                     </button>
@@ -1964,9 +2059,14 @@ export default function PisoManagerDetail() {
                                   className={`flex flex-1 flex-col gap-3 ${
                                     isInactive ? "opacity-25" : ""
                                   }`}
-                                  onClick={() => openHabitacionDetail(habitacion.id)}
+                                  onClick={() =>
+                                    openHabitacionDetail(habitacion.id)
+                                  }
                                   onKeyDown={(event) => {
-                                    if (event.key === "Enter" || event.key === " ") {
+                                    if (
+                                      event.key === "Enter" ||
+                                      event.key === " "
+                                    ) {
                                       event.preventDefault();
                                       openHabitacionDetail(habitacion.id);
                                     }
@@ -1975,7 +2075,10 @@ export default function PisoManagerDetail() {
                                   {roomCover ? (
                                     <img
                                       src={roomCover}
-                                      alt={habitacion.titulo || `Habitación ${habitacion.id}`}
+                                      alt={
+                                        habitacion.titulo ||
+                                        `Habitación ${habitacion.id}`
+                                      }
                                       className="aspect-[4/3] w-full rounded-md object-cover"
                                     />
                                   ) : (
@@ -1990,18 +2093,26 @@ export default function PisoManagerDetail() {
                                     <div className="flex flex-wrap items-center justify-end gap-2">
                                       <span
                                         className={
-                                          habitacion.activo ? "badge badge-success" : "badge badge-neutral"
+                                          habitacion.activo
+                                            ? "badge badge-success"
+                                            : "badge badge-neutral"
                                         }
                                       >
-                                        {habitacion.activo ? "Activa" : "Inactiva"}
+                                        {habitacion.activo
+                                          ? "Activa"
+                                          : "Inactiva"}
                                       </span>
 
                                       <span
                                         className={
-                                          habitacion.disponible ? "badge badge-info" : "badge badge-warning"
+                                          habitacion.disponible
+                                            ? "badge badge-info"
+                                            : "badge badge-warning"
                                         }
                                       >
-                                        {habitacion.disponible ? "Disponible" : "No disponible"}
+                                        {habitacion.disponible
+                                          ? "Disponible"
+                                          : "No disponible"}
                                       </span>
                                     </div>
                                   </div>
@@ -2011,7 +2122,9 @@ export default function PisoManagerDetail() {
                                       {formatEur(habitacion.precio_mensual)}
                                     </span>{" "}
                                     / mes
-                                    {habitacion.tamano_m2 ? ` · ${habitacion.tamano_m2} m²` : ""}
+                                    {habitacion.tamano_m2
+                                      ? ` · ${habitacion.tamano_m2} m²`
+                                      : ""}
                                   </p>
 
                                   <p className="text-xs text-ui-text-secondary">
@@ -2024,12 +2137,16 @@ export default function PisoManagerDetail() {
                                 {habitacionCardFeedback[habitacion.id] ? (
                                   <div
                                     className={`mt-4 ${
-                                      habitacionCardFeedback[habitacion.id].type === "success"
+                                      habitacionCardFeedback[habitacion.id]
+                                        .type === "success"
                                         ? "alert-success"
                                         : "alert-error"
                                     }`}
                                   >
-                                    {habitacionCardFeedback[habitacion.id].message}
+                                    {
+                                      habitacionCardFeedback[habitacion.id]
+                                        .message
+                                    }
                                   </div>
                                 ) : null}
                               </div>
@@ -2058,7 +2175,8 @@ export default function PisoManagerDetail() {
       >
         <div className="space-y-4">
           <p className="text-sm text-ui-text-secondary">
-            Vas a desactivar esta habitación y dejará de estar disponible en la parte pública.
+            Vas a desactivar esta habitación y dejará de estar disponible en la
+            parte pública.
           </p>
 
           <div className="rounded-lg border border-red-200 bg-red-50 p-4">

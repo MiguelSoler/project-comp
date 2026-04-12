@@ -10,6 +10,10 @@ function toInt(value, fallback = NaN) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function toNullableNumber(value) {
+  return value === null ? null : Number(value);
+}
+
 function toBool(value) {
   if (value === undefined || value === null) return undefined;
   if (typeof value === "boolean") return value;
@@ -108,6 +112,225 @@ async function hasActiveOccupancy(client, habitacionId) {
   );
   return q.rowCount > 0;
 }
+
+// =========================================================
+// GET /api/admin/habitacion/:habitacionId/historial
+// - Admin: puede ver cualquier habitación
+// - Advertiser/Manager: solo habitaciones de sus pisos
+//
+// Devuelve:
+// - historial de ocupantes de la habitación
+// - reputación global de cada usuario
+// - reputación recibida en este mismo piso
+//
+// Esto deja preparado el frontend para mostrar:
+// - histórico de la habitación
+// - contexto útil para el manager sobre qué tipo de perfil ha pasado por ella
+// =========================================================
+const getHistorialHabitacionAdmin = async (req, res) => {
+  try {
+    const requesterId = req.user?.id;
+    const requesterRol = req.user?.rol;
+
+    if (requesterRol !== "admin" && requesterRol !== "advertiser") {
+      return res.status(403).json({ error: "FORBIDDEN" });
+    }
+
+    const habitacionId = toInt(req.params.habitacionId, NaN);
+    if (!Number.isFinite(habitacionId)) {
+      return res.status(400).json({
+        error: "VALIDATION_ERROR",
+        details: ["habitacionId"],
+      });
+    }
+
+    // 1) Cargamos habitación + piso para validar permisos
+    const roomQ = await pool.query(
+      `
+      SELECT
+        h.id,
+        h.piso_id,
+        h.titulo,
+        h.activo,
+        p.manager_usuario_id,
+        p.direccion,
+        p.ciudad,
+        p.activo AS piso_activo
+      FROM habitacion h
+      JOIN piso p ON p.id = h.piso_id
+      WHERE h.id = $1
+      LIMIT 1
+      `,
+      [habitacionId]
+    );
+
+    if (roomQ.rowCount === 0) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+
+    const room = roomQ.rows[0];
+
+    if (
+      requesterRol !== "admin" &&
+      Number(room.manager_usuario_id) !== Number(requesterId)
+    ) {
+      return res.status(403).json({ error: "FORBIDDEN" });
+    }
+
+    // 2) Historial de ocupantes de la habitación
+    const historyQ = await pool.query(
+      `
+      SELECT
+        uh.id AS usuario_habitacion_id,
+        uh.usuario_id,
+        uh.habitacion_id,
+        uh.fecha_entrada,
+        uh.fecha_salida,
+        uh.estado,
+
+        u.nombre,
+        u.apellidos,
+        u.email,
+        u.telefono,
+        u.foto_perfil_url,
+        u.activo AS usuario_activo,
+
+        global_rep.total_votos_global,
+        global_rep.media_limpieza_global,
+        global_rep.media_ruido_global,
+        global_rep.media_puntualidad_pagos_global,
+        global_rep.media_global_global,
+
+        piso_rep.total_votos_piso,
+        piso_rep.media_limpieza_piso,
+        piso_rep.media_ruido_piso,
+        piso_rep.media_puntualidad_pagos_piso,
+        piso_rep.media_global_piso
+
+      FROM usuario_habitacion uh
+      JOIN usuario u ON u.id = uh.usuario_id
+
+      -- Reputación global histórica del usuario
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(vu.id)::int AS total_votos_global,
+          ROUND(AVG(vu.limpieza)::numeric, 2) AS media_limpieza_global,
+          ROUND(AVG(vu.ruido)::numeric, 2) AS media_ruido_global,
+          ROUND(AVG(vu.puntualidad_pagos)::numeric, 2) AS media_puntualidad_pagos_global,
+          ROUND(
+            AVG(
+              (
+                vu.limpieza +
+                vu.ruido +
+                vu.puntualidad_pagos
+              )::numeric / 3
+            ),
+            2
+          ) AS media_global_global
+        FROM voto_usuario vu
+        WHERE vu.votado_id = uh.usuario_id
+      ) global_rep ON true
+
+      -- Reputación recibida por ese usuario en este piso
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(vu.id)::int AS total_votos_piso,
+          ROUND(AVG(vu.limpieza)::numeric, 2) AS media_limpieza_piso,
+          ROUND(AVG(vu.ruido)::numeric, 2) AS media_ruido_piso,
+          ROUND(AVG(vu.puntualidad_pagos)::numeric, 2) AS media_puntualidad_pagos_piso,
+          ROUND(
+            AVG(
+              (
+                vu.limpieza +
+                vu.ruido +
+                vu.puntualidad_pagos
+              )::numeric / 3
+            ),
+            2
+          ) AS media_global_piso
+        FROM voto_usuario vu
+        WHERE vu.votado_id = uh.usuario_id
+          AND vu.piso_id = $1
+      ) piso_rep ON true
+
+      WHERE uh.habitacion_id = $2
+      ORDER BY uh.fecha_entrada DESC, uh.id DESC
+      `,
+      [room.piso_id, habitacionId]
+    );
+
+    return res.json({
+  habitacion: {
+    id: room.id,
+    piso_id: room.piso_id,
+    titulo: room.titulo,
+    activo: room.activo,
+    piso: {
+      id: room.piso_id,
+      direccion: room.direccion,
+      ciudad: room.ciudad,
+      activo: room.piso_activo,
+    },
+  },
+  items: historyQ.rows.map((row) => {
+    const reputacionGlobal = {
+      total_votos: Number(row.total_votos_global || 0),
+      medias: {
+        limpieza: toNullableNumber(row.media_limpieza_global),
+        ruido: toNullableNumber(row.media_ruido_global),
+        puntualidad_pagos: toNullableNumber(
+          row.media_puntualidad_pagos_global
+        ),
+      },
+      media_global: toNullableNumber(row.media_global_global),
+    };
+
+    const reputacionEnEstePiso = {
+      total_votos: Number(row.total_votos_piso || 0),
+      medias: {
+        limpieza: toNullableNumber(row.media_limpieza_piso),
+        ruido: toNullableNumber(row.media_ruido_piso),
+        puntualidad_pagos: toNullableNumber(
+          row.media_puntualidad_pagos_piso
+        ),
+      },
+      media_global: toNullableNumber(row.media_global_piso),
+    };
+
+    return {
+      usuario_habitacion_id: row.usuario_habitacion_id,
+      usuario_id: row.usuario_id,
+      habitacion_id: row.habitacion_id,
+      fecha_entrada: row.fecha_entrada,
+      fecha_salida: row.fecha_salida,
+      estado: row.estado,
+      es_actual: row.fecha_salida === null && row.estado === "active",
+
+      usuario: {
+        id: row.usuario_id,
+        nombre: row.nombre,
+        apellidos: row.apellidos,
+        email: row.email,
+        telefono: row.telefono,
+        foto_perfil_url: row.foto_perfil_url,
+        activo: row.usuario_activo,
+      },
+
+      reputacion_global: reputacionGlobal,
+
+      // nombre correcto según el modelo de datos
+      reputacion_en_este_piso: reputacionEnEstePiso,
+
+      // alias de compatibilidad para el frontend actual
+      reputacion_en_esta_habitacion: reputacionEnEstePiso,
+    };
+  }),
+});
+  } catch (error) {
+    console.error("getHistorialHabitacionAdmin error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+};
 
 // ---------------------------------------------------------
 // GET /api/admin/habitacion
@@ -975,6 +1198,7 @@ const reactivateHabitacion = async (req, res) => {
 };
 
 module.exports = {
+  getHistorialHabitacionAdmin,
   listHabitacionesAdmin,
   createHabitacion,
   updateHabitacion,

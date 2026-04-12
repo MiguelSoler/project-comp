@@ -60,20 +60,31 @@ export default function Modal({
   }, [open]);
 
   useEffect(() => {
-    if (!isRendered) return;
+  if (!open) return;
 
-    const onKeyDown = (e) => {
-      if (e.key === "Escape") onClose?.();
-    };
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") onClose?.();
+  };
 
-    document.addEventListener("keydown", onKeyDown);
-    document.body.style.overflow = "hidden";
+  const previousBodyOverflow = document.body.style.overflow;
+  const previousBodyPaddingRight = document.body.style.paddingRight;
 
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      document.body.style.overflow = "";
-    };
-  }, [isRendered, onClose]);
+  const scrollbarWidth =
+    window.innerWidth - document.documentElement.clientWidth;
+
+  document.addEventListener("keydown", onKeyDown);
+  document.body.style.overflow = "hidden";
+
+  if (scrollbarWidth > 0) {
+    document.body.style.paddingRight = `${scrollbarWidth}px`;
+  }
+
+  return () => {
+    document.removeEventListener("keydown", onKeyDown);
+    document.body.style.overflow = previousBodyOverflow;
+    document.body.style.paddingRight = previousBodyPaddingRight;
+  };
+}, [open, onClose]);
 
   const modalTitle = open ? title : cachedTitle;
   const modalChildren = open ? children : cachedChildren;

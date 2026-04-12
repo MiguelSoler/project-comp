@@ -42,6 +42,11 @@ export function getAdminPisoById(pisoId) {
   return get(`/api/admin/piso/${pisoId}`);
 }
 
+// GET /api/admin/piso/:pisoId/convivencia-actual
+export function getAdminPisoConvivenciaActual(pisoId) {
+  return get(`/api/admin/piso/${pisoId}/convivencia-actual`);
+}
+
 // POST /api/admin/piso
 export function createAdminPiso(payload) {
   return post("/api/admin/piso", payload);

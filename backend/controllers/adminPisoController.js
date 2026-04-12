@@ -24,6 +24,22 @@ function toInt(value, fallback) {
     return Number.isFinite(n) ? n : fallback;
 }
 
+function avgNumbers(values = []) {
+  const valid = values
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+
+  if (valid.length === 0) return null;
+
+  return valid.reduce((acc, value) => acc + value, 0) / valid.length;
+}
+
+function round2(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Number(n.toFixed(2));
+}
+
 function deleteUploadedFileByUrl(url) {
   if (!url || typeof url !== "string") return;
 
@@ -166,30 +182,40 @@ const listPisosAdmin = async (req, res) => {
       ) cover ON true
 
       -- Resumen de convivencia actual del piso
+      -- Regla:
+      -- - solo cuenta convivientes activos ahora mismo
+      -- - y solo votos entre esos convivientes actuales dentro de este piso
       LEFT JOIN LATERAL (
+        WITH active_users AS (
+          SELECT DISTINCT uh.usuario_id
+          FROM usuario_habitacion uh
+          JOIN habitacion h2 ON h2.id = uh.habitacion_id
+          WHERE h2.piso_id = p.id
+            AND uh.fecha_salida IS NULL
+            AND uh.estado = 'active'
+        ),
+        current_votes AS (
+          SELECT vu.*
+          FROM voto_usuario vu
+          JOIN active_users au_votado ON au_votado.usuario_id = vu.votado_id
+          JOIN active_users au_votante ON au_votante.usuario_id = vu.votante_id
+          WHERE vu.piso_id = p.id
+            AND vu.votante_id <> vu.votado_id
+        )
         SELECT
-          COUNT(DISTINCT uh.usuario_id)::int AS convivientes_actuales_count,
-
-          COUNT(vu.id)::int AS reputacion_actual_total_votos,
-
+          (SELECT COUNT(*)::int FROM active_users) AS convivientes_actuales_count,
+          COUNT(*)::int AS reputacion_actual_total_votos,
           ROUND(
             AVG(
               (
-                vu.limpieza +
-                vu.ruido +
-                vu.puntualidad_pagos
+                current_votes.limpieza +
+                current_votes.ruido +
+                current_votes.puntualidad_pagos
               )::numeric / 3
             ),
             2
           ) AS reputacion_actual_media
-        FROM usuario_habitacion uh
-        JOIN habitacion h ON h.id = uh.habitacion_id
-        LEFT JOIN voto_usuario vu
-          ON vu.piso_id = p.id
-         AND vu.votado_id = uh.usuario_id
-        WHERE h.piso_id = p.id
-          AND uh.fecha_salida IS NULL
-          AND uh.estado = 'active'
+        FROM current_votes
       ) stats ON true
 
       ${whereSql}
@@ -231,23 +257,31 @@ const listPisosAdmin = async (req, res) => {
 // GET /api/admin/piso/:pisoId
 // - Admin: puede ver cualquier piso (activo o no)
 // - Advertiser/Manager: solo puede ver sus pisos
+//
+// Extra:
+// - resumen_convivencia_actual
+//   -> solo convivientes activos ahora mismo
+//   -> solo votos entre esos convivientes actuales dentro del mismo piso
 // =========================================================
 const getPisoAdminById = async (req, res) => {
-    try {
-        const requesterId = req.user?.id;
-        const requesterRol = req.user?.rol;
+  try {
+    const requesterId = req.user?.id;
+    const requesterRol = req.user?.rol;
 
-        if (requesterRol !== "admin" && requesterRol !== "advertiser") {
-            return res.status(403).json({ error: "FORBIDDEN" });
-        }
+    if (requesterRol !== "admin" && requesterRol !== "advertiser") {
+      return res.status(403).json({ error: "FORBIDDEN" });
+    }
 
-        const pisoId = toInt(req.params.pisoId, NaN);
-        if (!Number.isFinite(pisoId)) {
-            return res.status(400).json({ error: "VALIDATION_ERROR", details: ["pisoId"] });
-        }
+    const pisoId = toInt(req.params.pisoId, NaN);
+    if (!Number.isFinite(pisoId)) {
+      return res.status(400).json({
+        error: "VALIDATION_ERROR",
+        details: ["pisoId"],
+      });
+    }
 
-        const q = await pool.query(
-            `
+    const pisoQ = await pool.query(
+      `
       SELECT
         p.id,
         p.direccion,
@@ -260,58 +294,511 @@ const getPisoAdminById = async (req, res) => {
         p.updated_at,
         u.nombre AS manager_nombre,
         u.apellidos AS manager_apellidos,
-        (SELECT fp.url
-         FROM foto_piso fp
-         WHERE fp.piso_id = p.id
-         ORDER BY fp.orden ASC, fp.id ASC
-         LIMIT 1) AS cover_foto_piso_url,
-        (SELECT COUNT(*)::int FROM habitacion h WHERE h.piso_id = p.id) AS habitaciones_total,
-        (SELECT COUNT(*)::int FROM habitacion h WHERE h.piso_id = p.id AND h.activo = true) AS habitaciones_activas,
-        (SELECT COUNT(*)::int FROM habitacion h WHERE h.piso_id = p.id AND h.activo = true AND h.disponible = true) AS habitaciones_disponibles
+        u.email AS manager_email,
+        (
+          SELECT fp.url
+          FROM foto_piso fp
+          WHERE fp.piso_id = p.id
+          ORDER BY fp.orden ASC, fp.id ASC
+          LIMIT 1
+        ) AS cover_foto_piso_url,
+        (
+          SELECT COUNT(*)::int
+          FROM habitacion h
+          WHERE h.piso_id = p.id
+        ) AS habitaciones_total,
+        (
+          SELECT COUNT(*)::int
+          FROM habitacion h
+          WHERE h.piso_id = p.id
+            AND h.activo = true
+        ) AS habitaciones_activas,
+        (
+          SELECT COUNT(*)::int
+          FROM habitacion h
+          WHERE h.piso_id = p.id
+            AND h.activo = true
+            AND h.disponible = true
+        ) AS habitaciones_disponibles
       FROM piso p
       JOIN usuario u ON u.id = p.manager_usuario_id
       WHERE p.id = $1
       LIMIT 1
       `,
-            [pisoId]
-        );
+      [pisoId]
+    );
 
-        if (q.rowCount === 0) {
-            return res.status(404).json({ error: "NOT_FOUND" });
-        }
-
-        const piso = q.rows[0];
-
-        // Si no es admin, solo puede acceder a sus pisos
-        if (requesterRol !== "admin" && Number(piso.manager_usuario_id) !== Number(requesterId)) {
-            return res.status(403).json({ error: "FORBIDDEN" });
-        }
-
-        const fotosQ = await pool.query(
-          `
-          SELECT id, piso_id, url, orden, created_at
-          FROM foto_piso
-          WHERE piso_id = $1
-          ORDER BY orden ASC, id ASC
-          `,
-            [pisoId]
-        );
-
-        return res.json({
-            piso: {
-                ...piso,
-                manager: {
-                    id: piso.manager_usuario_id,
-                    nombre: piso.manager_nombre,
-                    apellidos: piso.manager_apellidos,
-                },
-            },
-            fotos: fotosQ.rows,
-        });
-    } catch (error) {
-        console.error("getPisoAdminById error:", error);
-        return res.status(500).json({ error: "INTERNAL_ERROR" });
+    if (pisoQ.rowCount === 0) {
+      return res.status(404).json({ error: "NOT_FOUND" });
     }
+
+    const piso = pisoQ.rows[0];
+
+    if (
+      requesterRol !== "admin" &&
+      Number(piso.manager_usuario_id) !== Number(requesterId)
+    ) {
+      return res.status(403).json({ error: "FORBIDDEN" });
+    }
+
+    const fotosQ = pool.query(
+      `
+      SELECT id, piso_id, url, orden, created_at
+      FROM foto_piso
+      WHERE piso_id = $1
+      ORDER BY orden ASC, id ASC
+      `,
+      [pisoId]
+    );
+
+    const convivenciaResumenQ = pool.query(
+      `
+      WITH current_stays AS (
+        SELECT DISTINCT uh.usuario_id
+        FROM usuario_habitacion uh
+        JOIN habitacion h ON h.id = uh.habitacion_id
+        WHERE h.piso_id = $1
+          AND uh.fecha_salida IS NULL
+      ),
+      current_votes AS (
+        SELECT vu.*
+        FROM voto_usuario vu
+        WHERE vu.piso_id = $1
+          AND vu.votado_id IN (SELECT usuario_id FROM current_stays)
+          AND vu.votante_id IN (SELECT usuario_id FROM current_stays)
+          AND vu.votante_id <> vu.votado_id
+      )
+      SELECT
+        (SELECT COUNT(*)::int FROM current_stays) AS convivientes_actuales_count,
+        (SELECT COUNT(*)::int FROM current_votes) AS total_votos,
+        ROUND((SELECT AVG(limpieza::numeric) FROM current_votes), 2) AS limpieza,
+        ROUND((SELECT AVG(ruido::numeric) FROM current_votes), 2) AS ruido,
+        ROUND((SELECT AVG(puntualidad_pagos::numeric) FROM current_votes), 2) AS puntualidad_pagos,
+        ROUND(
+          (
+            SELECT AVG(
+              ((limpieza + ruido + puntualidad_pagos)::numeric / 3)
+            )
+            FROM current_votes
+          ),
+          2
+        ) AS media_global
+      `
+      ,
+      [pisoId]
+    );
+
+    const convivientesQ = pool.query(
+      `
+      WITH current_stays AS (
+        SELECT
+          uh.id AS usuario_habitacion_id,
+          uh.usuario_id,
+          uh.habitacion_id,
+          uh.fecha_entrada
+        FROM usuario_habitacion uh
+        JOIN habitacion h ON h.id = uh.habitacion_id
+        WHERE h.piso_id = $1
+          AND uh.fecha_salida IS NULL
+      ),
+      current_users AS (
+        SELECT DISTINCT usuario_id
+        FROM current_stays
+      ),
+      current_votes AS (
+        SELECT vu.*
+        FROM voto_usuario vu
+        WHERE vu.piso_id = $1
+          AND vu.votado_id IN (SELECT usuario_id FROM current_users)
+          AND vu.votante_id IN (SELECT usuario_id FROM current_users)
+          AND vu.votante_id <> vu.votado_id
+      )
+      SELECT
+        u.id,
+        u.nombre,
+        u.apellidos,
+        u.email,
+        u.telefono,
+        u.foto_perfil_url,
+        cs.usuario_habitacion_id,
+        cs.habitacion_id,
+        cs.fecha_entrada,
+        COUNT(cv.id)::int AS total_votos,
+        ROUND(AVG(cv.limpieza::numeric), 2) AS limpieza,
+        ROUND(AVG(cv.ruido::numeric), 2) AS ruido,
+        ROUND(AVG(cv.puntualidad_pagos::numeric), 2) AS puntualidad_pagos
+      FROM current_stays cs
+      JOIN usuario u ON u.id = cs.usuario_id
+      LEFT JOIN current_votes cv
+        ON cv.votado_id = cs.usuario_id
+      GROUP BY
+        u.id,
+        u.nombre,
+        u.apellidos,
+        u.email,
+        u.telefono,
+        u.foto_perfil_url,
+        cs.usuario_habitacion_id,
+        cs.habitacion_id,
+        cs.fecha_entrada
+      ORDER BY cs.fecha_entrada ASC, u.id ASC
+      `,
+      [pisoId]
+    );
+
+    const [fotosResult, convivenciaResumenResult, convivientesResult] =
+      await Promise.all([fotosQ, convivenciaResumenQ, convivientesQ]);
+
+    const resumenRow = convivenciaResumenResult.rows[0] || {};
+
+    return res.json({
+      piso: {
+        id: piso.id,
+        direccion: piso.direccion,
+        ciudad: piso.ciudad,
+        codigo_postal: piso.codigo_postal,
+        descripcion: piso.descripcion,
+        manager_usuario_id: piso.manager_usuario_id,
+        activo: piso.activo,
+        created_at: piso.created_at,
+        updated_at: piso.updated_at,
+        cover_foto_piso_url: piso.cover_foto_piso_url,
+        habitaciones_total: piso.habitaciones_total,
+        habitaciones_activas: piso.habitaciones_activas,
+        habitaciones_disponibles: piso.habitaciones_disponibles,
+        manager: {
+          id: piso.manager_usuario_id,
+          nombre: piso.manager_nombre,
+          apellidos: piso.manager_apellidos,
+          email: piso.manager_email,
+        },
+        convivencia_actual: {
+          convivientes_actuales_count: Number(
+            resumenRow.convivientes_actuales_count || 0
+          ),
+          total_votos: Number(resumenRow.total_votos || 0),
+          medias: {
+            limpieza:
+              resumenRow.limpieza !== null && resumenRow.limpieza !== undefined
+                ? Number(resumenRow.limpieza)
+                : null,
+            ruido:
+              resumenRow.ruido !== null && resumenRow.ruido !== undefined
+                ? Number(resumenRow.ruido)
+                : null,
+            puntualidad_pagos:
+              resumenRow.puntualidad_pagos !== null &&
+              resumenRow.puntualidad_pagos !== undefined
+                ? Number(resumenRow.puntualidad_pagos)
+                : null,
+          },
+          media_global:
+            resumenRow.media_global !== null &&
+            resumenRow.media_global !== undefined
+              ? Number(resumenRow.media_global)
+              : null,
+        },
+        convivientes_actuales: convivientesResult.rows.map((row) => ({
+          ...row,
+          id: Number(row.id),
+          usuario_habitacion_id: Number(row.usuario_habitacion_id),
+          habitacion_id: Number(row.habitacion_id),
+          total_votos: Number(row.total_votos || 0),
+          limpieza:
+            row.limpieza !== null && row.limpieza !== undefined
+              ? Number(row.limpieza)
+              : null,
+          ruido:
+            row.ruido !== null && row.ruido !== undefined
+              ? Number(row.ruido)
+              : null,
+          puntualidad_pagos:
+            row.puntualidad_pagos !== null &&
+            row.puntualidad_pagos !== undefined
+              ? Number(row.puntualidad_pagos)
+              : null,
+        })),
+      },
+      fotos: fotosResult.rows,
+    });
+  } catch (error) {
+    console.error("getPisoAdminById error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
+};
+
+// =========================================================
+// GET /api/admin/piso/:pisoId/convivencia-actual
+// - Admin: puede ver cualquier piso
+// - Advertiser/Manager: solo sus pisos
+//
+// Devuelve:
+// - convivientes actuales del piso
+// - reputación actual REAL del piso
+// - detalle de votos actuales entre convivientes actuales
+//
+// Regla correcta de "convivencia actual":
+// - solo usuarios con estancia activa ahora mismo en ese piso
+// - solo votos del mismo piso
+// - solo votos emitidos ENTRE esos convivientes actuales
+// =========================================================
+const getPisoConvivenciaActualAdmin = async (req, res) => {
+  try {
+    const requesterId = req.user?.id;
+    const requesterRol = req.user?.rol;
+
+    if (requesterRol !== "admin" && requesterRol !== "advertiser") {
+      return res.status(403).json({ error: "FORBIDDEN" });
+    }
+
+    const pisoId = toInt(req.params.pisoId, NaN);
+    if (!Number.isFinite(pisoId)) {
+      return res.status(400).json({
+        error: "VALIDATION_ERROR",
+        details: ["pisoId"],
+      });
+    }
+
+    const pisoQ = await pool.query(
+      `
+      SELECT
+        p.id,
+        p.direccion,
+        p.ciudad,
+        p.codigo_postal,
+        p.descripcion,
+        p.manager_usuario_id,
+        p.activo
+      FROM piso p
+      WHERE p.id = $1
+      LIMIT 1
+      `,
+      [pisoId]
+    );
+
+    if (pisoQ.rowCount === 0) {
+      return res.status(404).json({ error: "NOT_FOUND" });
+    }
+
+    const piso = pisoQ.rows[0];
+
+    if (
+      requesterRol !== "admin" &&
+      Number(piso.manager_usuario_id) !== Number(requesterId)
+    ) {
+      return res.status(403).json({ error: "FORBIDDEN" });
+    }
+
+    const convivientesQ = await pool.query(
+      `
+      SELECT
+        u.id,
+        u.nombre,
+        u.apellidos,
+        u.email,
+        u.telefono,
+        u.foto_perfil_url,
+        uh.habitacion_id,
+        h.titulo AS habitacion_titulo,
+        uh.fecha_entrada
+      FROM usuario_habitacion uh
+      JOIN habitacion h ON h.id = uh.habitacion_id
+      JOIN usuario u ON u.id = uh.usuario_id
+      WHERE h.piso_id = $1
+        AND uh.fecha_salida IS NULL
+      ORDER BY uh.fecha_entrada ASC, u.id ASC
+      `,
+      [pisoId]
+    );
+
+    const convivientes = convivientesQ.rows.map((row) => ({
+      id: row.id,
+      nombre: row.nombre,
+      apellidos: row.apellidos,
+      email: row.email,
+      telefono: row.telefono,
+      foto_perfil_url: row.foto_perfil_url,
+      habitacion_id: row.habitacion_id,
+      habitacion_titulo: row.habitacion_titulo,
+      fecha_entrada: row.fecha_entrada,
+    }));
+
+    if (convivientes.length === 0) {
+      return res.json({
+        piso: {
+          id: piso.id,
+          direccion: piso.direccion,
+          ciudad: piso.ciudad,
+          codigo_postal: piso.codigo_postal,
+          descripcion: piso.descripcion,
+          activo: piso.activo,
+        },
+        resumen: {
+          convivientes_actuales: 0,
+          total_votos_actuales: 0,
+          medias: {
+            limpieza: null,
+            ruido: null,
+            puntualidad_pagos: null,
+          },
+          media_global: null,
+        },
+        convivientes: [],
+      });
+    }
+
+    const convivienteIds = convivientes.map((item) => Number(item.id));
+
+    const votosQ = await pool.query(
+      `
+      SELECT
+        vu.id,
+        vu.piso_id,
+        vu.votante_id,
+        vu.votado_id,
+        vu.limpieza,
+        vu.ruido,
+        vu.puntualidad_pagos,
+        vu.num_cambios,
+        vu.created_at,
+        vu.updated_at,
+
+        votante.nombre AS votante_nombre,
+        votante.apellidos AS votante_apellidos,
+        votante.foto_perfil_url AS votante_foto_perfil_url
+      FROM voto_usuario vu
+      JOIN usuario votante ON votante.id = vu.votante_id
+      WHERE vu.piso_id = $1
+        AND vu.votante_id = ANY($2::int[])
+        AND vu.votado_id = ANY($2::int[])
+        AND vu.votante_id <> vu.votado_id
+      ORDER BY vu.updated_at DESC, vu.id DESC
+      `,
+      [pisoId, convivienteIds]
+    );
+
+    const votosActuales = votosQ.rows.map((row) => ({
+      id: row.id,
+      piso_id: row.piso_id,
+      votante_id: row.votante_id,
+      votado_id: row.votado_id,
+      limpieza: row.limpieza,
+      ruido: row.ruido,
+      puntualidad_pagos: row.puntualidad_pagos,
+      num_cambios: row.num_cambios,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      votante: {
+        id: row.votante_id,
+        nombre: row.votante_nombre,
+        apellidos: row.votante_apellidos,
+        foto_perfil_url: row.votante_foto_perfil_url,
+      },
+    }));
+
+    function buildDetalleMetricas(votosRecibidos) {
+      return {
+        limpieza: votosRecibidos.map((vote) => ({
+          voto_id: vote.id,
+          valor: vote.limpieza,
+          created_at: vote.created_at,
+          updated_at: vote.updated_at,
+          votante: vote.votante,
+        })),
+        ruido: votosRecibidos.map((vote) => ({
+          voto_id: vote.id,
+          valor: vote.ruido,
+          created_at: vote.created_at,
+          updated_at: vote.updated_at,
+          votante: vote.votante,
+        })),
+        puntualidad_pagos: votosRecibidos.map((vote) => ({
+          voto_id: vote.id,
+          valor: vote.puntualidad_pagos,
+          created_at: vote.created_at,
+          updated_at: vote.updated_at,
+          votante: vote.votante,
+        })),
+      };
+    }
+
+    function buildReputacionActualForUser(userId) {
+      const votosRecibidos = votosActuales.filter(
+        (vote) => Number(vote.votado_id) === Number(userId)
+      );
+
+      const limpieza = round2(avgNumbers(votosRecibidos.map((vote) => vote.limpieza)));
+      const ruido = round2(avgNumbers(votosRecibidos.map((vote) => vote.ruido)));
+      const puntualidad_pagos = round2(
+        avgNumbers(votosRecibidos.map((vote) => vote.puntualidad_pagos))
+      );
+
+      const media_global = round2(
+        avgNumbers(
+          votosRecibidos.map(
+            (vote) =>
+              (Number(vote.limpieza) +
+                Number(vote.ruido) +
+                Number(vote.puntualidad_pagos)) / 3
+          )
+        )
+      );
+
+      return {
+        total_votos: votosRecibidos.length,
+        medias: {
+          limpieza,
+          ruido,
+          puntualidad_pagos,
+        },
+        media_global,
+        detalle_votos: buildDetalleMetricas(votosRecibidos),
+      };
+    }
+
+    const convivientesConReputacion = convivientes.map((conviviente) => ({
+      ...conviviente,
+      reputacion_actual: buildReputacionActualForUser(conviviente.id),
+    }));
+
+    const resumen = {
+      convivientes_actuales: convivientes.length,
+      total_votos_actuales: votosActuales.length,
+      medias: {
+        limpieza: round2(avgNumbers(votosActuales.map((vote) => vote.limpieza))),
+        ruido: round2(avgNumbers(votosActuales.map((vote) => vote.ruido))),
+        puntualidad_pagos: round2(
+          avgNumbers(votosActuales.map((vote) => vote.puntualidad_pagos))
+        ),
+      },
+      media_global: round2(
+        avgNumbers(
+          votosActuales.map(
+            (vote) =>
+              (Number(vote.limpieza) +
+                Number(vote.ruido) +
+                Number(vote.puntualidad_pagos)) / 3
+          )
+        )
+      ),
+    };
+
+    return res.json({
+      piso: {
+        id: piso.id,
+        direccion: piso.direccion,
+        ciudad: piso.ciudad,
+        codigo_postal: piso.codigo_postal,
+        descripcion: piso.descripcion,
+        activo: piso.activo,
+      },
+      resumen,
+      convivientes: convivientesConReputacion,
+    });
+  } catch (error) {
+    console.error("getPisoConvivenciaActualAdmin error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
 };
 
 // =========================================================
@@ -904,6 +1391,7 @@ const deleteFotoPiso = async (req, res) => {
 
 module.exports = {
     listPisosAdmin,
+    getPisoConvivenciaActualAdmin,
     getPisoAdminById,
     listHabitacionesAdminByPiso,
     createPiso,

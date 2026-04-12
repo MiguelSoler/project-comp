@@ -6,6 +6,7 @@ import {
   addAdminHabitacionFoto,
   deleteAdminHabitacionFoto,
   getAdminHabitacionById,
+  getAdminHabitacionHistorial,
   updateAdminHabitacion,
   updateAdminHabitacionFoto,
 } from "../../services/adminHabitacionService.js";
@@ -44,6 +45,19 @@ function formatEur(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "-";
   return `${new Intl.NumberFormat("es-ES").format(n)} €`;
+}
+
+function formatDate(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
 }
 
 function formatDateTime(value) {
@@ -223,6 +237,52 @@ function MetricCard({ title, value, tone = "neutral" }) {
   );
 }
 
+function getHistorialItems(data) {
+  if (Array.isArray(data?.items)) return data.items;
+  if (Array.isArray(data?.historial)) return data.historial;
+  if (Array.isArray(data?.stays)) return data.stays;
+  if (Array.isArray(data)) return data;
+  return [];
+}
+
+function getHistorialUser(item) {
+  return item?.usuario || item?.user || item || null;
+}
+
+function getHistorialReputationGlobal(item) {
+  return (
+    item?.reputacion_global ||
+    item?.reputacionGlobal ||
+    item?.global_reputation ||
+    null
+  );
+}
+
+function getHistorialReputationPiso(item) {
+  return (
+    item?.reputacion_en_este_piso ||
+    item?.reputacion_en_esta_habitacion ||
+    item?.reputacion_habitacion ||
+    item?.reputacionHabitacion ||
+    item?.room_reputation ||
+    item?.reputacion_en_habitacion ||
+    null
+  );
+}
+
+function normalizeSummary(summary) {
+  const source = summary?.resumen || summary || {};
+  const medias = source?.medias || {};
+
+  return {
+    limpieza: medias?.limpieza ?? null,
+    ruido: medias?.ruido ?? null,
+    puntualidad_pagos: medias?.puntualidad_pagos ?? null,
+    total_votos: source?.total_votos ?? summary?.total_votos ?? 0,
+    media_global: source?.media_global ?? summary?.media_global ?? null,
+  };
+}
+
 export default function HabitacionManagerDetail() {
   const { habitacionId } = useParams();
   const navigate = useNavigate();
@@ -253,19 +313,27 @@ export default function HabitacionManagerDetail() {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
 
-  // Estado de ocupación
   const [currentOccupant, setCurrentOccupant] = useState(null);
   const [searchEmail, setSearchEmail] = useState("");
   const [candidateResult, setCandidateResult] = useState(null);
   const [occupancyFeedback, setOccupancyFeedback] = useState(null);
 
-  // Estados de carga de ocupación
   const [occupancyLoading, setOccupancyLoading] = useState(false);
   const [searchingUser, setSearchingUser] = useState(false);
   const [assigningUser, setAssigningUser] = useState(false);
   const [removingOccupant, setRemovingOccupant] = useState(false);
 
-  // Modales de confirmación
+  const [historialItems, setHistorialItems] = useState([]);
+  const [loadingHistorial, setLoadingHistorial] = useState(false);
+  const [historialError, setHistorialError] = useState("");
+  const [hasLoadedHistorial, setHasLoadedHistorial] = useState(false);
+
+  const [isHistorialPhotoModalOpen, setIsHistorialPhotoModalOpen] = useState(false);
+  const [selectedHistorialPhoto, setSelectedHistorialPhoto] = useState({
+    url: "",
+    alt: "",
+  });
+
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [isRemoveOccupantModalOpen, setIsRemoveOccupantModalOpen] = useState(false);
 
@@ -314,7 +382,6 @@ export default function HabitacionManagerDetail() {
     );
   }, [fotos]);
 
-  // Carga el ocupante actual filtrando los convivientes activos del piso
   const refreshOccupancy = useCallback(async (room, { showError = false } = {}) => {
     if (!room?.piso_id || !room?.id) {
       setCurrentOccupant(null);
@@ -347,6 +414,28 @@ export default function HabitacionManagerDetail() {
     }
   }, []);
 
+  const loadHistorial = useCallback(async () => {
+    try {
+      setLoadingHistorial(true);
+      setHistorialError("");
+
+      const data = await getAdminHabitacionHistorial(habitacionId);
+      setHistorialItems(getHistorialItems(data));
+      setHasLoadedHistorial(true);
+    } catch (err) {
+      setHistorialItems([]);
+      setHistorialError(
+        getFriendlyErrorMessage(
+          err,
+          "No se pudo cargar el historial de la habitación."
+        )
+      );
+      setHasLoadedHistorial(true);
+    } finally {
+      setLoadingHistorial(false);
+    }
+  }, [habitacionId]);
+
   useEffect(() => {
     if (!habitacion?.id || !habitacion?.piso_id) {
       setCurrentOccupant(null);
@@ -355,6 +444,12 @@ export default function HabitacionManagerDetail() {
 
     refreshOccupancy(habitacion, { showError: true });
   }, [habitacion, refreshOccupancy]);
+
+  useEffect(() => {
+    if (activeTab === "historial" && !hasLoadedHistorial) {
+      loadHistorial();
+    }
+  }, [activeTab, hasLoadedHistorial, loadHistorial]);
 
   function handleSelectTab(nextTab) {
     setActiveTab(nextTab);
@@ -399,6 +494,17 @@ export default function HabitacionManagerDetail() {
     setSelectedPhotoIndex((prev) =>
       prev === fotos.length - 1 ? 0 : prev + 1
     );
+  }
+
+  function openHistorialPhotoModal(url, alt) {
+    if (!url) return;
+    setSelectedHistorialPhoto({ url, alt });
+    setIsHistorialPhotoModalOpen(true);
+  }
+
+  function closeHistorialPhotoModal() {
+    setSelectedHistorialPhoto({ url: "", alt: "" });
+    setIsHistorialPhotoModalOpen(false);
   }
 
   function togglePhotoMenu(fotoId, event) {
@@ -663,7 +769,6 @@ export default function HabitacionManagerDetail() {
     }
   }
 
-  // Busca un usuario por email para revisar su ficha antes de asignarlo
   async function handleSearchAssignableUser(event) {
     event.preventDefault();
 
@@ -732,7 +837,6 @@ export default function HabitacionManagerDetail() {
     setIsRemoveOccupantModalOpen(false);
   }
 
-  // Asigna el usuario encontrado a la habitación actual
   async function handleAssignUserToRoom() {
     const email = candidateResult?.user?.email;
 
@@ -773,6 +877,11 @@ export default function HabitacionManagerDetail() {
         { showError: true }
       );
 
+      setHasLoadedHistorial(false);
+      if (activeTab === "historial") {
+        await loadHistorial();
+      }
+
       setOccupancyFeedback({
         type: "success",
         message: "Usuario asignado correctamente a la habitación.",
@@ -787,7 +896,6 @@ export default function HabitacionManagerDetail() {
     }
   }
 
-  // Quita al ocupante actual de la habitación
   async function handleRemoveOccupantFromRoom() {
     const usuarioHabitacionId = currentOccupant?.usuario_habitacion_id;
 
@@ -822,6 +930,11 @@ export default function HabitacionManagerDetail() {
         },
         { showError: true }
       );
+
+      setHasLoadedHistorial(false);
+      if (activeTab === "historial") {
+        await loadHistorial();
+      }
 
       setOccupancyFeedback({
         type: "success",
@@ -882,7 +995,8 @@ export default function HabitacionManagerDetail() {
               <div className="skeleton h-24 w-full" />
             </div>
 
-            <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+            <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+              <div className="skeleton h-12 w-full rounded-xl" />
               <div className="skeleton h-12 w-full rounded-xl" />
               <div className="skeleton h-12 w-full rounded-xl" />
               <div className="skeleton h-12 w-full rounded-xl" />
@@ -948,7 +1062,7 @@ export default function HabitacionManagerDetail() {
               <div
                 role="tablist"
                 aria-label="Secciones del detalle de la habitación"
-                className="grid grid-cols-1 gap-2 md:grid-cols-3"
+                className="grid grid-cols-1 gap-2 md:grid-cols-4"
               >
                 <button
                   type="button"
@@ -999,6 +1113,29 @@ export default function HabitacionManagerDetail() {
                 <button
                   type="button"
                   role="tab"
+                  aria-selected={activeTab === "historial"}
+                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
+                    activeTab === "historial"
+                      ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
+                      : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
+                  }`}
+                  onClick={() => handleSelectTab("historial")}
+                >
+                  <span className="font-semibold">Historial</span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      activeTab === "historial"
+                        ? "bg-blue-100 text-brand-primary"
+                        : "bg-slate-100 text-ui-text-secondary"
+                    }`}
+                  >
+                    {historialItems.length}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  role="tab"
                   aria-selected={activeTab === "fotos"}
                   className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
                     activeTab === "fotos"
@@ -1026,7 +1163,9 @@ export default function HabitacionManagerDetail() {
                     ? "rounded-b-2xl rounded-tr-2xl rounded-tl-none"
                     : activeTab === "ocupacion"
                       ? "rounded-b-2xl rounded-tl-2xl rounded-tr-2xl"
-                      : "rounded-b-2xl rounded-tl-2xl rounded-tr-none"
+                      : activeTab === "historial"
+                        ? "rounded-b-2xl rounded-tl-2xl rounded-tr-2xl"
+                        : "rounded-b-2xl rounded-tl-2xl rounded-tr-none"
                 }`}
               >
                 {activeTab === "editar" ? (
@@ -1337,7 +1476,7 @@ export default function HabitacionManagerDetail() {
                             </button>
                           </div>
 
-                          <div className="rounded-xl border border-amber-sky bg-amber-50 p-4">
+                          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
                             <p className="text-sm text-amber-800">
                               Esta acción cerrará la estancia activa del usuario en esta habitación y volverá a marcarla como disponible.
                             </p>
@@ -1496,7 +1635,7 @@ export default function HabitacionManagerDetail() {
                                         <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
                                           Email
                                         </p>
-                                        <p className="mt-1 text-sm font-semibold text-ui-text break-all">
+                                        <p className="mt-1 text-sm font-semibold break-all text-ui-text">
                                           {candidateResult.user.email}
                                         </p>
                                       </div>
@@ -1745,6 +1884,256 @@ export default function HabitacionManagerDetail() {
                           </div>
                         ) : null}
                       </>
+                    )}
+                  </section>
+                ) : null}
+
+                {activeTab === "historial" ? (
+                  <section className="space-y-6">
+                    <div>
+                      <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                        Historial de la habitación
+                      </h3>
+                      <p className="mt-1 text-sm text-ui-text-secondary">
+                        Revisa qué personas han vivido en esta habitación y su reputación agregada.
+                      </p>
+                    </div>
+
+                    {historialError ? (
+                      <div className="alert-error">{historialError}</div>
+                    ) : null}
+
+                    {loadingHistorial ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                          <div className="skeleton h-24 w-full" />
+                          <div className="skeleton h-24 w-full" />
+                          <div className="skeleton h-24 w-full" />
+                        </div>
+
+                        <div className="space-y-4">
+                          {Array.from({ length: 2 }).map((_, index) => (
+                            <div key={index} className="card">
+                              <div className="card-body space-y-4">
+                                <div className="flex items-center gap-4">
+                                  <div className="skeleton h-14 w-14 rounded-full" />
+                                  <div className="space-y-2">
+                                    <div className="skeleton h-5 w-40" />
+                                    <div className="skeleton h-4 w-56" />
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                  <div className="skeleton h-20 rounded-lg" />
+                                  <div className="skeleton h-20 rounded-lg" />
+                                  <div className="skeleton h-20 rounded-lg" />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : historialItems.length === 0 ? (
+                      <div className="card">
+                        <div className="card-body">
+                          <p className="text-sm text-ui-text-secondary">
+                            Esta habitación todavía no tiene historial registrado.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {historialItems.map((item) => {
+                          const usuario = getHistorialUser(item);
+                          const avatarUrl = buildImageUrl(usuario?.foto_perfil_url);
+                          const reputacionGlobal = normalizeSummary(getHistorialReputationGlobal(item));
+                          const reputacionPiso = normalizeSummary(getHistorialReputationPiso(item));
+                          const displayName = formatDisplayName(usuario);
+                          const stayState = item?.estado || (item?.es_actual ? "active" : null);
+
+                          return (
+                            <article
+                              key={item?.usuario_habitacion_id || `${usuario?.id}-${item?.fecha_entrada || ""}`}
+                              className="card"
+                            >
+                              <div className="card-body space-y-5">
+                                <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                  <div className="flex items-center gap-4">
+                                    {avatarUrl ? (
+                                      <button
+                                        type="button"
+                                        className="block"
+                                        onClick={() => openHistorialPhotoModal(avatarUrl, displayName)}
+                                        aria-label={`Ver foto de ${displayName}`}
+                                      >
+                                        <img
+                                          src={avatarUrl}
+                                          alt={displayName}
+                                          className="h-14 w-14 rounded-full object-cover"
+                                        />
+                                      </button>
+                                    ) : (
+                                      buildPersonAvatar(usuario)
+                                    )}
+
+                                    <div className="space-y-2">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <h4 className="text-lg font-semibold text-ui-text">
+                                          {displayName}
+                                        </h4>
+
+                                        <span className={getStayStateBadgeClass(stayState)}>
+                                          {getStayStateLabel(stayState)}
+                                        </span>
+
+                                        {item?.es_actual ? (
+                                          <span className="badge badge-success">
+                                            Ocupante actual
+                                          </span>
+                                        ) : null}
+                                      </div>
+
+                                      <p className="text-sm text-ui-text-secondary">
+                                        {usuario?.email || "Sin email"}
+                                      </p>
+
+                                      <p className="text-sm text-ui-text-secondary">
+                                        {usuario?.telefono || "Sin teléfono"}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-sm text-ui-text-secondary">
+                                    <p>
+                                      <span className="font-medium text-ui-text">Entrada:</span>{" "}
+                                      {formatDateTime(item?.fecha_entrada)}
+                                    </p>
+                                    <p className="mt-1">
+                                      <span className="font-medium text-ui-text">Salida:</span>{" "}
+                                      {item?.fecha_salida
+                                        ? formatDateTime(item.fecha_salida)
+                                        : "Activa"}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                                  <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <h5 className="text-base font-semibold text-violet-800">
+                                        Reputación global
+                                      </h5>
+                                      <span className="badge badge-neutral">
+                                        {reputacionGlobal.total_votos} votos
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">
+                                          Limpieza
+                                        </p>
+                                        <p className="mt-1 text-lg font-bold text-ui-text">
+                                          {formatMetric(reputacionGlobal.limpieza)}
+                                        </p>
+                                      </div>
+
+                                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+                                          Ruido
+                                        </p>
+                                        <p className="mt-1 text-lg font-bold text-ui-text">
+                                          {formatMetric(reputacionGlobal.ruido)}
+                                        </p>
+                                      </div>
+
+                                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
+                                          Pagos
+                                        </p>
+                                        <p className="mt-1 text-lg font-bold text-ui-text">
+                                          {formatMetric(reputacionGlobal.puntualidad_pagos)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
+                                    <div className="flex items-center justify-between gap-3">
+                                      <h5 className="text-base font-semibold text-sky-800">
+                                        Reputación en este piso
+                                      </h5>
+                                      <span className="badge badge-neutral">
+                                        {reputacionPiso.total_votos} votos
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+                                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">
+                                          Limpieza
+                                        </p>
+                                        <p className="mt-1 text-lg font-bold text-ui-text">
+                                          {formatMetric(reputacionPiso.limpieza)}
+                                        </p>
+                                      </div>
+
+                                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+                                          Ruido
+                                        </p>
+                                        <p className="mt-1 text-lg font-bold text-ui-text">
+                                          {formatMetric(reputacionPiso.ruido)}
+                                        </p>
+                                      </div>
+
+                                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
+                                          Pagos
+                                        </p>
+                                        <p className="mt-1 text-lg font-bold text-ui-text">
+                                          {formatMetric(reputacionPiso.puntualidad_pagos)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
+                                  <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                                    <div>
+                                      <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                                        Inicio estancia
+                                      </p>
+                                      <p className="mt-1 text-sm font-semibold text-ui-text">
+                                        {formatDate(item?.fecha_entrada)}
+                                      </p>
+                                    </div>
+
+                                    <div>
+                                      <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                                        Fin estancia
+                                      </p>
+                                      <p className="mt-1 text-sm font-semibold text-ui-text">
+                                        {item?.fecha_salida ? formatDate(item.fecha_salida) : "Activa"}
+                                      </p>
+                                    </div>
+
+                                    <div>
+                                      <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                                        Estado
+                                      </p>
+                                      <p className="mt-1 text-sm font-semibold text-ui-text">
+                                        {getStayStateLabel(stayState)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            </article>
+                          );
+                        })}
+                      </div>
                     )}
                   </section>
                 ) : null}
@@ -2184,6 +2573,24 @@ export default function HabitacionManagerDetail() {
             <div className="text-center text-sm text-ui-text-secondary">
               Foto {selectedPhotoIndex + 1} de {fotos.length}
             </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={isHistorialPhotoModalOpen}
+        title="Foto de perfil"
+        onClose={closeHistorialPhotoModal}
+        size="default"
+        closeLabel="Cerrar"
+      >
+        {selectedHistorialPhoto.url ? (
+          <div className="space-y-4">
+            <img
+              src={selectedHistorialPhoto.url}
+              alt={selectedHistorialPhoto.alt || "Foto de perfil"}
+              className="max-h-[80vh] w-full rounded-lg object-contain"
+            />
           </div>
         ) : null}
       </Modal>
