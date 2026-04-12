@@ -24,6 +24,77 @@ function buildImageUrl(url) {
   return `${API_BASE_URL}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
+function toNullableNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function formatConvivientesLabel(count) {
+  const n = Number(count || 0);
+  if (n === 1) return "1 conviviente";
+  return `${n} convivientes`;
+}
+
+function getConvivenciaTone(avg, count, totalVotes) {
+  const media = toNullableNumber(avg);
+  const convivientes = Number(count || 0);
+  const votos = Number(totalVotes || 0);
+
+  if (convivientes === 0) {
+    return {
+      wrapper: "rounded-lg border border-slate-200 bg-slate-50 p-3",
+      label: "text-xs font-medium uppercase tracking-wide text-slate-500",
+      value: "mt-1 text-sm font-semibold text-ui-text",
+      meta: "mt-1 text-xs text-ui-text-secondary",
+      title: "Sin convivientes actuales",
+      subtitle: "Todavía no hay ocupación activa en este piso.",
+    };
+  }
+
+  if (media === null || votos === 0) {
+    return {
+      wrapper: "rounded-lg border border-sky-200 bg-sky-50 p-3",
+      label: "text-xs font-medium uppercase tracking-wide text-sky-700",
+      value: "mt-1 text-sm font-semibold text-ui-text",
+      meta: "mt-1 text-xs text-ui-text-secondary",
+      title: "Convivencia actual sin datos",
+      subtitle: formatConvivientesLabel(convivientes),
+    };
+  }
+
+  if (media >= 4) {
+    return {
+      wrapper: "rounded-lg border border-emerald-200 bg-emerald-50 p-3",
+      label: "text-xs font-medium uppercase tracking-wide text-emerald-700",
+      value: "mt-1 text-sm font-semibold text-ui-text",
+      meta: "mt-1 text-xs text-ui-text-secondary",
+      title: `Convivencia actual · ${media.toFixed(1)}/5`,
+      subtitle: `${formatConvivientesLabel(convivientes)} · ${votos} votos`,
+    };
+  }
+
+  if (media >= 3) {
+    return {
+      wrapper: "rounded-lg border border-amber-200 bg-amber-50 p-3",
+      label: "text-xs font-medium uppercase tracking-wide text-amber-700",
+      value: "mt-1 text-sm font-semibold text-ui-text",
+      meta: "mt-1 text-xs text-ui-text-secondary",
+      title: `Convivencia actual · ${media.toFixed(1)}/5`,
+      subtitle: `${formatConvivientesLabel(convivientes)} · ${votos} votos`,
+    };
+  }
+
+  return {
+    wrapper: "rounded-lg border border-red-200 bg-red-50 p-3",
+    label: "text-xs font-medium uppercase tracking-wide text-red-700",
+    value: "mt-1 text-sm font-semibold text-ui-text",
+    meta: "mt-1 text-xs text-ui-text-secondary",
+    title: `Convivencia actual · ${media.toFixed(1)}/5`,
+    subtitle: `${formatConvivientesLabel(convivientes)} · ${votos} votos`,
+  };
+}
+
 export default function DashboardManager() {
   const navigate = useNavigate();
 
@@ -509,6 +580,22 @@ export default function DashboardManager() {
                         {piso.ciudad || "—"}
                         {piso.codigo_postal ? ` · ${piso.codigo_postal}` : ""}
                       </p>
+
+                      {(() => {
+                        const convivencia = getConvivenciaTone(
+                          piso.reputacion_actual_media,
+                          piso.convivientes_actuales_count,
+                          piso.reputacion_actual_total_votos
+                        );
+                      
+                        return (
+                          <div className={convivencia.wrapper}>
+                            <p className={convivencia.label}>Resumen convivencia</p>
+                            <p className={convivencia.value}>{convivencia.title}</p>
+                            <p className={convivencia.meta}>{convivencia.subtitle}</p>
+                          </div>
+                        );
+                      })()}
 
                       <p className="text-sm text-ui-text-secondary line-clamp-3">
                         {piso.descripcion || "Sin descripción."}

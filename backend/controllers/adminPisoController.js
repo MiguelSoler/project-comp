@@ -44,83 +44,93 @@ function deleteUploadedFileByUrl(url) {
 // - Admin: lista todos los pisos
 // - Advertiser/Manager: lista solo sus pisos
 // Query: page, limit, activo=all|true|false, ciudad, sort=newest|updated|oldest
+//
+// Extra que devolvemos ahora por cada piso:
+// - convivientes_actuales_count
+// - reputacion_actual_media
+// - reputacion_actual_total_votos
+//
+// Regla de reputación actual:
+// - solo cuenta a convivientes con estancia activa ahora mismo
+// - la media se calcula con votos del mismo piso recibidos por esos convivientes actuales
 // =========================================================
 const listPisosAdmin = async (req, res) => {
-    try {
-        const requesterId = req.user?.id;
-        const requesterRol = req.user?.rol;
+  try {
+    const requesterId = req.user?.id;
+    const requesterRol = req.user?.rol;
 
-        if (requesterRol !== "admin" && requesterRol !== "advertiser") {
-            return res.status(403).json({ error: "FORBIDDEN" });
-        }
+    if (requesterRol !== "admin" && requesterRol !== "advertiser") {
+      return res.status(403).json({ error: "FORBIDDEN" });
+    }
 
-        const page = Math.max(1, toInt(req.query.page, 1));
-        const limit = Math.min(100, Math.max(1, toInt(req.query.limit, 10)));
-        const offset = (page - 1) * limit;
+    const page = Math.max(1, toInt(req.query.page, 1));
+    const limit = Math.min(100, Math.max(1, toInt(req.query.limit, 10)));
+    const offset = (page - 1) * limit;
 
-        const activoRaw = String(req.query.activo || "all").toLowerCase(); // all|true|false
-        const ciudad = (req.query.ciudad || "").trim();
-        const direccion = (req.query.direccion || "").trim();
-        const codigoPostal = (req.query.codigo_postal || "").trim();
-        const descripcion = (req.query.descripcion || "").trim();
+    const activoRaw = String(req.query.activo || "all").toLowerCase(); // all|true|false
+    const ciudad = (req.query.ciudad || "").trim();
+    const direccion = (req.query.direccion || "").trim();
+    const codigoPostal = (req.query.codigo_postal || "").trim();
+    const descripcion = (req.query.descripcion || "").trim();
 
-        const sort = String(req.query.sort || "newest");
-        const sortMap = {
-            newest: "p.created_at DESC, p.id DESC",
-            updated: "p.updated_at DESC, p.id DESC",
-            oldest: "p.created_at ASC, p.id ASC",
-        };
-        const orderBy = sortMap[sort] || sortMap.newest;
+    const sort = String(req.query.sort || "newest");
+    const sortMap = {
+      newest: "p.created_at DESC, p.id DESC",
+      updated: "p.updated_at DESC, p.id DESC",
+      oldest: "p.created_at ASC, p.id ASC",
+    };
+    const orderBy = sortMap[sort] || sortMap.newest;
 
-        const where = [];
-        const params = [];
-        let i = 1;
+    const where = [];
+    const params = [];
+    let i = 1;
 
-        // Manager: solo sus pisos
-        if (requesterRol !== "admin") {
-            params.push(requesterId);
-            where.push(`p.manager_usuario_id = $${i++}`);
-        }
+    // Manager: solo sus pisos
+    if (requesterRol !== "admin") {
+      params.push(requesterId);
+      where.push(`p.manager_usuario_id = $${i++}`);
+    }
 
-        // Filtro activo
-        if (activoRaw !== "all") {
-            if (activoRaw !== "true" && activoRaw !== "false") {
-                return res
-                    .status(400)
-                    .json({ error: "VALIDATION_ERROR", details: ["activo"] });
-            }
-            params.push(activoRaw === "true");
-            where.push(`p.activo = $${i++}`);
-        }
+    // Filtro activo
+    if (activoRaw !== "all") {
+      if (activoRaw !== "true" && activoRaw !== "false") {
+        return res
+          .status(400)
+          .json({ error: "VALIDATION_ERROR", details: ["activo"] });
+      }
 
-        // Filtro ciudad (exact match)
-        if (ciudad) {
-                params.push(ciudad);
-                where.push(`LOWER(p.ciudad) = LOWER($${i++})`);
-            }
-        
-            if (direccion) {
-          params.push(`%${direccion}%`);
-          where.push(`p.direccion ILIKE $${i++}`);
-        }
-    
-        if (codigoPostal) {
-          params.push(codigoPostal);
-          where.push(`p.codigo_postal = $${i++}`);
-        }
-    
-        if (descripcion) {
-          params.push(`%${descripcion}%`);
-          where.push(`COALESCE(p.descripcion, '') ILIKE $${i++}`);
-        }
+      params.push(activoRaw === "true");
+      where.push(`p.activo = $${i++}`);
+    }
 
-        params.push(limit);
-        params.push(offset);
+    // Filtros extra
+    if (ciudad) {
+      params.push(ciudad);
+      where.push(`LOWER(p.ciudad) = LOWER($${i++})`);
+    }
 
-        const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    if (direccion) {
+      params.push(`%${direccion}%`);
+      where.push(`p.direccion ILIKE $${i++}`);
+    }
 
-        const q = await pool.query(
-            `
+    if (codigoPostal) {
+      params.push(codigoPostal);
+      where.push(`p.codigo_postal = $${i++}`);
+    }
+
+    if (descripcion) {
+      params.push(`%${descripcion}%`);
+      where.push(`COALESCE(p.descripcion, '') ILIKE $${i++}`);
+    }
+
+    params.push(limit);
+    params.push(offset);
+
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+    const q = await pool.query(
+      `
       SELECT
         p.id,
         p.direccion,
@@ -131,44 +141,90 @@ const listPisosAdmin = async (req, res) => {
         p.activo,
         p.created_at,
         p.updated_at,
+
         u.nombre AS manager_nombre,
         u.apellidos AS manager_apellidos,
         u.email AS manager_email,
-        (SELECT fp.url
-         FROM foto_piso fp
-         WHERE fp.piso_id = p.id
-         ORDER BY fp.orden ASC, fp.id ASC
-         LIMIT 1) AS cover_foto_piso_url,
+
+        cover.cover_foto_piso_url,
+
+        stats.convivientes_actuales_count,
+        stats.reputacion_actual_media,
+        stats.reputacion_actual_total_votos,
+
         COUNT(*) OVER() AS total_count
       FROM piso p
       JOIN usuario u ON u.id = p.manager_usuario_id
+
+      -- Foto de portada del piso
+      LEFT JOIN LATERAL (
+        SELECT fp.url AS cover_foto_piso_url
+        FROM foto_piso fp
+        WHERE fp.piso_id = p.id
+        ORDER BY fp.orden ASC, fp.id ASC
+        LIMIT 1
+      ) cover ON true
+
+      -- Resumen de convivencia actual del piso
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(DISTINCT uh.usuario_id)::int AS convivientes_actuales_count,
+
+          COUNT(vu.id)::int AS reputacion_actual_total_votos,
+
+          ROUND(
+            AVG(
+              (
+                vu.limpieza +
+                vu.ruido +
+                vu.puntualidad_pagos
+              )::numeric / 3
+            ),
+            2
+          ) AS reputacion_actual_media
+        FROM usuario_habitacion uh
+        JOIN habitacion h ON h.id = uh.habitacion_id
+        LEFT JOIN voto_usuario vu
+          ON vu.piso_id = p.id
+         AND vu.votado_id = uh.usuario_id
+        WHERE h.piso_id = p.id
+          AND uh.fecha_salida IS NULL
+          AND uh.estado = 'active'
+      ) stats ON true
+
       ${whereSql}
       ORDER BY ${orderBy}
       LIMIT $${i++} OFFSET $${i++}
       `,
-            params
-        );
+      params
+    );
 
-        const total = q.rowCount ? Number(q.rows[0].total_count) : 0;
-        const totalPages = total ? Math.ceil(total / limit) : 0;
+    const total = q.rowCount ? Number(q.rows[0].total_count) : 0;
+    const totalPages = total ? Math.ceil(total / limit) : 0;
 
-        const items = q.rows.map(
-            ({ total_count, manager_nombre, manager_apellidos, manager_email, ...row }) => ({
-                ...row,
-                manager: {
-                    id: row.manager_usuario_id,
-                    nombre: manager_nombre,
-                    apellidos: manager_apellidos,
-                    email: manager_email,
-                },
-            })
-        );
+    const items = q.rows.map(
+      ({
+        total_count,
+        manager_nombre,
+        manager_apellidos,
+        manager_email,
+        ...row
+      }) => ({
+        ...row,
+        manager: {
+          id: row.manager_usuario_id,
+          nombre: manager_nombre,
+          apellidos: manager_apellidos,
+          email: manager_email,
+        },
+      })
+    );
 
-        return res.json({ page, limit, total, totalPages, items });
-    } catch (error) {
-        console.error("listPisosAdmin error:", error);
-        return res.status(500).json({ error: "INTERNAL_ERROR" });
-    }
+    return res.json({ page, limit, total, totalPages, items });
+  } catch (error) {
+    console.error("listPisosAdmin error:", error);
+    return res.status(500).json({ error: "INTERNAL_ERROR" });
+  }
 };
 
 // =========================================================

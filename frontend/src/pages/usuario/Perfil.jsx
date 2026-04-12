@@ -7,6 +7,7 @@ import {
   updateMyProfileFoto,
   deleteMyProfileFoto,
   dejarDeSerAdvertiser,
+  updateMyPassword,
 } from "../../services/usuarioService.js";
 import useAuth from "../../hooks/useAuth.js";
 
@@ -17,6 +18,12 @@ const EMPTY_FORM = {
   apellidos: "",
   email: "",
   telefono: "",
+};
+
+const EMPTY_PASSWORD_FORM = {
+  current_password: "",
+  new_password: "",
+  confirm_new_password: "",
 };
 
 function formatRoleLabel(rol) {
@@ -68,18 +75,39 @@ function getPhotoErrorMessage(err) {
   }
 }
 
+function getPasswordErrorMessage(err) {
+  switch (err?.error) {
+    case "VALIDATION_ERROR":
+      return "Revisa los campos de contraseña. La nueva contraseña debe tener al menos 8 caracteres.";
+    case "INVALID_CREDENTIALS":
+      return "La contraseña actual no es correcta.";
+    case "PASSWORD_SAME_AS_OLD":
+      return "La nueva contraseña no puede ser igual a la actual.";
+    case "USER_INACTIVE":
+      return "Tu usuario está inactivo.";
+    case "USER_NOT_FOUND":
+      return "No se encontró el usuario.";
+    default:
+      return err?.message || "No se pudo cambiar la contraseña.";
+  }
+}
+
 export default function Perfil() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const { setUser, setSession } = useAuth();
 
+  const [activeTab, setActiveTab] = useState("perfil");
+
   const [form, setForm] = useState(EMPTY_FORM);
+  const [passwordForm, setPasswordForm] = useState(EMPTY_PASSWORD_FORM);
   const [meta, setMeta] = useState(null);
 
   const [selectedPhotoFile, setSelectedPhotoFile] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deletingPhoto, setDeletingPhoto] = useState(false);
   const [changingRole, setChangingRole] = useState(false);
@@ -87,6 +115,7 @@ export default function Perfil() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [photoFeedback, setPhotoFeedback] = useState(null);
+  const [passwordFeedback, setPasswordFeedback] = useState(null);
   const [roleFeedback, setRoleFeedback] = useState(null);
 
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
@@ -94,6 +123,7 @@ export default function Perfil() {
   const [isLeaveAdvertiserModalOpen, setIsLeaveAdvertiserModalOpen] = useState(false);
 
   const avatarUrl = buildImageUrl(meta?.foto_perfil_url);
+  const hasCuentaTab = meta?.rol === "user" || meta?.rol === "advertiser";
 
   useEffect(() => {
     let isMounted = true;
@@ -104,6 +134,7 @@ export default function Perfil() {
         setError(null);
         setSuccess(null);
         setPhotoFeedback(null);
+        setPasswordFeedback(null);
         setRoleFeedback(null);
 
         const data = await getMyProfile();
@@ -133,9 +164,30 @@ export default function Perfil() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!hasCuentaTab && activeTab === "cuenta") {
+      setActiveTab("perfil");
+    }
+  }, [hasCuentaTab, activeTab]);
+
+  function handleSelectTab(nextTab) {
+    setActiveTab(nextTab);
+  }
+
   function handleChange(event) {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+  }
+
+  function handlePasswordChange(event) {
+    const { name, value } = event.target;
+    setPasswordForm((prev) => ({ ...prev, [name]: value }));
+    setPasswordFeedback(null);
+  }
+
+  function resetPasswordForm() {
+    setPasswordForm(EMPTY_PASSWORD_FORM);
+    setPasswordFeedback(null);
   }
 
   function handlePhotoSelection(event) {
@@ -159,6 +211,7 @@ export default function Perfil() {
       setError(null);
       setSuccess(null);
       setPhotoFeedback(null);
+      setPasswordFeedback(null);
       setRoleFeedback(null);
 
       const payload = {
@@ -191,6 +244,72 @@ export default function Perfil() {
     }
   }
 
+  async function handleSubmitPassword(event) {
+    event.preventDefault();
+
+    const currentPassword = passwordForm.current_password.trim();
+    const newPassword = passwordForm.new_password.trim();
+    const confirmNewPassword = passwordForm.confirm_new_password.trim();
+
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      setPasswordFeedback({
+        type: "error",
+        message: "Debes completar los tres campos de contraseña.",
+      });
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setPasswordFeedback({
+        type: "error",
+        message: "La nueva contraseña debe tener al menos 8 caracteres.",
+      });
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordFeedback({
+        type: "error",
+        message: "La nueva contraseña y la confirmación no coinciden.",
+      });
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+      setError(null);
+      setSuccess(null);
+      setPhotoFeedback(null);
+      setPasswordFeedback(null);
+      setRoleFeedback(null);
+
+      const data = await updateMyPassword({
+        current_password: currentPassword,
+        new_password: newPassword,
+      });
+
+      // El backend devuelve token nuevo porque incrementa token_version.
+      // Refrescamos la sesión para no invalidar el login actual.
+      if (data?.token && meta) {
+        setSession(data.token, meta);
+      }
+
+      resetPasswordForm();
+
+      setPasswordFeedback({
+        type: "success",
+        message: "Contraseña actualizada correctamente.",
+      });
+    } catch (err) {
+      setPasswordFeedback({
+        type: "error",
+        message: getPasswordErrorMessage(err),
+      });
+    } finally {
+      setChangingPassword(false);
+    }
+  }
+
   async function handleUploadPhoto() {
     if (!selectedPhotoFile) {
       setPhotoFeedback({
@@ -205,6 +324,7 @@ export default function Perfil() {
       setError(null);
       setSuccess(null);
       setPhotoFeedback(null);
+      setPasswordFeedback(null);
       setRoleFeedback(null);
 
       const formData = new FormData();
@@ -238,6 +358,7 @@ export default function Perfil() {
     setError(null);
     setSuccess(null);
     setPhotoFeedback(null);
+    setPasswordFeedback(null);
     setRoleFeedback(null);
     setIsDeletePhotoModalOpen(true);
   }
@@ -253,6 +374,7 @@ export default function Perfil() {
       setError(null);
       setSuccess(null);
       setPhotoFeedback(null);
+      setPasswordFeedback(null);
       setRoleFeedback(null);
 
       await deleteMyProfileFoto();
@@ -265,6 +387,7 @@ export default function Perfil() {
         : meta;
 
       setMeta(nextUser);
+
       if (nextUser) {
         setUser(nextUser);
       }
@@ -300,6 +423,7 @@ export default function Perfil() {
     setError(null);
     setSuccess(null);
     setPhotoFeedback(null);
+    setPasswordFeedback(null);
     setRoleFeedback(null);
     setIsLeaveAdvertiserModalOpen(true);
   }
@@ -315,6 +439,7 @@ export default function Perfil() {
       setError(null);
       setSuccess(null);
       setPhotoFeedback(null);
+      setPasswordFeedback(null);
       setRoleFeedback(null);
 
       const data = await dejarDeSerAdvertiser();
@@ -395,7 +520,7 @@ export default function Perfil() {
                   Volver
                 </button>
               </div>
-              
+
               <div>
                 <h1>Mi perfil</h1>
                 <p className="text-sm text-ui-text-secondary">
@@ -406,11 +531,19 @@ export default function Perfil() {
 
             {error ? <div className="alert-error">{error}</div> : null}
             {success ? <div className="alert-success">{success}</div> : null}
+
             {photoFeedback ? (
               <div className={photoFeedback.type === "success" ? "alert-success" : "alert-error"}>
                 {photoFeedback.message}
               </div>
             ) : null}
+
+            {passwordFeedback ? (
+              <div className={passwordFeedback.type === "success" ? "alert-success" : "alert-error"}>
+                {passwordFeedback.message}
+              </div>
+            ) : null}
+
             {roleFeedback ? (
               <div className={roleFeedback.type === "success" ? "alert-success" : "alert-error"}>
                 {roleFeedback.message}
@@ -418,7 +551,7 @@ export default function Perfil() {
             ) : null}
 
             <div className="card">
-              <div className="card-body space-y-6">
+              <div className="card-body space-y-4">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-center gap-4">
                     {avatarUrl ? (
@@ -453,210 +586,436 @@ export default function Perfil() {
                     </div>
                   </div>
                 </div>
-
-                <form className="space-y-4" onSubmit={handleSubmit}>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="label" htmlFor="nombre">
-                        Nombre
-                      </label>
-                      <input
-                        id="nombre"
-                        name="nombre"
-                        type="text"
-                        className="input"
-                        value={form.nombre}
-                        onChange={handleChange}
-                        disabled={saving}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="label" htmlFor="apellidos">
-                        Apellidos
-                      </label>
-                      <input
-                        id="apellidos"
-                        name="apellidos"
-                        type="text"
-                        className="input"
-                        value={form.apellidos}
-                        onChange={handleChange}
-                        disabled={saving}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="label" htmlFor="email">
-                        Email
-                      </label>
-                      <input
-                        id="email"
-                        name="email"
-                        type="email"
-                        className="input"
-                        value={form.email}
-                        onChange={handleChange}
-                        disabled={saving}
-                      />
-                    </div>
-
-                    <div>
-                      <label className="label" htmlFor="telefono">
-                        Teléfono
-                      </label>
-                      <input
-                        id="telefono"
-                        name="telefono"
-                        type="text"
-                        className="input"
-                        value={form.telefono}
-                        onChange={handleChange}
-                        disabled={saving}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-end">
-                    <button
-                      type="submit"
-                      className="btn btn-primary"
-                      disabled={saving}
-                      aria-busy={saving}
-                    >
-                      {saving ? "Guardando..." : "Guardar cambios"}
-                    </button>
-                  </div>
-                </form>
               </div>
             </div>
 
-            <div className="card">
-              <div className="card-body space-y-4">
-                <div>
-                  <h2 className="text-xl font-bold tracking-tight text-ui-text">
-                    Foto de perfil
-                  </h2>
-                  <p className="mt-1 text-sm text-ui-text-secondary">
-                    Sube una nueva imagen o elimina la foto actual.
-                  </p>
-                </div>
+            <div className="space-y-0">
+              <div
+                role="tablist"
+                aria-label="Secciones del perfil"
+                className={`grid grid-cols-1 gap-2 ${
+                  hasCuentaTab ? "md:grid-cols-4" : "md:grid-cols-3"
+                }`}
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === "perfil"}
+                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
+                    activeTab === "perfil"
+                      ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
+                      : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
+                  }`}
+                  onClick={() => handleSelectTab("perfil")}
+                >
+                  <span className="font-semibold">Perfil</span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      activeTab === "perfil"
+                        ? "bg-blue-100 text-brand-primary"
+                        : "bg-slate-100 text-ui-text-secondary"
+                    }`}
+                  >
+                    Datos
+                  </span>
+                </button>
 
-                <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div className="text-sm text-ui-text-secondary">
-                      {selectedPhotoFile
-                        ? `Nueva foto seleccionada: ${selectedPhotoFile.name}`
-                        : meta?.foto_perfil_url
-                          ? "Ya tienes una foto de perfil."
-                          : "Todavía no has subido ninguna foto de perfil."}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === "seguridad"}
+                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
+                    activeTab === "seguridad"
+                      ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
+                      : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
+                  }`}
+                  onClick={() => handleSelectTab("seguridad")}
+                >
+                  <span className="font-semibold">Seguridad</span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      activeTab === "seguridad"
+                        ? "bg-blue-100 text-brand-primary"
+                        : "bg-slate-100 text-ui-text-secondary"
+                    }`}
+                  >
+                    Contraseña
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === "foto"}
+                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
+                    activeTab === "foto"
+                      ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
+                      : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
+                  }`}
+                  onClick={() => handleSelectTab("foto")}
+                >
+                  <span className="font-semibold">Foto</span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      activeTab === "foto"
+                        ? "bg-blue-100 text-brand-primary"
+                        : "bg-slate-100 text-ui-text-secondary"
+                    }`}
+                  >
+                    Perfil
+                  </span>
+                </button>
+
+                {hasCuentaTab ? (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "cuenta"}
+                    className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
+                      activeTab === "cuenta"
+                        ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
+                        : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
+                    }`}
+                    onClick={() => handleSelectTab("cuenta")}
+                  >
+                    <span className="font-semibold">Cuenta</span>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        activeTab === "cuenta"
+                          ? "bg-blue-100 text-brand-primary"
+                          : "bg-slate-100 text-ui-text-secondary"
+                      }`}
+                    >
+                      Rol
+                    </span>
+                  </button>
+                ) : null}
+              </div>
+
+              <div
+                className={`border border-slate-300 bg-white p-4 md:p-5 ${
+                  activeTab === "perfil"
+                    ? "rounded-b-2xl rounded-tr-2xl rounded-tl-none"
+                    : activeTab === "seguridad"
+                      ? hasCuentaTab
+                        ? "rounded-b-2xl rounded-tl-2xl rounded-tr-2xl"
+                        : "rounded-b-2xl rounded-tl-2xl rounded-tr-2xl"
+                      : activeTab === "foto"
+                        ? hasCuentaTab
+                          ? "rounded-b-2xl rounded-tl-2xl rounded-tr-2xl"
+                          : "rounded-b-2xl rounded-tl-2xl rounded-tr-none"
+                        : "rounded-b-2xl rounded-tl-2xl rounded-tr-none"
+                }`}
+              >
+                {activeTab === "perfil" ? (
+                  <section className="space-y-4">
+                    <div>
+                      <h2 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                        Datos personales
+                      </h2>
+                      <p className="mt-1 text-sm text-ui-text-secondary">
+                        Actualiza tu información básica.
+                      </p>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      <input
-                        ref={fileInputRef}
-                        id="perfil-foto"
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={handlePhotoSelection}
-                        disabled={uploadingPhoto || deletingPhoto}
-                      />
+                    <form className="space-y-4" onSubmit={handleSubmit}>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                          <label className="label" htmlFor="nombre">
+                            Nombre
+                          </label>
+                          <input
+                            id="nombre"
+                            name="nombre"
+                            type="text"
+                            className="input"
+                            value={form.nombre}
+                            onChange={handleChange}
+                            disabled={saving}
+                          />
+                        </div>
 
-                      <label
-                        htmlFor="perfil-foto"
-                        className="btn btn-secondary btn-sm cursor-pointer"
-                      >
-                        Seleccionar foto
-                      </label>
+                        <div>
+                          <label className="label" htmlFor="apellidos">
+                            Apellidos
+                          </label>
+                          <input
+                            id="apellidos"
+                            name="apellidos"
+                            type="text"
+                            className="input"
+                            value={form.apellidos}
+                            onChange={handleChange}
+                            disabled={saving}
+                          />
+                        </div>
 
-                      {selectedPhotoFile ? (
-                        <>
-                          <button
-                            type="button"
-                            className="btn btn-primary btn-sm"
-                            onClick={handleUploadPhoto}
-                            disabled={uploadingPhoto || deletingPhoto}
-                          >
-                            {uploadingPhoto ? "Subiendo..." : "Subir foto"}
-                          </button>
+                        <div>
+                          <label className="label" htmlFor="email">
+                            Email
+                          </label>
+                          <input
+                            id="email"
+                            name="email"
+                            type="email"
+                            className="input"
+                            value={form.email}
+                            onChange={handleChange}
+                            disabled={saving}
+                          />
+                        </div>
 
-                          <button
-                            type="button"
-                            className="btn btn-secondary btn-sm"
-                            onClick={resetPhotoSelection}
-                            disabled={uploadingPhoto || deletingPhoto}
-                          >
-                            Quitar selección
-                          </button>
-                        </>
-                      ) : null}
+                        <div>
+                          <label className="label" htmlFor="telefono">
+                            Teléfono
+                          </label>
+                          <input
+                            id="telefono"
+                            name="telefono"
+                            type="text"
+                            className="input"
+                            value={form.telefono}
+                            onChange={handleChange}
+                            disabled={saving}
+                          />
+                        </div>
+                      </div>
 
-                      {meta?.foto_perfil_url ? (
+                      <div className="flex items-center justify-end">
+                        <button
+                          type="submit"
+                          className="btn btn-primary"
+                          disabled={saving}
+                          aria-busy={saving}
+                        >
+                          {saving ? "Guardando..." : "Guardar cambios"}
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                ) : null}
+
+                {activeTab === "seguridad" ? (
+                  <section className="space-y-4">
+                    <div>
+                      <h2 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                        Cambiar contraseña
+                      </h2>
+                      <p className="mt-1 text-sm text-ui-text-secondary">
+                        Actualiza tu contraseña para mantener tu cuenta segura.
+                      </p>
+                    </div>
+
+                    <form className="space-y-4" onSubmit={handleSubmitPassword}>
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="md:col-span-2">
+                          <label className="label" htmlFor="current_password">
+                            Contraseña actual
+                          </label>
+                          <input
+                            id="current_password"
+                            name="current_password"
+                            type="password"
+                            className="input"
+                            value={passwordForm.current_password}
+                            onChange={handlePasswordChange}
+                            disabled={changingPassword}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="label" htmlFor="new_password">
+                            Nueva contraseña
+                          </label>
+                          <input
+                            id="new_password"
+                            name="new_password"
+                            type="password"
+                            className="input"
+                            value={passwordForm.new_password}
+                            onChange={handlePasswordChange}
+                            disabled={changingPassword}
+                          />
+                        </div>
+
+                        <div>
+                          <label className="label" htmlFor="confirm_new_password">
+                            Confirmar nueva contraseña
+                          </label>
+                          <input
+                            id="confirm_new_password"
+                            name="confirm_new_password"
+                            type="password"
+                            className="input"
+                            value={passwordForm.confirm_new_password}
+                            onChange={handlePasswordChange}
+                            disabled={changingPassword}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
-                          className="btn btn-danger btn-sm"
-                          onClick={openDeletePhotoModal}
-                          disabled={uploadingPhoto || deletingPhoto}
+                          className="btn btn-secondary"
+                          onClick={resetPasswordForm}
+                          disabled={changingPassword}
                         >
-                          Eliminar foto
+                          Limpiar
                         </button>
-                      ) : null}
+
+                        <button
+                          type="submit"
+                          className="btn btn-primary"
+                          disabled={changingPassword}
+                          aria-busy={changingPassword}
+                        >
+                          {changingPassword ? "Actualizando..." : "Cambiar contraseña"}
+                        </button>
+                      </div>
+                    </form>
+                  </section>
+                ) : null}
+
+                {activeTab === "foto" ? (
+                  <section className="space-y-4">
+                    <div>
+                      <h2 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                        Foto de perfil
+                      </h2>
+                      <p className="mt-1 text-sm text-ui-text-secondary">
+                        Sube una nueva imagen o elimina la foto actual.
+                      </p>
                     </div>
-                  </div>
-                </div>
+
+                    <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
+                      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                        <div className="text-sm text-ui-text-secondary">
+                          {selectedPhotoFile
+                            ? `Nueva foto seleccionada: ${selectedPhotoFile.name}`
+                            : meta?.foto_perfil_url
+                              ? "Ya tienes una foto de perfil."
+                              : "Todavía no has subido ninguna foto de perfil."}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            ref={fileInputRef}
+                            id="perfil-foto"
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handlePhotoSelection}
+                            disabled={uploadingPhoto || deletingPhoto}
+                          />
+
+                          <label
+                            htmlFor="perfil-foto"
+                            className="btn btn-secondary btn-sm cursor-pointer"
+                          >
+                            Seleccionar foto
+                          </label>
+
+                          {selectedPhotoFile ? (
+                            <>
+                              <button
+                                type="button"
+                                className="btn btn-primary btn-sm"
+                                onClick={handleUploadPhoto}
+                                disabled={uploadingPhoto || deletingPhoto}
+                              >
+                                {uploadingPhoto ? "Subiendo..." : "Subir foto"}
+                              </button>
+
+                              <button
+                                type="button"
+                                className="btn btn-secondary btn-sm"
+                                onClick={resetPhotoSelection}
+                                disabled={uploadingPhoto || deletingPhoto}
+                              >
+                                Quitar selección
+                              </button>
+                            </>
+                          ) : null}
+
+                          {meta?.foto_perfil_url ? (
+                            <button
+                              type="button"
+                              className="btn btn-danger btn-sm"
+                              onClick={openDeletePhotoModal}
+                              disabled={uploadingPhoto || deletingPhoto}
+                            >
+                              Eliminar foto
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                ) : null}
+
+                {activeTab === "cuenta" && hasCuentaTab ? (
+                  <section className="space-y-4">
+                    <div className="rounded-xl border border-violet-300 bg-violet-50">
+                      <div className="card-body">
+                        <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
+                          Rol actual
+                        </p>
+                        <p className="mt-2 text-2xl font-bold text-ui-text">
+                          {formatRoleLabel(meta?.rol)}
+                        </p>
+                      </div>
+                    </div>
+                                
+                    {meta?.rol === "user" ? (
+                      <>
+                        <div>
+                          <h2 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                            Convertirse en anunciante
+                          </h2>
+                          <p className="mt-1 text-sm text-ui-text-secondary">
+                            Crea tu primer piso y tu cuenta pasará a rol anunciante.
+                          </p>
+                        </div>
+                    
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            onClick={() => navigate("/convertirse-anunciante")}
+                          >
+                            Empezar
+                          </button>
+                        </div>
+                      </>
+                    ) : null}
+                
+                    {meta?.rol === "advertiser" ? (
+                      <>
+                        <div>
+                          <h2 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                            Dejar de ser anunciante
+                          </h2>
+                          <p className="mt-1 text-sm text-ui-text-secondary">
+                            Volverás a rol usuario. Antes debes asegurarte de no tener pisos activos.
+                          </p>
+                        </div>
+                    
+                        <div className="flex justify-end">
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            onClick={openLeaveAdvertiserModal}
+                          >
+                            Dejar de ser anunciante
+                          </button>
+                        </div>
+                      </>
+                    ) : null}
+                  </section>
+                ) : null}
               </div>
             </div>
-
-            {meta?.rol === "user" ? (
-              <div className="card">
-                <div className="card-body space-y-4">
-                  <div>
-                    <h2 className="text-xl font-bold tracking-tight text-ui-text">
-                      Convertirse en anunciante
-                    </h2>
-                    <p className="mt-1 text-sm text-ui-text-secondary">
-                      Crea tu primer piso y tu cuenta pasará a rol anunciante.
-                    </p>
-                  </div>
-
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={() => navigate("/convertirse-anunciante")}
-                    >
-                      Empezar
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-
-            {meta?.rol === "advertiser" ? (
-              <div className="card">
-                <div className="card-body space-y-4">
-                  <div>
-                    <h2 className="text-xl font-bold tracking-tight text-ui-text">
-                      Dejar de ser anunciante
-                    </h2>
-                    <p className="mt-1 text-sm text-ui-text-secondary">
-                      Volverás a rol usuario. Antes debes asegurarte de no tener pisos activos.
-                    </p>
-                  </div>
-
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      className="btn btn-danger"
-                      onClick={openLeaveAdvertiserModal}
-                    >
-                      Dejar de ser anunciante
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
           </div>
         </div>
       </section>
@@ -712,7 +1071,7 @@ export default function Perfil() {
 
             <button
               type="button"
-              className="btn btn-sm border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
+              className="btn btn-sm border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-800"
               onClick={handleConfirmDeletePhoto}
               disabled={deletingPhoto}
             >
@@ -755,7 +1114,7 @@ export default function Perfil() {
 
             <button
               type="button"
-              className="btn btn-sm border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
+              className="btn btn-sm border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200 hover:text-amber-800"
               onClick={handleConfirmLeaveAdvertiser}
               disabled={changingRole}
             >

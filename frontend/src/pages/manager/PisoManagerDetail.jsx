@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
@@ -15,6 +15,8 @@ import {
   deactivateAdminHabitacion,
   reactivateAdminHabitacion,
 } from "../../services/adminHabitacionService.js";
+import { listConvivientesByPiso } from "../../services/usuarioHabitacionService.js";
+import { getUserVotesSummary } from "../../services/votoUsuarioService.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -53,6 +55,37 @@ function formatEur(value) {
   return `${new Intl.NumberFormat("es-ES").format(n)} €`;
 }
 
+function formatDate(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatMetric(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  return n.toFixed(1);
+}
+
+function getInitials(usuario) {
+  const source =
+    [usuario?.nombre, usuario?.apellidos].filter(Boolean).join(" ") || "U";
+
+  return source
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || "")
+    .join("");
+}
+
 function buildPisoFormFromPiso(piso) {
   if (!piso) return EMPTY_PISO_FORM;
 
@@ -61,6 +94,70 @@ function buildPisoFormFromPiso(piso) {
     ciudad: piso.ciudad || "",
     codigo_postal: piso.codigo_postal || "",
     descripcion: piso.descripcion || "",
+  };
+}
+
+function getSummaryMetrics(summaryData) {
+  const resumen = summaryData?.resumen || summaryData || null;
+  const medias = resumen?.medias || {};
+
+  return {
+    limpieza: medias.limpieza ?? null,
+    ruido: medias.ruido ?? null,
+    pagos: medias.puntualidad_pagos ?? null,
+    total: resumen?.total_votos ?? 0,
+  };
+}
+
+function getConvivenciaStats(convivientes, summaryMap) {
+  const summaries = convivientes
+    .map((item) => getSummaryMetrics(summaryMap[item.id]))
+    .filter(
+      (item) =>
+        item.limpieza !== null || item.ruido !== null || item.pagos !== null
+    );
+
+  if (summaries.length === 0) {
+    return {
+      limpieza: null,
+      ruido: null,
+      pagos: null,
+      mediaGeneral: null,
+      totalVotos: 0,
+    };
+  }
+
+  const avg = (values) => {
+    const valid = values.filter((value) => Number.isFinite(Number(value)));
+    if (valid.length === 0) return null;
+    return valid.reduce((acc, value) => acc + Number(value), 0) / valid.length;
+  };
+
+  const limpieza = avg(summaries.map((item) => item.limpieza));
+  const ruido = avg(summaries.map((item) => item.ruido));
+  const pagos = avg(summaries.map((item) => item.pagos));
+
+  const metricValues = [limpieza, ruido, pagos].filter((value) =>
+    Number.isFinite(Number(value))
+  );
+
+  const mediaGeneral =
+    metricValues.length > 0
+      ? metricValues.reduce((acc, value) => acc + Number(value), 0) /
+        metricValues.length
+      : null;
+
+  const totalVotos = summaries.reduce(
+    (acc, item) => acc + Number(item.total || 0),
+    0
+  );
+
+  return {
+    limpieza,
+    ruido,
+    pagos,
+    mediaGeneral,
+    totalVotos,
   };
 }
 
@@ -102,9 +199,30 @@ export default function PisoManagerDetail() {
 
   const [isPisoPhotoModalOpen, setIsPisoPhotoModalOpen] = useState(false);
   const [selectedPisoPhotoIndex, setSelectedPisoPhotoIndex] = useState(0);
-
+  
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // =========================================================
+  // Pestaña Convivencia
+  // MVP:
+  // - cargamos convivientes actuales del piso
+  // - para cada uno usamos su resumen GLOBAL de reputación
+  //   porque es la API que ya existe hoy
+  // - si más adelante creas un endpoint de reputación actual por piso,
+  //   aquí será fácil sustituir esta parte
+  // =========================================================
+  const [convivientes, setConvivientes] = useState([]);
+  const [convivientesSummaryMap, setConvivientesSummaryMap] = useState({});
+  const [loadingConvivencia, setLoadingConvivencia] = useState(false);
+  const [convivenciaError, setConvivenciaError] = useState("");
+
+  const [isConvivientePhotoModalOpen, setIsConvivientePhotoModalOpen] =
+    useState(false);
+  const [selectedConvivientePhoto, setSelectedConvivientePhoto] = useState({
+    url: "",
+    alt: "",
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -153,6 +271,61 @@ export default function PisoManagerDetail() {
       Object.fromEntries(fotosPiso.map((foto) => [foto.id, String(foto.orden)]))
     );
   }, [fotosPiso]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadConvivencia() {
+      try {
+        setLoadingConvivencia(true);
+        setConvivenciaError("");
+
+        const data = await listConvivientesByPiso(pisoId);
+        const nextConvivientes = Array.isArray(data?.convivientes)
+          ? data.convivientes
+          : [];
+
+        if (!isMounted) return;
+
+        setConvivientes(nextConvivientes);
+
+        if (nextConvivientes.length === 0) {
+          setConvivientesSummaryMap({});
+          return;
+        }
+
+        const summaryEntries = await Promise.all(
+          nextConvivientes.map(async (conviviente) => {
+            try {
+              const summary = await getUserVotesSummary(conviviente.id);
+              return [conviviente.id, summary];
+            } catch (_) {
+              return [conviviente.id, null];
+            }
+          })
+        );
+
+        if (!isMounted) return;
+
+        setConvivientesSummaryMap(Object.fromEntries(summaryEntries));
+      } catch (err) {
+        if (!isMounted) return;
+        setConvivenciaError(
+          err?.message || "No se pudo cargar la convivencia actual del piso."
+        );
+        setConvivientes([]);
+        setConvivientesSummaryMap({});
+      } finally {
+        if (isMounted) setLoadingConvivencia(false);
+      }
+    }
+
+    loadConvivencia();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [pisoId]);
 
   function handleSelectTab(nextTab) {
     setActiveTab(nextTab);
@@ -698,15 +871,30 @@ export default function PisoManagerDetail() {
     }
   }
 
+  function openConvivientePhotoModal(url, alt) {
+    if (!url) return;
+    setSelectedConvivientePhoto({ url, alt });
+    setIsConvivientePhotoModalOpen(true);
+  }
+
+  function closeConvivientePhotoModal() {
+    setSelectedConvivientePhoto({ url: "", alt: "" });
+    setIsConvivientePhotoModalOpen(false);
+  }
+
   const cover = buildImageUrl(piso?.cover_foto_piso_url);
   const habitacionCount = Number(piso?.habitaciones_total ?? habitaciones.length);
   const fotoCount = fotosPiso.length;
+
+  const convivenciaStats = useMemo(() => {
+    return getConvivenciaStats(convivientes, convivientesSummaryMap);
+  }, [convivientes, convivientesSummaryMap]);
 
   return (
     <>
       <PageShell
         title="Detalle del piso"
-        subtitle="Consulta información del piso, sus fotos y sus habitaciones."
+        subtitle="Consulta información del piso, sus fotos, sus habitaciones y su convivencia actual."
         variant="plain"
         contentClassName="space-y-6"
         actions={
@@ -729,7 +917,8 @@ export default function PisoManagerDetail() {
             </div>
 
             <div className="rounded-2xl border border-slate-300 bg-white p-3">
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-4">
+                <div className="skeleton h-11 w-full rounded-xl" />
                 <div className="skeleton h-11 w-full rounded-xl" />
                 <div className="skeleton h-11 w-full rounded-xl" />
                 <div className="skeleton h-11 w-full rounded-xl" />
@@ -795,7 +984,7 @@ export default function PisoManagerDetail() {
               <div
                 role="tablist"
                 aria-label="Secciones del detalle del piso"
-                className="grid grid-cols-1 gap-2 md:grid-cols-3"
+                className="grid grid-cols-1 gap-2 md:grid-cols-4"
               >
                 <button
                   type="button"
@@ -819,7 +1008,7 @@ export default function PisoManagerDetail() {
                     {habitacionCount}
                   </span>
                 </button>
-                  
+
                 <button
                   type="button"
                   role="tab"
@@ -842,7 +1031,30 @@ export default function PisoManagerDetail() {
                     {fotoCount}
                   </span>
                 </button>
-                  
+
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={activeTab === "convivencia"}
+                  className={`flex items-center justify-between rounded-t-xl rounded-b-lg border px-4 py-3 text-left transition-all duration-200 ${
+                    activeTab === "convivencia"
+                      ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
+                      : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
+                  }`}
+                  onClick={() => handleSelectTab("convivencia")}
+                >
+                  <span className="font-semibold">Convivencia</span>
+                  <span
+                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                      activeTab === "convivencia"
+                        ? "bg-blue-100 text-brand-primary"
+                        : "bg-slate-100 text-ui-text-secondary"
+                    }`}
+                  >
+                    {convivientes.length}
+                  </span>
+                </button>
+
                 <button
                   type="button"
                   role="tab"
@@ -866,14 +1078,14 @@ export default function PisoManagerDetail() {
                   </span>
                 </button>
               </div>
-                  
+
               <div
                 className={`border border-slate-300 bg-white p-4 md:p-5 ${
                   activeTab === "habitaciones"
                     ? "rounded-b-2xl rounded-tr-2xl rounded-tl-none"
-                    : activeTab === "fotos"
-                      ? "rounded-b-2xl rounded-tl-2xl rounded-tr-2xl"
-                      : "rounded-b-2xl rounded-tl-2xl rounded-tr-none"
+                    : activeTab === "editar"
+                      ? "rounded-b-2xl rounded-tl-2xl rounded-tr-none"
+                      : "rounded-b-2xl rounded-tl-2xl rounded-tr-2xl"
                 }`}
               >
                 {activeTab === "editar" ? (
@@ -886,7 +1098,7 @@ export default function PisoManagerDetail() {
                         Actualiza los datos principales del piso.
                       </p>
                     </div>
-                
+
                     {editPisoFeedback ? (
                       <div
                         className={
@@ -898,7 +1110,7 @@ export default function PisoManagerDetail() {
                         {editPisoFeedback.message}
                       </div>
                     ) : null}
-            
+
                     <form className="space-y-4" onSubmit={handleUpdatePiso}>
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="md:col-span-2">
@@ -915,7 +1127,7 @@ export default function PisoManagerDetail() {
                             disabled={savingPiso}
                           />
                         </div>
-                  
+
                         <div>
                           <label className="label" htmlFor="ciudad">
                             Ciudad
@@ -930,7 +1142,7 @@ export default function PisoManagerDetail() {
                             disabled={savingPiso}
                           />
                         </div>
-                  
+
                         <div>
                           <label className="label" htmlFor="codigo_postal">
                             Código postal
@@ -945,7 +1157,7 @@ export default function PisoManagerDetail() {
                             disabled={savingPiso}
                           />
                         </div>
-                  
+
                         <div className="md:col-span-2">
                           <label className="label" htmlFor="descripcion">
                             Descripción
@@ -960,7 +1172,7 @@ export default function PisoManagerDetail() {
                           />
                         </div>
                       </div>
-                  
+
                       <div className="flex items-center justify-end gap-2">
                         <button
                           type="button"
@@ -970,7 +1182,7 @@ export default function PisoManagerDetail() {
                         >
                           Cancelar
                         </button>
-                  
+
                         <button
                           type="button"
                           className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
@@ -979,7 +1191,7 @@ export default function PisoManagerDetail() {
                         >
                           Restablecer
                         </button>
-                  
+
                         <button
                           type="submit"
                           className="btn btn-primary"
@@ -992,7 +1204,7 @@ export default function PisoManagerDetail() {
                     </form>
                   </section>
                 ) : null}
-            
+
                 {activeTab === "fotos" ? (
                   <section className="space-y-4">
                     <div className="flex items-center justify-between gap-3">
@@ -1001,7 +1213,7 @@ export default function PisoManagerDetail() {
                       </h3>
                       <span className="text-xs text-ui-text-secondary">Total: {fotosPiso.length}</span>
                     </div>
-                
+
                     <div className="card">
                       <div className="card-body space-y-4">
                         <div>
@@ -1010,7 +1222,7 @@ export default function PisoManagerDetail() {
                             Selecciona o arrastra una imagen para subirla a este piso.
                           </p>
                         </div>
-                
+
                         {uploadingPisoPhoto ? (
                           <div className="flex justify-end">
                             <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
@@ -1018,7 +1230,7 @@ export default function PisoManagerDetail() {
                             </div>
                           </div>
                         ) : null}
-            
+
                         <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
                           <label
                             htmlFor="foto-piso"
@@ -1042,7 +1254,7 @@ export default function PisoManagerDetail() {
                               </p>
                             </div>
                           </label>
-                                
+
                           <input
                             id="foto-piso"
                             name="foto"
@@ -1052,7 +1264,7 @@ export default function PisoManagerDetail() {
                             onChange={handlePisoPhotoFileChange}
                             disabled={uploadingPisoPhoto}
                           />
-            
+
                           <div className="max-w-[220px]">
                             <label className="label" htmlFor="orden-piso">
                               Orden (opcional)
@@ -1071,7 +1283,7 @@ export default function PisoManagerDetail() {
                         </form>
                       </div>
                     </div>
-                                
+
                     {fotosPiso.length === 0 ? (
                       <div className="card">
                         <div className="card-body">
@@ -1096,7 +1308,7 @@ export default function PisoManagerDetail() {
                                 <span className="h-1 w-1 rounded-full bg-white" />
                               </span>
                             </button>
-                        
+
                             {openPisoPhotoMenuId === foto.id ? (
                               <div
                                 className="absolute right-3 top-12 z-30 min-w-[180px] rounded-lg border border-ui-border bg-white p-2 shadow-modal"
@@ -1109,7 +1321,7 @@ export default function PisoManagerDetail() {
                                 >
                                   Cambiar orden
                                 </button>
-                            
+
                                 <button
                                   type="button"
                                   className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-red-100"
@@ -1119,7 +1331,7 @@ export default function PisoManagerDetail() {
                                 </button>
                               </div>
                             ) : null}
-            
+
                             <div className="card-body space-y-3">
                               <button
                                 type="button"
@@ -1132,12 +1344,12 @@ export default function PisoManagerDetail() {
                                   className="aspect-[4/3] w-full rounded-md object-cover"
                                 />
                               </button>
-                          
+
                               <div className="flex items-center justify-between gap-2">
                                 <span className="text-xs text-ui-text-secondary">ID #{foto.id}</span>
                                 <span className="text-xs text-ui-text-secondary">Orden #{foto.orden}</span>
                               </div>
-                          
+
                               {editingPisoPhotoOrderId === foto.id ? (
                                 <div className="space-y-3">
                                   <div>
@@ -1159,7 +1371,7 @@ export default function PisoManagerDetail() {
                                       }
                                     />
                                   </div>
-                                    
+
                                   <div className="flex items-center justify-end gap-2">
                                     <button
                                       type="button"
@@ -1172,7 +1384,7 @@ export default function PisoManagerDetail() {
                                     >
                                       Cancelar
                                     </button>
-                                    
+
                                     <button
                                       type="button"
                                       className="btn btn-sm border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
@@ -1187,7 +1399,7 @@ export default function PisoManagerDetail() {
                                   </div>
                                 </div>
                               ) : null}
-            
+
                               {pisoPhotoFeedback[foto.id] ? (
                                 <div
                                   className={
@@ -1206,7 +1418,237 @@ export default function PisoManagerDetail() {
                     )}
                   </section>
                 ) : null}
-            
+
+                {activeTab === "convivencia" ? (
+                  <section className="space-y-6">
+                    <div>
+                      <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                        Convivencia actual
+                      </h3>
+                      <p className="mt-1 text-sm text-ui-text-secondary">
+                        Aquí ves los convivientes actuales del piso y su reputación global resumida.
+                      </p>
+                    </div>
+
+                    {convivenciaError ? (
+                      <div className="alert-error">{convivenciaError}</div>
+                    ) : null}
+
+                    {loadingConvivencia ? (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                          {Array.from({ length: 4 }).map((_, index) => (
+                            <div
+                              key={index}
+                              className="rounded-xl border border-slate-300 bg-slate-50 p-4"
+                            >
+                              <div className="skeleton h-4 w-2/3" />
+                              <div className="mt-3 skeleton h-8 w-1/2" />
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                          {Array.from({ length: 2 }).map((_, index) => (
+                            <div key={index} className="card">
+                              <div className="card-body space-y-4">
+                                <div className="flex items-center gap-4">
+                                  <div className="skeleton h-16 w-16 rounded-full" />
+                                  <div className="flex-1 space-y-2">
+                                    <div className="skeleton h-5 w-1/2" />
+                                    <div className="skeleton h-4 w-1/3" />
+                                  </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                  <div className="skeleton h-20 rounded-lg" />
+                                  <div className="skeleton h-20 rounded-lg" />
+                                  <div className="skeleton h-20 rounded-lg" />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                          <div className="rounded-xl border border-violet-300 bg-violet-50">
+                            <div className="card-body">
+                              <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
+                                Convivientes actuales
+                              </p>
+                              <p className="mt-2 text-2xl font-bold text-ui-text">
+                                {convivientes.length}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-emerald-300 bg-emerald-50">
+                            <div className="card-body">
+                              <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
+                                Limpieza media
+                              </p>
+                              <p className="mt-2 text-2xl font-bold text-ui-text">
+                                {formatMetric(convivenciaStats.limpieza)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-amber-300 bg-amber-50">
+                            <div className="card-body">
+                              <p className="text-xs font-medium uppercase tracking-wide text-amber-600">
+                                Ruido medio
+                              </p>
+                              <p className="mt-2 text-2xl font-bold text-ui-text">
+                                {formatMetric(convivenciaStats.ruido)}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="rounded-xl border border-sky-300 bg-sky-50">
+                            <div className="card-body">
+                              <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
+                                Pagos medios
+                              </p>
+                              <p className="mt-2 text-2xl font-bold text-ui-text">
+                                {formatMetric(convivenciaStats.pagos)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
+                          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <p className="text-sm font-semibold text-ui-text">
+                                Resumen general visible del grupo
+                              </p>
+                              <p className="mt-1 text-sm text-ui-text-secondary">
+                                Media global aproximada:{" "}
+                                <span className="font-semibold text-ui-text">
+                                  {formatMetric(convivenciaStats.mediaGeneral)}
+                                </span>
+                                {" · "}
+                                Total votos agregados:{" "}
+                                <span className="font-semibold text-ui-text">
+                                  {convivenciaStats.totalVotos}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {convivientes.length === 0 ? (
+                          <div className="card">
+                            <div className="card-body">
+                              <p className="text-sm text-ui-text-secondary">
+                                Este piso no tiene convivientes activos en este momento.
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                            {convivientes.map((conviviente) => {
+                              const avatarUrl = buildImageUrl(conviviente.foto_perfil_url);
+                              const summaryMetrics = getSummaryMetrics(
+                                convivientesSummaryMap[conviviente.id]
+                              );
+
+                              return (
+                                <article key={conviviente.id} className="card">
+                                  <div className="card-body space-y-4">
+                                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                                      <div className="flex items-center gap-4">
+                                        {avatarUrl ? (
+                                          <button
+                                            type="button"
+                                            className="block"
+                                            onClick={() =>
+                                              openConvivientePhotoModal(
+                                                avatarUrl,
+                                                [conviviente.nombre, conviviente.apellidos]
+                                                  .filter(Boolean)
+                                                  .join(" ") || "Conviviente"
+                                              )
+                                            }
+                                            aria-label="Ver foto de perfil"
+                                          >
+                                            <img
+                                              src={avatarUrl}
+                                              alt={
+                                                [conviviente.nombre, conviviente.apellidos]
+                                                  .filter(Boolean)
+                                                  .join(" ") || "Conviviente"
+                                              }
+                                              className="h-16 w-16 rounded-full border border-ui-border object-cover"
+                                            />
+                                          </button>
+                                        ) : (
+                                          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary">
+                                            {getInitials(conviviente)}
+                                          </div>
+                                        )}
+
+                                        <div className="min-w-0">
+                                          <p className="text-lg font-semibold text-ui-text">
+                                            {[conviviente.nombre, conviviente.apellidos]
+                                              .filter(Boolean)
+                                              .join(" ") || "Sin nombre"}
+                                          </p>
+                                          <p className="mt-1 text-sm text-ui-text-secondary">
+                                            Habitación #{conviviente.habitacion_id}
+                                          </p>
+                                          <p className="mt-1 text-xs text-ui-text-secondary">
+                                            Entrada: {formatDate(conviviente.fecha_entrada)}
+                                          </p>
+                                        </div>
+                                      </div>
+
+                                      <span className="badge badge-info">
+                                        Total votos: {summaryMetrics.total}
+                                      </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">
+                                          Limpieza
+                                        </p>
+                                        <p className="mt-1 text-lg font-semibold text-ui-text">
+                                          {formatMetric(summaryMetrics.limpieza)}
+                                        </p>
+                                      </div>
+
+                                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+                                          Ruido
+                                        </p>
+                                        <p className="mt-1 text-lg font-semibold text-ui-text">
+                                          {formatMetric(summaryMetrics.ruido)}
+                                        </p>
+                                      </div>
+
+                                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                                        <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
+                                          Puntualidad pagos
+                                        </p>
+                                        <p className="mt-1 text-lg font-semibold text-ui-text">
+                                          {formatMetric(summaryMetrics.pagos)}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </article>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </section>
+                ) : null}
+
                 {activeTab === "habitaciones" ? (
                   <section className="space-y-4">
                     <div className="flex items-center justify-between gap-3">
@@ -1217,7 +1659,7 @@ export default function PisoManagerDetail() {
                         Total cargadas: {habitaciones.length}
                       </span>
                     </div>
-                
+
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                       <div className="rounded-xl border border-amber-300 bg-amber-50">
                         <div className="card-body">
@@ -1229,7 +1671,7 @@ export default function PisoManagerDetail() {
                           </p>
                         </div>
                       </div>
-                
+
                       <div className="rounded-xl border border-emerald-300 bg-emerald-50">
                         <div className="card-body">
                           <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
@@ -1240,7 +1682,7 @@ export default function PisoManagerDetail() {
                           </p>
                         </div>
                       </div>
-                
+
                       <div className="rounded-xl border border-sky-300 bg-sky-50">
                         <div className="card-body">
                           <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
@@ -1252,11 +1694,11 @@ export default function PisoManagerDetail() {
                         </div>
                       </div>
                     </div>
-                
+
                     {createHabitacionSuccess ? (
                       <div className="alert-success">{createHabitacionSuccess}</div>
                     ) : null}
-            
+
                     <div className="space-y-4">
                       {!isCreateHabitacionOpen ? (
                         <div className="flex justify-start">
@@ -1269,7 +1711,7 @@ export default function PisoManagerDetail() {
                           </button>
                         </div>
                       ) : null}
-            
+
                       <div
                         className={`overflow-hidden transition-all duration-500 ease-out ${
                           isCreateHabitacionOpen
@@ -1289,7 +1731,7 @@ export default function PisoManagerDetail() {
                                 </p>
                               </div>
                             </div>
-                      
+
                             <form className="space-y-4" onSubmit={handleCreateHabitacion}>
                               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                                 <div className="md:col-span-2">
@@ -1307,7 +1749,7 @@ export default function PisoManagerDetail() {
                                     placeholder="Ej. Habitación luminosa con escritorio"
                                   />
                                 </div>
-                      
+
                                 <div className="md:col-span-2">
                                   <label className="label" htmlFor="new-descripcion">
                                     Descripción
@@ -1322,7 +1764,7 @@ export default function PisoManagerDetail() {
                                     placeholder="Describe brevemente la habitación"
                                   />
                                 </div>
-                      
+
                                 <div>
                                   <label className="label" htmlFor="new-precio_mensual">
                                     Precio mensual
@@ -1338,7 +1780,7 @@ export default function PisoManagerDetail() {
                                     disabled={creatingHabitacion}
                                   />
                                 </div>
-                      
+
                                 <div>
                                   <label className="label" htmlFor="new-tamano_m2">
                                     Tamaño (m²)
@@ -1354,7 +1796,7 @@ export default function PisoManagerDetail() {
                                     disabled={creatingHabitacion}
                                   />
                                 </div>
-                      
+
                                 <div>
                                   <label className="label" htmlFor="new-disponible">
                                     Disponibilidad
@@ -1371,7 +1813,7 @@ export default function PisoManagerDetail() {
                                     <option value="false">No disponible</option>
                                   </select>
                                 </div>
-                      
+
                                 <div>
                                   <label className="label" htmlFor="new-amueblada">
                                     Amueblada
@@ -1388,7 +1830,7 @@ export default function PisoManagerDetail() {
                                     <option value="false">No</option>
                                   </select>
                                 </div>
-                      
+
                                 <div>
                                   <label className="label" htmlFor="new-bano">
                                     Baño
@@ -1405,7 +1847,7 @@ export default function PisoManagerDetail() {
                                     <option value="false">No</option>
                                   </select>
                                 </div>
-                      
+
                                 <div>
                                   <label className="label" htmlFor="new-balcon">
                                     Balcón
@@ -1423,7 +1865,7 @@ export default function PisoManagerDetail() {
                                   </select>
                                 </div>
                               </div>
-                      
+
                               <div className="flex items-center justify-end gap-2">
                                 <button
                                   type="button"
@@ -1433,7 +1875,7 @@ export default function PisoManagerDetail() {
                                 >
                                   Cancelar
                                 </button>
-                      
+
                                 <button
                                   type="button"
                                   className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
@@ -1442,7 +1884,7 @@ export default function PisoManagerDetail() {
                                 >
                                   Limpiar
                                 </button>
-                      
+
                                 <button
                                   type="submit"
                                   className="btn btn-primary"
@@ -1457,7 +1899,7 @@ export default function PisoManagerDetail() {
                         </div>
                       </div>
                     </div>
-                      
+
                     {habitaciones.length === 0 ? (
                       <div className="rounded-xl border border-slate-300 bg-slate-50">
                         <div className="card-body">
@@ -1471,7 +1913,7 @@ export default function PisoManagerDetail() {
                         {habitaciones.map((habitacion) => {
                           const roomCover = buildImageUrl(habitacion.cover_foto_habitacion_url);
                           const isInactive = !habitacion.activo;
-                        
+
                           return (
                             <article
                               key={habitacion.id}
@@ -1489,7 +1931,7 @@ export default function PisoManagerDetail() {
                                   <span className="h-1 w-1 rounded-full bg-white" />
                                 </span>
                               </button>
-                          
+
                               {openHabitacionMenuId === habitacion.id ? (
                                 <div
                                   className="absolute right-3 top-12 z-30 min-w-[180px] rounded-lg border border-ui-border bg-white p-2 shadow-modal"
@@ -1514,7 +1956,7 @@ export default function PisoManagerDetail() {
                                   )}
                                 </div>
                               ) : null}
-            
+
                               <div className="card-body flex flex-1 flex-col">
                                 <div
                                   role="button"
@@ -1539,12 +1981,12 @@ export default function PisoManagerDetail() {
                                   ) : (
                                     <div className="skeleton aspect-[4/3] w-full rounded-md" />
                                   )}
-            
+
                                   <div className="flex items-start justify-between gap-2">
                                     <h4 className="min-h-[56px] text-base font-semibold text-ui-text">
                                       {habitacion.titulo || "Sin título"}
                                     </h4>
-                                
+
                                     <div className="flex flex-wrap items-center justify-end gap-2">
                                       <span
                                         className={
@@ -1553,7 +1995,7 @@ export default function PisoManagerDetail() {
                                       >
                                         {habitacion.activo ? "Activa" : "Inactiva"}
                                       </span>
-                                      
+
                                       <span
                                         className={
                                           habitacion.disponible ? "badge badge-info" : "badge badge-warning"
@@ -1563,7 +2005,7 @@ export default function PisoManagerDetail() {
                                       </span>
                                     </div>
                                   </div>
-                                      
+
                                   <p className="text-sm text-ui-text-secondary">
                                     <span className="font-medium text-ui-text">
                                       {formatEur(habitacion.precio_mensual)}
@@ -1571,14 +2013,14 @@ export default function PisoManagerDetail() {
                                     / mes
                                     {habitacion.tamano_m2 ? ` · ${habitacion.tamano_m2} m²` : ""}
                                   </p>
-                                      
+
                                   <p className="text-xs text-ui-text-secondary">
                                     {habitacion.amueblada ? "Amueblada · " : ""}
                                     {habitacion.bano ? "Baño · " : ""}
                                     {habitacion.balcon ? "Balcón" : ""}
                                   </p>
                                 </div>
-                                      
+
                                 {habitacionCardFeedback[habitacion.id] ? (
                                   <div
                                     className={`mt-4 ${
@@ -1730,6 +2172,24 @@ export default function PisoManagerDetail() {
             <div className="text-center text-sm text-ui-text-secondary">
               Foto {selectedPisoPhotoIndex + 1} de {fotosPiso.length}
             </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal
+        open={isConvivientePhotoModalOpen}
+        title="Foto de perfil"
+        onClose={closeConvivientePhotoModal}
+        size="default"
+        closeLabel="Cerrar"
+      >
+        {selectedConvivientePhoto.url ? (
+          <div className="space-y-4">
+            <img
+              src={selectedConvivientePhoto.url}
+              alt={selectedConvivientePhoto.alt || "Foto de perfil"}
+              className="max-h-[80vh] w-full rounded-lg object-contain"
+            />
           </div>
         ) : null}
       </Modal>
