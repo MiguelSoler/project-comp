@@ -1686,7 +1686,7 @@ export default function PisoManagerDetail() {
 
                                       <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
                                         <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
-                                          Puntualidad con los pagos
+                                          Puntualid. pagos
                                         </p>
                                         <p className="mt-1 text-lg font-semibold text-ui-text">
                                           {formatMetric(

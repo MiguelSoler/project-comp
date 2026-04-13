@@ -96,7 +96,7 @@ function PersonAvatar({ entity, onOpen, sizeClassName = "h-14 w-14" }) {
   );
 }
 
-function OccupantMetric({ label, value, tone = "neutral" }) {
+function OccupantMetric({ label, value, tone = "neutral", compact = false }) {
   const toneClasses =
     tone === "success"
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
@@ -107,8 +107,17 @@ function OccupantMetric({ label, value, tone = "neutral" }) {
           : "border-slate-200 bg-slate-50 text-slate-700";
 
   return (
-    <div className={`rounded-lg border p-2 text-center ${toneClasses}`}>
-      <p className="text-[11px] font-medium uppercase tracking-wide">{label}</p>
+    <div
+      className={`rounded-lg border text-center ${compact ? "px-1.0 py-2" : "p-2"} ${toneClasses}`}
+    >
+      <p
+        className={`text-[11px] font-medium uppercase leading-tight ${
+          compact ? "tracking-normal" : "tracking-wide"
+        }`}
+      >
+        {label}
+      </p>
+
       <p className="mt-1 text-base font-bold text-ui-text">{value}</p>
     </div>
   );
@@ -452,6 +461,7 @@ export default function HabitacionDetail() {
                                 label="Limpieza"
                                 value={formatMetric(ocupante.media_limpieza)}
                                 tone="success"
+                                compact
                               />
                               <OccupantMetric
                                 label="Ruido"
