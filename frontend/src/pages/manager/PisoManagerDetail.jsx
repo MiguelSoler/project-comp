@@ -569,22 +569,22 @@ export default function PisoManagerDetail() {
   async function handleConfirmDeactivateHabitacion() {
     const habitacion = habitacionToDeactivate;
     if (!habitacion) return;
-
+    
     try {
       setChangingId(habitacion.id);
       setError("");
       setSuccess("");
       setCreateHabitacionSuccess("");
-
+    
       setHabitacionCardFeedback((prev) => {
         const next = { ...prev };
         delete next[habitacion.id];
         return next;
       });
-
+    
       const data = await deactivateAdminHabitacion(habitacion.id);
       const updatedHabitacion = data?.habitacion;
-
+    
       setHabitaciones((prev) =>
         prev.map((item) =>
           item.id === habitacion.id
@@ -592,15 +592,15 @@ export default function PisoManagerDetail() {
             : item
         )
       );
-
+    
       setPiso((prev) => {
         if (!prev) return prev;
-
+      
         const wasActive = Boolean(habitacion.activo);
         const wasAvailableAndActive = Boolean(
           habitacion.activo && habitacion.disponible
         );
-
+      
         return {
           ...prev,
           habitaciones_activas: wasActive
@@ -611,7 +611,7 @@ export default function PisoManagerDetail() {
             : Number(prev.habitaciones_disponibles ?? 0),
         };
       });
-
+    
       setHabitacionCardFeedback((prev) => ({
         ...prev,
         [habitacion.id]: {
@@ -619,17 +619,24 @@ export default function PisoManagerDetail() {
           message: "Habitación desactivada correctamente.",
         },
       }));
-
+    
       setHabitacionToDeactivate(null);
     } catch (err) {
+      const message =
+        err?.error === "ROOM_OCCUPIED"
+          ? "No puedes desactivar esta habitación mientras esté ocupada."
+          : err?.error || err?.message || "No se pudo desactivar la habitación.";
+    
       setHabitacionCardFeedback((prev) => ({
         ...prev,
         [habitacion.id]: {
           type: "error",
-          message:
-            err?.error || err?.message || "No se pudo desactivar la habitación.",
+          message,
         },
       }));
+    
+      setError(message);
+      setHabitacionToDeactivate(null);
     } finally {
       setChangingId(null);
     }

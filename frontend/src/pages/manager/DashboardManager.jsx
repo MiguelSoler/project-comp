@@ -235,61 +235,72 @@ export default function DashboardManager() {
   }
 
   async function handleConfirmPisoAction() {
-    if (!pisoActionTarget || !pisoActionType) return;
-    
+    const piso = pisoActionTarget;
+    const actionType = pisoActionType;
+
+    if (!piso || !actionType) return;
+
     try {
-      setChangingPisoId(pisoActionTarget.id);
+      setChangingPisoId(piso.id);
       setError("");
-    
+
       setPisoCardFeedback((prev) => {
         const next = { ...prev };
-        delete next[pisoActionTarget.id];
+        delete next[piso.id];
         return next;
       });
-    
-      if (pisoActionType === "deactivate") {
-        await deactivateAdminPiso(pisoActionTarget.id);
+
+      if (actionType === "deactivate") {
+        await deactivateAdminPiso(piso.id);
       } else {
-        await reactivateAdminPiso(pisoActionTarget.id);
+        await reactivateAdminPiso(piso.id);
       }
-    
+
       setItems((prev) =>
         prev.map((item) =>
-          item.id === pisoActionTarget.id
+          item.id === piso.id
             ? {
                 ...item,
-                activo: pisoActionType === "reactivate",
+                activo: actionType === "reactivate",
               }
             : item
         )
       );
-    
+
       setPisoCardFeedback((prev) => ({
         ...prev,
-        [pisoActionTarget.id]: {
+        [piso.id]: {
           type: "success",
           message:
-            pisoActionType === "deactivate"
+            actionType === "deactivate"
               ? "Piso desactivado correctamente."
               : "Piso reactivado correctamente.",
         },
       }));
-    
+
       setPisoActionTarget(null);
       setPisoActionType("");
     } catch (err) {
+      const message =
+        err?.error === "PISO_HAS_ACTIVE_OCCUPANTS"
+          ? "No puedes desactivar este piso mientras tenga convivientes activos."
+          : err?.error ||
+            err?.message ||
+            (actionType === "deactivate"
+              ? "No se pudo desactivar el piso."
+              : "No se pudo reactivar el piso.");
+
       setPisoCardFeedback((prev) => ({
         ...prev,
-        [pisoActionTarget.id]: {
+        [piso.id]: {
           type: "error",
-          message:
-            err?.error ||
-            err?.message ||
-            (pisoActionType === "deactivate"
-              ? "No se pudo desactivar el piso."
-              : "No se pudo reactivar el piso."),
+          message,
         },
       }));
+
+      setError(message);
+      setPisoActionTarget(null);
+      setPisoActionType("");
     } finally {
       setChangingPisoId(null);
     }
@@ -601,6 +612,17 @@ export default function DashboardManager() {
                         {piso.descripcion || "Sin descripción."}
                       </p>
                     </div>
+                    {pisoCardFeedback[piso.id] ? (
+                      <div
+                        className={`mx-4 mb-4 ${
+                          pisoCardFeedback[piso.id].type === "success"
+                            ? "alert-success"
+                            : "alert-error"
+                        }`}
+                      >
+                        {pisoCardFeedback[piso.id].message}
+                      </div>
+                    ) : null}
                   </article>
                 );
               })}
