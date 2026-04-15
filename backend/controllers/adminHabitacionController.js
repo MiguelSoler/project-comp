@@ -737,7 +737,7 @@ const updateHabitacion = async (req, res) => {
       const occupied = await hasActiveOccupancy(client, habitacionId);
       if (occupied) {
         await client.query("ROLLBACK");
-        return res.status(409).json({ error: "ROOM_OCCUPIED" });
+        return res.status(409).json({ error: "No puedes desactivar esta habitación mientras esté ocupada" });
       }
     }
 
@@ -798,15 +798,22 @@ const deactivateHabitacion = async (req, res) => {
       requesterRol,
       habitacionId
     );
+
     if (!authz.ok) {
       await client.query("ROLLBACK");
       return authz.code === "NOT_FOUND" ? notFound(res) : forbidden(res);
     }
 
+    const occupied = await hasActiveOccupancy(client, habitacionId);
+    if (occupied) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "No puedes desactivar esta habitación mientras esté ocupada" });
+    }
+
     const upd = await client.query(
       `
       UPDATE habitacion
-      SET activo = false
+      SET activo = false, updated_at = NOW()
       WHERE id = $1
       RETURNING *
       `,

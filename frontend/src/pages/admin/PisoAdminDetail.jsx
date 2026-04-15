@@ -431,71 +431,78 @@ export default function PisoAdminDetail() {
   }
 
   async function handleConfirmDeactivateHabitacion() {
-    const habitacion = habitacionToDeactivate;
-    if (!habitacion) return;
+  const habitacion = habitacionToDeactivate;
+  if (!habitacion) return;
 
-    try {
-      setChangingId(habitacion.id);
-      setError("");
-      setSuccess("");
-      setCreateHabitacionSuccess("");
+  try {
+    setChangingId(habitacion.id);
+    setError("");
+    setSuccess("");
+    setCreateHabitacionSuccess("");
 
-      setHabitacionCardFeedback((prev) => {
-        const next = { ...prev };
-        delete next[habitacion.id];
-        return next;
-      });
+    setHabitacionCardFeedback((prev) => {
+      const next = { ...prev };
+      delete next[habitacion.id];
+      return next;
+    });
 
-      const data = await deactivateAdminHabitacion(habitacion.id);
-      const updatedHabitacion = data?.habitacion;
+    const data = await deactivateAdminHabitacion(habitacion.id);
+    const updatedHabitacion = data?.habitacion;
 
-      setHabitaciones((prev) =>
-        prev.map((item) =>
-          item.id === habitacion.id
-            ? { ...item, activo: updatedHabitacion?.activo ?? false }
-            : item
-        )
-      );
+    setHabitaciones((prev) =>
+      prev.map((item) =>
+        item.id === habitacion.id
+          ? { ...item, activo: updatedHabitacion?.activo ?? false }
+          : item
+      )
+    );
 
-      setPiso((prev) => {
-        if (!prev) return prev;
+    setPiso((prev) => {
+      if (!prev) return prev;
 
-        const wasActive = Boolean(habitacion.activo);
-        const wasAvailableAndActive = Boolean(habitacion.activo && habitacion.disponible);
+      const wasActive = Boolean(habitacion.activo);
+      const wasAvailableAndActive = Boolean(habitacion.activo && habitacion.disponible);
 
-        return {
-          ...prev,
-          habitaciones_activas: wasActive
-            ? Math.max(0, Number(prev.habitaciones_activas ?? 0) - 1)
-            : Number(prev.habitaciones_activas ?? 0),
-          habitaciones_disponibles: wasAvailableAndActive
-            ? Math.max(0, Number(prev.habitaciones_disponibles ?? 0) - 1)
-            : Number(prev.habitaciones_disponibles ?? 0),
-        };
-      });
-
-      setHabitacionCardFeedback((prev) => ({
+      return {
         ...prev,
-        [habitacion.id]: {
-          type: "success",
-          message: "Habitación desactivada correctamente.",
-        },
-      }));
+        habitaciones_activas: wasActive
+          ? Math.max(0, Number(prev.habitaciones_activas ?? 0) - 1)
+          : Number(prev.habitaciones_activas ?? 0),
+        habitaciones_disponibles: wasAvailableAndActive
+          ? Math.max(0, Number(prev.habitaciones_disponibles ?? 0) - 1)
+          : Number(prev.habitaciones_disponibles ?? 0),
+      };
+    });
 
-      setHabitacionToDeactivate(null);
-    } catch (err) {
-      setHabitacionCardFeedback((prev) => ({
-        ...prev,
-        [habitacion.id]: {
-          type: "error",
-          message: err?.error || err?.message || "No se pudo desactivar la habitación.",
-        },
-      }));
-    } finally {
-      setChangingId(null);
-    }
+    setHabitacionCardFeedback((prev) => ({
+      ...prev,
+      [habitacion.id]: {
+        type: "success",
+        message: "Habitación desactivada correctamente.",
+      },
+    }));
+
+    setHabitacionToDeactivate(null);
+  } catch (err) {
+    const message =
+      err?.error === "ROOM_OCCUPIED"
+        ? "No puedes desactivar esta habitación mientras esté ocupada."
+        : err?.error || err?.message || "No se pudo desactivar la habitación.";
+
+    setHabitacionCardFeedback((prev) => ({
+      ...prev,
+      [habitacion.id]: {
+        type: "error",
+        message,
+      },
+    }));
+
+    setError(message);
+    setHabitacionToDeactivate(null);
+  } finally {
+    setChangingId(null);
   }
-
+}
   function handlePisoPhotoFileChange(event) {
     const file = event.target.files?.[0] || null;
     setPisoUploadForm((prev) => ({ ...prev, foto: file }));

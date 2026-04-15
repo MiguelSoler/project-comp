@@ -120,69 +120,80 @@ export default function AdminPisosList() {
   }
 
   async function handleConfirmPisoAction() {
-    if (!pisoActionTarget || !pisoActionType) return;
+  const piso = pisoActionTarget;
+  const actionType = pisoActionType;
 
-    try {
-      setChangingPisoId(pisoActionTarget.id);
-      setError("");
+  if (!piso || !actionType) return;
 
-      setPisoCardFeedback((prev) => {
-        const next = { ...prev };
-        delete next[pisoActionTarget.id];
-        return next;
-      });
+  try {
+    setChangingPisoId(piso.id);
+    setError("");
 
-      if (pisoActionType === "deactivate") {
-        await deactivateAdminPiso(pisoActionTarget.id);
-      } else {
-        await reactivateAdminPiso(pisoActionTarget.id);
-      }
+    setPisoCardFeedback((prev) => {
+      const next = { ...prev };
+      delete next[piso.id];
+      return next;
+    });
 
-      if (activoFilter === "all") {
-        setItems((prev) =>
-          prev.map((item) =>
-            item.id === pisoActionTarget.id
-              ? {
-                  ...item,
-                  activo: pisoActionType === "reactivate",
-                }
-              : item
-          )
-        );
-      } else {
-        setReloadKey((prev) => prev + 1);
-      }
-
-      setPisoCardFeedback((prev) => ({
-        ...prev,
-        [pisoActionTarget.id]: {
-          type: "success",
-          message:
-            pisoActionType === "deactivate"
-              ? "Piso desactivado correctamente."
-              : "Piso reactivado correctamente.",
-        },
-      }));
-
-      setPisoActionTarget(null);
-      setPisoActionType("");
-    } catch (err) {
-      setPisoCardFeedback((prev) => ({
-        ...prev,
-        [pisoActionTarget.id]: {
-          type: "error",
-          message:
-            err?.error ||
-            err?.message ||
-            (pisoActionType === "deactivate"
-              ? "No se pudo desactivar el piso."
-              : "No se pudo reactivar el piso."),
-        },
-      }));
-    } finally {
-      setChangingPisoId(null);
+    if (actionType === "deactivate") {
+      await deactivateAdminPiso(piso.id);
+    } else {
+      await reactivateAdminPiso(piso.id);
     }
+
+    if (activoFilter === "all") {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === piso.id
+            ? {
+                ...item,
+                activo: actionType === "reactivate",
+              }
+            : item
+        )
+      );
+    } else {
+      setReloadKey((prev) => prev + 1);
+    }
+
+    setPisoCardFeedback((prev) => ({
+      ...prev,
+      [piso.id]: {
+        type: "success",
+        message:
+          actionType === "deactivate"
+            ? "Piso desactivado correctamente."
+            : "Piso reactivado correctamente.",
+      },
+    }));
+
+    setPisoActionTarget(null);
+    setPisoActionType("");
+  } catch (err) {
+    const message =
+      err?.error === "PISO_HAS_ACTIVE_OCCUPANTS"
+        ? "No puedes desactivar este piso mientras tenga convivientes activos."
+        : err?.error ||
+          err?.message ||
+          (actionType === "deactivate"
+            ? "No se pudo desactivar el piso."
+            : "No se pudo reactivar el piso.");
+
+    setPisoCardFeedback((prev) => ({
+      ...prev,
+      [piso.id]: {
+        type: "error",
+        message,
+      },
+    }));
+
+    setError(message);
+    setPisoActionTarget(null);
+    setPisoActionType("");
+  } finally {
+    setChangingPisoId(null);
   }
+}
 
   const hasPrev = page > 1;
   const hasNext = page < totalPages;

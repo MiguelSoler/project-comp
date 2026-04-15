@@ -19,6 +19,23 @@ async function getPisoForAdminFoto(client, pisoId) {
     return q.rowCount ? q.rows[0] : null;
 }
 
+async function pisoHasActiveOccupants(client, pisoId) {
+  const q = await client.query(
+    `
+    SELECT 1
+    FROM usuario_habitacion uh
+    JOIN habitacion h ON h.id = uh.habitacion_id
+    WHERE h.piso_id = $1
+      AND uh.fecha_salida IS NULL
+      AND uh.estado = 'active'
+    LIMIT 1
+    `,
+    [pisoId]
+  );
+
+  return q.rowCount > 0;
+}
+
 function toInt(value, fallback) {
     const n = parseInt(value, 10);
     return Number.isFinite(n) ? n : fallback;
@@ -972,22 +989,31 @@ const createPiso = async (req, res) => {
 // PATCH /api/piso/:id  (routes ya restringen advertiser/admin)
 // Aquí validamos: admin o manager_usuario_id
 const updatePiso = async (req, res) => {
-  try {
-    const pisoId = toInt(req.params.pisoId, NaN);
-    if (!Number.isFinite(pisoId)) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", details: ["pisoId"] });
-    }
+  const pisoId = toInt(req.params.pisoId, NaN);
+  if (!Number.isFinite(pisoId)) {
+    return res.status(400).json({
+      error: "VALIDATION_ERROR",
+      details: ["pisoId"],
+    });
+  }
 
-    const current = await pool.query(
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const current = await client.query(
       `
       SELECT id, manager_usuario_id, activo
       FROM piso
       WHERE id = $1
+      LIMIT 1
       `,
       [pisoId]
     );
 
     if (current.rowCount === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "NOT_FOUND" });
     }
 
@@ -996,6 +1022,7 @@ const updatePiso = async (req, res) => {
     const isManager = Number(piso.manager_usuario_id) === Number(req.user?.id);
 
     if (!isAdmin && !isManager) {
+      await client.query("ROLLBACK");
       return res.status(403).json({ error: "FORBIDDEN" });
     }
 
@@ -1030,16 +1057,26 @@ const updatePiso = async (req, res) => {
 
     if (direccion !== undefined) {
       if (!direccion) {
-        return res.status(400).json({ error: "VALIDATION_ERROR", details: ["direccion"] });
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          error: "VALIDATION_ERROR",
+          details: ["direccion"],
+        });
       }
+
       params.push(direccion);
       updates.push(`direccion = $${idx++}`);
     }
 
     if (ciudad !== undefined) {
       if (!ciudad) {
-        return res.status(400).json({ error: "VALIDATION_ERROR", details: ["ciudad"] });
+        await client.query("ROLLBACK");
+        return res.status(400).json({
+          error: "VALIDATION_ERROR",
+          details: ["ciudad"],
+        });
       }
+
       params.push(ciudad);
       updates.push(`ciudad = $${idx++}`);
     }
@@ -1055,17 +1092,27 @@ const updatePiso = async (req, res) => {
     }
 
     if (activo !== undefined) {
+      if (activo === false && piso.activo === true) {
+        const hasActiveOccupants = await pisoHasActiveOccupants(client, pisoId);
+
+        if (hasActiveOccupants) {
+          await client.query("ROLLBACK");
+          return res.status(409).json({ error: "No puedes desactivar este piso mientras tenga convivientes activos" });
+        }
+      }
+
       params.push(activo);
       updates.push(`activo = $${idx++}`);
     }
 
     if (updates.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: "NO_FIELDS_TO_UPDATE" });
     }
 
     params.push(pisoId);
 
-    const result = await pool.query(
+    const result = await client.query(
       `
       UPDATE piso
       SET ${updates.join(", ")}, updated_at = NOW()
@@ -1075,31 +1122,45 @@ const updatePiso = async (req, res) => {
       params
     );
 
+    await client.query("COMMIT");
+
     return res.json({ piso: result.rows[0] });
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("updatePiso error:", err);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
+  } finally {
+    client.release();
   }
 };
 
 // DELETE /api/piso/:id  (soft delete)
 const deletePiso = async (req, res) => {
-  try {
-    const pisoId = toInt(req.params.pisoId, NaN);
-    if (!Number.isFinite(pisoId)) {
-      return res.status(400).json({ error: "VALIDATION_ERROR", details: ["pisoId"] });
-    }
+  const pisoId = toInt(req.params.pisoId, NaN);
+  if (!Number.isFinite(pisoId)) {
+    return res.status(400).json({
+      error: "VALIDATION_ERROR",
+      details: ["pisoId"],
+    });
+  }
 
-    const current = await pool.query(
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const current = await client.query(
       `
-      SELECT id, manager_usuario_id
+      SELECT id, manager_usuario_id, activo
       FROM piso
       WHERE id = $1
+      LIMIT 1
       `,
       [pisoId]
     );
 
     if (current.rowCount === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "NOT_FOUND" });
     }
 
@@ -1108,10 +1169,17 @@ const deletePiso = async (req, res) => {
     const isManager = Number(piso.manager_usuario_id) === Number(req.user?.id);
 
     if (!isAdmin && !isManager) {
+      await client.query("ROLLBACK");
       return res.status(403).json({ error: "FORBIDDEN" });
     }
 
-    const result = await pool.query(
+    const hasActiveOccupants = await pisoHasActiveOccupants(client, pisoId);
+    if (hasActiveOccupants) {
+      await client.query("ROLLBACK");
+      return res.status(409).json({ error: "No puedes desactivar este piso mientras tenga convivientes activos" });
+    }
+
+    const result = await client.query(
       `
       UPDATE piso
       SET activo = false, updated_at = NOW()
@@ -1122,13 +1190,19 @@ const deletePiso = async (req, res) => {
     );
 
     if (result.rowCount === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ error: "NOT_FOUND" });
     }
 
+    await client.query("COMMIT");
+
     return res.json({ ok: true });
   } catch (err) {
+    await client.query("ROLLBACK");
     console.error("deletePiso error:", err);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
+  } finally {
+    client.release();
   }
 };
 

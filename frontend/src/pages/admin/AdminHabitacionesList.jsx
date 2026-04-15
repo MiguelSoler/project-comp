@@ -150,69 +150,80 @@ export default function AdminHabitacionesList() {
   }
 
   async function handleConfirmHabitacionAction() {
-    if (!habitacionActionTarget || !habitacionActionType) return;
+  const habitacion = habitacionActionTarget;
+  const actionType = habitacionActionType;
 
-    try {
-      setChangingHabitacionId(habitacionActionTarget.id);
-      setError("");
+  if (!habitacion || !actionType) return;
 
-      setHabitacionCardFeedback((prev) => {
-        const next = { ...prev };
-        delete next[habitacionActionTarget.id];
-        return next;
-      });
+  try {
+    setChangingHabitacionId(habitacion.id);
+    setError("");
 
-      if (habitacionActionType === "deactivate") {
-        await deactivateAdminHabitacion(habitacionActionTarget.id);
-      } else {
-        await reactivateAdminHabitacion(habitacionActionTarget.id);
-      }
+    setHabitacionCardFeedback((prev) => {
+      const next = { ...prev };
+      delete next[habitacion.id];
+      return next;
+    });
 
-      if (activoFilter === "all") {
-        setItems((prev) =>
-          prev.map((item) =>
-            item.id === habitacionActionTarget.id
-              ? {
-                  ...item,
-                  activo: habitacionActionType === "reactivate",
-                }
-              : item
-          )
-        );
-      } else {
-        setReloadKey((prev) => prev + 1);
-      }
-
-      setHabitacionCardFeedback((prev) => ({
-        ...prev,
-        [habitacionActionTarget.id]: {
-          type: "success",
-          message:
-            habitacionActionType === "deactivate"
-              ? "Habitación desactivada correctamente."
-              : "Habitación reactivada correctamente.",
-        },
-      }));
-
-      setHabitacionActionTarget(null);
-      setHabitacionActionType("");
-    } catch (err) {
-      setHabitacionCardFeedback((prev) => ({
-        ...prev,
-        [habitacionActionTarget.id]: {
-          type: "error",
-          message:
-            err?.error ||
-            err?.message ||
-            (habitacionActionType === "deactivate"
-              ? "No se pudo desactivar la habitación."
-              : "No se pudo reactivar la habitación."),
-        },
-      }));
-    } finally {
-      setChangingHabitacionId(null);
+    if (actionType === "deactivate") {
+      await deactivateAdminHabitacion(habitacion.id);
+    } else {
+      await reactivateAdminHabitacion(habitacion.id);
     }
+
+    if (activoFilter === "all") {
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === habitacion.id
+            ? {
+                ...item,
+                activo: actionType === "reactivate",
+              }
+            : item
+        )
+      );
+    } else {
+      setReloadKey((prev) => prev + 1);
+    }
+
+    setHabitacionCardFeedback((prev) => ({
+      ...prev,
+      [habitacion.id]: {
+        type: "success",
+        message:
+          actionType === "deactivate"
+            ? "Habitación desactivada correctamente."
+            : "Habitación reactivada correctamente.",
+      },
+    }));
+
+    setHabitacionActionTarget(null);
+    setHabitacionActionType("");
+  } catch (err) {
+    const message =
+      err?.error === "ROOM_OCCUPIED"
+        ? "No puedes desactivar esta habitación mientras esté ocupada."
+        : err?.error ||
+          err?.message ||
+          (actionType === "deactivate"
+            ? "No se pudo desactivar la habitación."
+            : "No se pudo reactivar la habitación.");
+
+    setHabitacionCardFeedback((prev) => ({
+      ...prev,
+      [habitacion.id]: {
+        type: "error",
+        message,
+      },
+    }));
+
+    setError(message);
+    setHabitacionActionTarget(null);
+    setHabitacionActionType("");
+  } finally {
+    setChangingHabitacionId(null);
   }
+}
 
   const hasPrev = page > 1;
   const hasNext = page < totalPages;
