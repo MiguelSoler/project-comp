@@ -109,7 +109,7 @@ function getMetricVoteItems(reputacionActual, metricKey) {
   return Array.isArray(items) ? items : [];
 }
 
-function MiniVoteList({ items = [] }) {
+function MiniVoteList({ items = [], onOpen }) {
   if (!items.length) {
     return (
       <p className="mt-2 text-xs text-ui-text-secondary">
@@ -131,13 +131,24 @@ function MiniVoteList({ items = [] }) {
             title={voterName}
           >
             {voterPhoto ? (
-              <img
-                src={voterPhoto}
-                alt={voterName}
-                className="h-6 w-6 rounded-full object-cover"
-              />
+              <button
+                type="button"
+                className="block cursor-pointer rounded-full"
+                onClick={() => onOpen?.(voterPhoto, voterName)}
+                aria-label={`Ver foto de ${voterName}`}
+                title={voterName}
+              >
+                <img
+                  src={voterPhoto}
+                  alt={voterName}
+                  className="h-6 w-6 rounded-full object-cover"
+                />
+              </button>
             ) : (
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-ui-text-secondary">
+              <div
+                className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[10px] font-semibold text-ui-text-secondary"
+                title={voterName}
+              >
                 {getInitials(item.votante)}
               </div>
             )}
@@ -1676,7 +1687,7 @@ export default function PisoManagerDetail() {
                                             reputacionActual?.medias?.limpieza
                                           )}
                                         </p>
-                                        <MiniVoteList items={limpiezaVotes} />
+                                        <MiniVoteList items={limpiezaVotes} onOpen={openConvivientePhotoModal}/>
                                       </div>
 
                                       <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
@@ -1688,7 +1699,7 @@ export default function PisoManagerDetail() {
                                             reputacionActual?.medias?.ruido
                                           )}
                                         </p>
-                                        <MiniVoteList items={ruidoVotes} />
+                                        <MiniVoteList items={ruidoVotes} onOpen={openConvivientePhotoModal}/>
                                       </div>
 
                                       <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
@@ -1700,7 +1711,7 @@ export default function PisoManagerDetail() {
                                             reputacionActual?.medias?.puntualidad_pagos
                                           )}
                                         </p>
-                                        <MiniVoteList items={pagosVotes} />
+                                        <MiniVoteList items={pagosVotes} onOpen={openConvivientePhotoModal}/>
                                       </div>
                                     </div>
                                   </div>

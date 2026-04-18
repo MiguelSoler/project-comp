@@ -18,6 +18,22 @@ function toBool(value) {
   return undefined;
 }
 
+function avgNumbers(values = []) {
+  const valid = values
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value));
+
+  if (valid.length === 0) return null;
+
+  return valid.reduce((acc, value) => acc + value, 0) / valid.length;
+}
+
+function round2(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return null;
+  return Number(n.toFixed(2));
+}
+
 const badRequest = (res, details = []) =>
   res.status(400).json({ error: "VALIDATION_ERROR", details });
 
@@ -368,10 +384,10 @@ const getHabitacionById = async (req, res) => {
 
     const habitacion = q.rows[0];
 
-    // Público: ocultar si piso o habitación están inactivos
-    if (!habitacion.piso_activo || !habitacion.activo) return notFound(res);
+    if (!habitacion.piso_activo || !habitacion.activo) {
+      return notFound(res);
+    }
 
-    // Fotos de la habitación
     const fotosQ = await pool.query(
       `
       SELECT id, habitacion_id, url, orden, created_at
@@ -382,103 +398,210 @@ const getHabitacionById = async (req, res) => {
       [habitacionId]
     );
 
-    // Resumen de convivencia actual del piso
-    const convivenciaQ = await pool.query(
+    const convivientesQ = await pool.query(
       `
-      WITH current_occupants AS (
-        SELECT DISTINCT u.id
-        FROM usuario_habitacion uh2
-        JOIN habitacion h2 ON h2.id = uh2.habitacion_id
-        JOIN usuario u ON u.id = uh2.usuario_id
-        WHERE h2.piso_id = $1
-          AND uh2.fecha_salida IS NULL
-          AND uh2.estado = 'active'
-          AND u.activo = true
-      ),
-      occupant_scores AS (
-        SELECT
-          co.id AS usuario_id,
-          COUNT(vu.id)::int AS total_votos,
-          ROUND(
-            AVG(
-              ((vu.limpieza + vu.ruido + vu.puntualidad_pagos)::numeric / 3)
-            ),
-            2
-          ) AS media_global,
-          ROUND(AVG(vu.limpieza)::numeric, 2) AS media_limpieza,
-          ROUND(AVG(vu.ruido)::numeric, 2) AS media_ruido,
-          ROUND(AVG(vu.puntualidad_pagos)::numeric, 2) AS media_puntualidad_pagos
-        FROM current_occupants co
-        LEFT JOIN voto_usuario vu ON vu.votado_id = co.id
-        GROUP BY co.id
-      )
       SELECT
-        COUNT(*)::int AS convivientes_actuales,
-        COUNT(*) FILTER (WHERE os.total_votos > 0)::int AS convivientes_con_votos,
-        ROUND(AVG(os.media_global) FILTER (WHERE os.total_votos > 0), 2) AS media_global,
-        ROUND(AVG(os.media_limpieza) FILTER (WHERE os.total_votos > 0), 2) AS media_limpieza,
-        ROUND(AVG(os.media_ruido) FILTER (WHERE os.total_votos > 0), 2) AS media_ruido,
-        ROUND(
-          AVG(os.media_puntualidad_pagos) FILTER (WHERE os.total_votos > 0),
-          2
-        ) AS media_puntualidad_pagos
-      FROM current_occupants co
-      LEFT JOIN occupant_scores os ON os.usuario_id = co.id
+        u.id,
+        u.nombre,
+        u.apellidos,
+        u.foto_perfil_url,
+        uh.habitacion_id,
+        h_current.titulo AS habitacion_titulo,
+        uh.fecha_entrada
+      FROM usuario_habitacion uh
+      JOIN habitacion h_current ON h_current.id = uh.habitacion_id
+      JOIN usuario u ON u.id = uh.usuario_id
+      WHERE h_current.piso_id = $1
+        AND uh.fecha_salida IS NULL
+        AND uh.estado = 'active'
+        AND u.activo = true
+      ORDER BY uh.fecha_entrada ASC, u.id ASC
       `,
       [habitacion.piso_id]
     );
 
-    // Ocupantes actuales del piso con desglose de reputación
-    const ocupantesQ = await pool.query(
+    const convivientes = convivientesQ.rows.map((row) => ({
+      id: Number(row.id),
+      nombre: row.nombre,
+      apellidos: row.apellidos,
+      foto_perfil_url: row.foto_perfil_url,
+      habitacion_id: Number(row.habitacion_id),
+      habitacion_titulo: row.habitacion_titulo,
+      fecha_entrada: row.fecha_entrada,
+    }));
+
+    if (convivientes.length === 0) {
+      return res.json({
+        habitacion,
+        fotos: fotosQ.rows,
+        manager: {
+          id: habitacion.manager_usuario_id,
+          nombre: habitacion.manager_nombre,
+          telefono: habitacion.manager_telefono,
+          foto_perfil_url: habitacion.manager_foto_perfil_url,
+        },
+        convivencia_actual: {
+          convivientes_actuales: 0,
+          convivientes_con_votos: 0,
+          total_votos_actuales: 0,
+          medias: {
+            limpieza: null,
+            ruido: null,
+            puntualidad_pagos: null,
+          },
+          media_global: null,
+          media_limpieza: null,
+          media_ruido: null,
+          media_puntualidad_pagos: null,
+        },
+        ocupantes_actuales: [],
+      });
+    }
+
+    const convivienteIds = convivientes.map((item) => item.id);
+
+    const votosQ = await pool.query(
       `
-      WITH current_occupants AS (
-        SELECT
-          u.id,
-          u.nombre,
-          u.foto_perfil_url,
-          uh.habitacion_id,
-          uh.fecha_entrada
-        FROM usuario_habitacion uh
-        JOIN habitacion h ON h.id = uh.habitacion_id
-        JOIN usuario u ON u.id = uh.usuario_id
-        WHERE h.piso_id = $1
-          AND uh.fecha_salida IS NULL
-          AND uh.estado = 'active'
-          AND u.activo = true
-      ),
-      occupant_scores AS (
-        SELECT
-          co.id AS usuario_id,
-          COUNT(vu.id)::int AS total_votos,
-          ROUND(
-            AVG(
-              ((vu.limpieza + vu.ruido + vu.puntualidad_pagos)::numeric / 3)
-            ),
-            2
-          ) AS media_global,
-          ROUND(AVG(vu.limpieza)::numeric, 2) AS media_limpieza,
-          ROUND(AVG(vu.ruido)::numeric, 2) AS media_ruido,
-          ROUND(AVG(vu.puntualidad_pagos)::numeric, 2) AS media_puntualidad_pagos
-        FROM current_occupants co
-        LEFT JOIN voto_usuario vu ON vu.votado_id = co.id
-        GROUP BY co.id
-      )
       SELECT
-        co.id,
-        co.nombre,
-        co.foto_perfil_url,
-        co.habitacion_id,
-        co.fecha_entrada,
-        os.total_votos,
-        os.media_global,
-        os.media_limpieza,
-        os.media_ruido,
-        os.media_puntualidad_pagos
-      FROM current_occupants co
-      LEFT JOIN occupant_scores os ON os.usuario_id = co.id
-      ORDER BY co.fecha_entrada ASC, co.id ASC
+        vu.id,
+        vu.piso_id,
+        vu.votante_id,
+        vu.votado_id,
+        vu.limpieza,
+        vu.ruido,
+        vu.puntualidad_pagos,
+        vu.num_cambios,
+        vu.created_at,
+        vu.updated_at,
+
+        votante.nombre AS votante_nombre,
+        votante.apellidos AS votante_apellidos,
+        votante.foto_perfil_url AS votante_foto_perfil_url
+      FROM voto_usuario vu
+      JOIN usuario votante ON votante.id = vu.votante_id
+      WHERE vu.piso_id = $1
+        AND vu.votante_id = ANY($2::int[])
+        AND vu.votado_id = ANY($2::int[])
+        AND vu.votante_id <> vu.votado_id
+      ORDER BY vu.updated_at DESC, vu.id DESC
       `,
-      [habitacion.piso_id]
+      [habitacion.piso_id, convivienteIds]
+    );
+
+    const votosActuales = votosQ.rows.map((row) => ({
+      id: Number(row.id),
+      piso_id: Number(row.piso_id),
+      votante_id: Number(row.votante_id),
+      votado_id: Number(row.votado_id),
+      limpieza: Number(row.limpieza),
+      ruido: Number(row.ruido),
+      puntualidad_pagos: Number(row.puntualidad_pagos),
+      num_cambios: Number(row.num_cambios || 0),
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      votante: {
+        id: Number(row.votante_id),
+        nombre: row.votante_nombre,
+        apellidos: row.votante_apellidos,
+        foto_perfil_url: row.votante_foto_perfil_url,
+      },
+    }));
+
+    function buildDetalleMetricas(votosRecibidos) {
+      return {
+        limpieza: votosRecibidos.map((vote) => ({
+          voto_id: vote.id,
+          valor: vote.limpieza,
+          created_at: vote.created_at,
+          updated_at: vote.updated_at,
+          votante: vote.votante,
+        })),
+        ruido: votosRecibidos.map((vote) => ({
+          voto_id: vote.id,
+          valor: vote.ruido,
+          created_at: vote.created_at,
+          updated_at: vote.updated_at,
+          votante: vote.votante,
+        })),
+        puntualidad_pagos: votosRecibidos.map((vote) => ({
+          voto_id: vote.id,
+          valor: vote.puntualidad_pagos,
+          created_at: vote.created_at,
+          updated_at: vote.updated_at,
+          votante: vote.votante,
+        })),
+      };
+    }
+
+    function buildReputacionActualForUser(userId) {
+      const votosRecibidos = votosActuales.filter(
+        (vote) => Number(vote.votado_id) === Number(userId)
+      );
+
+      const limpieza = round2(avgNumbers(votosRecibidos.map((vote) => vote.limpieza)));
+      const ruido = round2(avgNumbers(votosRecibidos.map((vote) => vote.ruido)));
+      const puntualidad_pagos = round2(
+        avgNumbers(votosRecibidos.map((vote) => vote.puntualidad_pagos))
+      );
+
+      const media_global = round2(
+        avgNumbers(
+          votosRecibidos.map(
+            (vote) =>
+              (Number(vote.limpieza) +
+                Number(vote.ruido) +
+                Number(vote.puntualidad_pagos)) / 3
+          )
+        )
+      );
+
+      return {
+        total_votos: votosRecibidos.length,
+        medias: {
+          limpieza,
+          ruido,
+          puntualidad_pagos,
+        },
+        media_global,
+        detalle_votos: buildDetalleMetricas(votosRecibidos),
+      };
+    }
+
+    const ocupantesActuales = convivientes.map((conviviente) => {
+      const reputacionActual = buildReputacionActualForUser(conviviente.id);
+
+      return {
+        ...conviviente,
+        reputacion_actual: reputacionActual,
+
+        // Alias para compatibilidad con el frontend público actual
+        total_votos: reputacionActual.total_votos,
+        media_global: reputacionActual.media_global,
+        media_limpieza: reputacionActual.medias.limpieza,
+        media_ruido: reputacionActual.medias.ruido,
+        media_puntualidad_pagos: reputacionActual.medias.puntualidad_pagos,
+      };
+    });
+
+    const convivientesConVotos = ocupantesActuales.filter(
+      (item) => Number(item.reputacion_actual?.total_votos || 0) > 0
+    ).length;
+
+    const limpiezaMedia = round2(avgNumbers(votosActuales.map((vote) => vote.limpieza)));
+    const ruidoMedio = round2(avgNumbers(votosActuales.map((vote) => vote.ruido)));
+    const pagosMedios = round2(
+      avgNumbers(votosActuales.map((vote) => vote.puntualidad_pagos))
+    );
+
+    const mediaGlobal = round2(
+      avgNumbers(
+        votosActuales.map(
+          (vote) =>
+            (Number(vote.limpieza) +
+              Number(vote.ruido) +
+              Number(vote.puntualidad_pagos)) / 3
+        )
+      )
     );
 
     return res.json({
@@ -490,15 +613,23 @@ const getHabitacionById = async (req, res) => {
         telefono: habitacion.manager_telefono,
         foto_perfil_url: habitacion.manager_foto_perfil_url,
       },
-      convivencia_actual: convivenciaQ.rows[0] || {
-        convivientes_actuales: 0,
-        convivientes_con_votos: 0,
-        media_global: null,
-        media_limpieza: null,
-        media_ruido: null,
-        media_puntualidad_pagos: null,
+      convivencia_actual: {
+        convivientes_actuales: ocupantesActuales.length,
+        convivientes_con_votos: convivientesConVotos,
+        total_votos_actuales: votosActuales.length,
+        medias: {
+          limpieza: limpiezaMedia,
+          ruido: ruidoMedio,
+          puntualidad_pagos: pagosMedios,
+        },
+        media_global: mediaGlobal,
+
+        // Alias para compatibilidad con el frontend público actual
+        media_limpieza: limpiezaMedia,
+        media_ruido: ruidoMedio,
+        media_puntualidad_pagos: pagosMedios,
       },
-      ocupantes_actuales: ocupantesQ.rows,
+      ocupantes_actuales: ocupantesActuales,
     });
   } catch (error) {
     console.error("getHabitacionById error:", error);

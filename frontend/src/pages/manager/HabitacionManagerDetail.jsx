@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
@@ -121,21 +121,36 @@ function getInitials(entity) {
     .join("");
 }
 
-function buildPersonAvatar(entity) {
+function buildPersonAvatar(
+  entity,
+  { onOpen, sizeClassName = "h-14 w-14" } = {}
+) {
   const photoUrl = buildImageUrl(entity?.foto_perfil_url);
+  const displayName = formatDisplayName(entity);
 
   if (photoUrl) {
     return (
-      <img
-        src={photoUrl}
-        alt={formatDisplayName(entity)}
-        className="h-14 w-14 rounded-full object-cover"
-      />
+      <button
+        type="button"
+        className="block overflow-hidden rounded-full"
+        onClick={() => onOpen?.(photoUrl, displayName)}
+        aria-label={`Ver foto de ${displayName}`}
+        title={displayName}
+      >
+        <img
+          src={photoUrl}
+          alt={displayName}
+          className={`${sizeClassName} rounded-full object-cover`}
+        />
+      </button>
     );
   }
 
   return (
-    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-brand-primary">
+    <div
+      className={`flex items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-brand-primary ${sizeClassName}`}
+      title={displayName}
+    >
       {getInitials(entity)}
     </div>
   );
@@ -237,6 +252,28 @@ function MetricCard({ title, value, tone = "neutral" }) {
   );
 }
 
+function CompactMetricCard({ title, value, tone = "neutral" }) {
+  const toneClasses =
+    tone === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-50 text-amber-700"
+        : tone === "info"
+          ? "border-sky-200 bg-sky-50 text-sky-700"
+          : tone === "violet"
+            ? "border-violet-200 bg-violet-50 text-violet-700"
+            : "border-slate-200 bg-slate-50 text-slate-700";
+
+  return (
+    <div className={`rounded-lg border px-3 py-2.5 ${toneClasses}`}>
+      <p className="text-[11px] font-medium uppercase leading-tight tracking-wide">
+        {title}
+      </p>
+      <p className="mt-1 text-lg font-bold text-ui-text">{value}</p>
+    </div>
+  );
+}
+
 function getHistorialItems(data) {
   if (Array.isArray(data?.items)) return data.items;
   if (Array.isArray(data?.historial)) return data.historial;
@@ -281,6 +318,74 @@ function normalizeSummary(summary) {
     total_votos: source?.total_votos ?? summary?.total_votos ?? 0,
     media_global: source?.media_global ?? summary?.media_global ?? null,
   };
+}
+
+function getDateTimestamp(value) {
+  if (!value) return 0;
+  const ts = new Date(value).getTime();
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+function buildCandidatePisoActivity(candidateResult) {
+  const reputacionPorPiso = Array.isArray(candidateResult?.reputacion?.por_piso)
+    ? candidateResult.reputacion.por_piso
+    : [];
+
+  const historialEstancias = Array.isArray(candidateResult?.historial_estancias)
+    ? candidateResult.historial_estancias
+    : [];
+
+  const byPiso = new Map();
+
+  reputacionPorPiso.forEach((item) => {
+    const pisoId = Number(item?.piso?.id);
+    if (!Number.isFinite(pisoId)) return;
+
+    byPiso.set(pisoId, {
+      pisoId,
+      piso: item.piso,
+      reputacion: item,
+      estancias: [],
+      sortValue: getDateTimestamp(item?.last_vote_at),
+    });
+  });
+
+  historialEstancias.forEach((stay) => {
+    const pisoId = Number(stay?.piso_id);
+    if (!Number.isFinite(pisoId)) return;
+
+    if (!byPiso.has(pisoId)) {
+      byPiso.set(pisoId, {
+        pisoId,
+        piso: {
+          id: stay.piso_id,
+          ciudad: stay.ciudad,
+          direccion: stay.direccion,
+        },
+        reputacion: null,
+        estancias: [],
+        sortValue: 0,
+      });
+    }
+
+    const entry = byPiso.get(pisoId);
+    entry.estancias.push(stay);
+    entry.sortValue = Math.max(
+      entry.sortValue,
+      getDateTimestamp(stay?.fecha_entrada),
+      getDateTimestamp(stay?.fecha_salida)
+    );
+  });
+
+  return Array.from(byPiso.values())
+    .map((item) => ({
+      ...item,
+      estancias: [...item.estancias].sort(
+        (a, b) =>
+          getDateTimestamp(b?.fecha_entrada) - getDateTimestamp(a?.fecha_entrada)
+      ),
+    }))
+    .sort((a, b) => b.sortValue - a.sortValue);
 }
 
 export default function HabitacionManagerDetail() {
@@ -960,6 +1065,11 @@ export default function HabitacionManagerDetail() {
     Boolean(habitacion?.activo) &&
     Boolean(habitacion?.disponible);
 
+  const candidatePisoActivity = useMemo(
+    () => buildCandidatePisoActivity(candidateResult),
+    [candidateResult]
+  );
+
   return (
     <>
       <PageShell
@@ -1446,7 +1556,9 @@ export default function HabitacionManagerDetail() {
                         <div className="card-body space-y-4">
                           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                             <div className="flex items-center gap-4">
-                              {buildPersonAvatar(currentOccupant)}
+                              {buildPersonAvatar(currentOccupant, {
+                                onOpen: openHistorialPhotoModal,
+                              })}
 
                               <div className="space-y-2">
                                 <div className="flex flex-wrap items-center gap-2">
@@ -1531,7 +1643,9 @@ export default function HabitacionManagerDetail() {
                               <div className="card-body space-y-5">
                                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                   <div className="flex items-center gap-4">
-                                    {buildPersonAvatar(candidateResult.user)}
+                                    {buildPersonAvatar(candidateResult.user, {
+                                      onOpen: openHistorialPhotoModal,
+                                    })}
 
                                     <div className="space-y-2">
                                       <div className="flex flex-wrap items-center gap-2">
@@ -1586,27 +1700,27 @@ export default function HabitacionManagerDetail() {
                                   </button>
                                 </div>
 
-                                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                                  <MetricCard
+                                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                                  <CompactMetricCard
                                     title="Total votos"
                                     value={candidateResult.reputacion?.global?.total_votos ?? 0}
                                     tone="violet"
                                   />
-                                  <MetricCard
+                                  <CompactMetricCard
                                     title="Limpieza"
                                     value={formatMetric(
                                       candidateResult.reputacion?.global?.medias?.limpieza
                                     )}
                                     tone="success"
                                   />
-                                  <MetricCard
+                                  <CompactMetricCard
                                     title="Ruido"
                                     value={formatMetric(
                                       candidateResult.reputacion?.global?.medias?.ruido
                                     )}
                                     tone="warning"
                                   />
-                                  <MetricCard
+                                  <CompactMetricCard
                                     title="Pagos"
                                     value={formatMetric(
                                       candidateResult.reputacion?.global?.medias?.puntualidad_pagos
@@ -1635,7 +1749,7 @@ export default function HabitacionManagerDetail() {
                                         <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
                                           Email
                                         </p>
-                                        <p className="mt-1 text-sm font-semibold break-all text-ui-text">
+                                        <p className="mt-1 break-all text-sm font-semibold text-ui-text">
                                           {candidateResult.user.email}
                                         </p>
                                       </div>
@@ -1728,144 +1842,116 @@ export default function HabitacionManagerDetail() {
                               <div className="card-body space-y-4">
                                 <div className="flex items-center justify-between gap-3">
                                   <h5 className="text-lg font-semibold text-ui-text">
-                                    Reputación por piso
+                                    Actividad por piso
                                   </h5>
                                   <span className="text-xs text-ui-text-secondary">
-                                    Total: {candidateResult.reputacion?.por_piso?.length || 0}
+                                    Total pisos: {candidatePisoActivity.length}
                                   </span>
                                 </div>
 
-                                {candidateResult.reputacion?.por_piso?.length > 0 ? (
+                                {candidatePisoActivity.length > 0 ? (
                                   <div className="space-y-4">
-                                    {candidateResult.reputacion.por_piso.map((item) => (
+                                    {candidatePisoActivity.map((item) => (
                                       <div
-                                        key={item.piso.id}
+                                        key={`candidate-piso-${item.pisoId}`}
                                         className="rounded-xl border border-slate-300 bg-slate-50 p-4"
                                       >
-                                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                                           <div>
                                             <p className="text-sm font-semibold text-ui-text">
-                                              Piso #{item.piso.id}
+                                              Piso #{item.piso?.id || item.pisoId}
                                             </p>
                                             <p className="mt-1 text-sm text-ui-text-secondary">
-                                              {item.piso.ciudad || "—"} · {item.piso.direccion || "—"}
+                                              {item.piso?.ciudad || "—"} · {item.piso?.direccion || "—"}
                                             </p>
                                           </div>
 
-                                          <span className="badge badge-neutral">
-                                            {item.total_votos} votos
-                                          </span>
-                                        </div>
-
-                                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-                                          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                                            <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">
-                                              Limpieza
-                                            </p>
-                                            <p className="mt-1 text-lg font-bold text-ui-text">
-                                              {formatMetric(item.medias?.limpieza)}
-                                            </p>
-                                          </div>
-
-                                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                                            <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
-                                              Ruido
-                                            </p>
-                                            <p className="mt-1 text-lg font-bold text-ui-text">
-                                              {formatMetric(item.medias?.ruido)}
-                                            </p>
-                                          </div>
-
-                                          <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
-                                            <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
-                                              Pagos
-                                            </p>
-                                            <p className="mt-1 text-lg font-bold text-ui-text">
-                                              {formatMetric(item.medias?.puntualidad_pagos)}
-                                            </p>
+                                          <div className="flex flex-wrap items-center gap-2">
+                                            <span className="badge badge-neutral">
+                                              Estancias: {item.estancias.length}
+                                            </span>
+                                            <span className="badge badge-neutral">
+                                              Votos: {item.reputacion?.total_votos ?? 0}
+                                            </span>
                                           </div>
                                         </div>
 
-                                        <p className="mt-3 text-xs text-ui-text-secondary">
-                                          Último voto: {formatDateTime(item.last_vote_at)}
-                                        </p>
-                                      </div>
-                                    ))}
-                                  </div>
-                                ) : (
-                                  <div className="rounded-xl border border-slate-300 bg-slate-50">
-                                    <div className="card-body">
-                                      <p className="text-sm text-ui-text-secondary">
-                                        Este usuario todavía no tiene reputación por piso.
-                                      </p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="card">
-                              <div className="card-body space-y-4">
-                                <div className="flex items-center justify-between gap-3">
-                                  <h5 className="text-lg font-semibold text-ui-text">
-                                    Historial de estancias
-                                  </h5>
-                                  <span className="text-xs text-ui-text-secondary">
-                                    Total: {candidateResult.historial_estancias?.length || 0}
-                                  </span>
-                                </div>
-
-                                {candidateResult.historial_estancias?.length > 0 ? (
-                                  <div className="space-y-4">
-                                    {candidateResult.historial_estancias.map((stay) => (
-                                      <div
-                                        key={stay.usuario_habitacion_id}
-                                        className="rounded-xl border border-slate-300 bg-slate-50 p-4"
-                                      >
-                                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                                          <div>
-                                            <p className="text-sm font-semibold text-ui-text">
-                                              Piso #{stay.piso_id}
-                                            </p>
-                                            <p className="mt-1 text-sm text-ui-text-secondary">
-                                              {stay.ciudad || "—"} · {stay.direccion || "—"}
-                                            </p>
-                                          </div>
-
-                                          <span className={getStayStateBadgeClass(stay.estado)}>
-                                            {getStayStateLabel(stay.estado)}
-                                          </span>
+                                        <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+                                          <CompactMetricCard
+                                            title="Limpieza"
+                                            value={formatMetric(item.reputacion?.medias?.limpieza)}
+                                            tone="success"
+                                          />
+                                          <CompactMetricCard
+                                            title="Ruido"
+                                            value={formatMetric(item.reputacion?.medias?.ruido)}
+                                            tone="warning"
+                                          />
+                                          <CompactMetricCard
+                                            title="Pagos"
+                                            value={formatMetric(
+                                              item.reputacion?.medias?.puntualidad_pagos
+                                            )}
+                                            tone="info"
+                                          />
+                                          <CompactMetricCard
+                                            title="Últ. voto"
+                                            value={
+                                              item.reputacion?.last_vote_at
+                                                ? formatDate(item.reputacion.last_vote_at)
+                                                : "—"
+                                            }
+                                            tone="violet"
+                                          />
                                         </div>
 
-                                        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
-                                          <div className="rounded-lg border border-slate-200 bg-white p-3">
-                                            <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-                                              Habitación
-                                            </p>
-                                            <p className="mt-1 text-sm font-semibold text-ui-text">
-                                              {stay.habitacion_titulo || `#${stay.habitacion_id}`}
-                                            </p>
+                                        <div className="mt-4 rounded-xl border border-white/80 bg-white p-4">
+                                          <div className="flex items-center justify-between gap-3">
+                                            <h6 className="text-sm font-semibold text-ui-text">
+                                              Estancias en este piso
+                                            </h6>
+                                            <span className="text-xs text-ui-text-secondary">
+                                              {item.estancias.length} registradas
+                                            </span>
                                           </div>
 
-                                          <div className="rounded-lg border border-slate-200 bg-white p-3">
-                                            <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-                                              Entrada
-                                            </p>
-                                            <p className="mt-1 text-sm font-semibold text-ui-text">
-                                              {formatDateTime(stay.fecha_entrada)}
-                                            </p>
-                                          </div>
+                                          {item.estancias.length > 0 ? (
+                                            <div className="mt-4 space-y-3">
+                                              {item.estancias.map((stay) => (
+                                                <div
+                                                  key={stay.usuario_habitacion_id}
+                                                  className="rounded-lg border border-slate-200 bg-slate-50/80 p-3"
+                                                >
+                                                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                                    <div>
+                                                      <p className="text-sm font-semibold text-ui-text">
+                                                        {stay.habitacion_titulo || `Habitación #${stay.habitacion_id}`}
+                                                      </p>
 
-                                          <div className="rounded-lg border border-slate-200 bg-white p-3">
-                                            <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-                                              Salida
+                                                      <p className="mt-1 text-xs text-ui-text-secondary">
+                                                        Entrada: {formatDateTime(stay.fecha_entrada)}
+                                                      </p>
+
+                                                      <p className="mt-1 text-xs text-ui-text-secondary">
+                                                        Salida:{" "}
+                                                        {stay.fecha_salida
+                                                          ? formatDateTime(stay.fecha_salida)
+                                                          : "Activa"}
+                                                      </p>
+                                                    </div>
+
+                                                    <span className={getStayStateBadgeClass(stay.estado)}>
+                                                      {getStayStateLabel(stay.estado)}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          ) : (
+                                            <p className="mt-3 text-sm text-ui-text-secondary">
+                                              Sin estancias registradas en este piso.
                                             </p>
-                                            <p className="mt-1 text-sm font-semibold text-ui-text">
-                                              {stay.fecha_salida
-                                                ? formatDateTime(stay.fecha_salida)
-                                                : "Activa"}
-                                            </p>
-                                          </div>
+                                          )}
                                         </div>
                                       </div>
                                     ))}
@@ -1874,7 +1960,7 @@ export default function HabitacionManagerDetail() {
                                   <div className="rounded-xl border border-slate-300 bg-slate-50">
                                     <div className="card-body">
                                       <p className="text-sm text-ui-text-secondary">
-                                        Este usuario todavía no tiene estancias registradas.
+                                        Este usuario todavía no tiene actividad registrada por piso.
                                       </p>
                                     </div>
                                   </div>
@@ -1945,7 +2031,6 @@ export default function HabitacionManagerDetail() {
                       <div className="space-y-4">
                         {historialItems.map((item) => {
                           const usuario = getHistorialUser(item);
-                          const avatarUrl = buildImageUrl(usuario?.foto_perfil_url);
                           const reputacionGlobal = normalizeSummary(getHistorialReputationGlobal(item));
                           const reputacionPiso = normalizeSummary(getHistorialReputationPiso(item));
                           const displayName = formatDisplayName(usuario);
@@ -1959,22 +2044,9 @@ export default function HabitacionManagerDetail() {
                               <div className="card-body space-y-5">
                                 <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                                   <div className="flex items-center gap-4">
-                                    {avatarUrl ? (
-                                      <button
-                                        type="button"
-                                        className="block"
-                                        onClick={() => openHistorialPhotoModal(avatarUrl, displayName)}
-                                        aria-label={`Ver foto de ${displayName}`}
-                                      >
-                                        <img
-                                          src={avatarUrl}
-                                          alt={displayName}
-                                          className="h-14 w-14 rounded-full object-cover"
-                                        />
-                                      </button>
-                                    ) : (
-                                      buildPersonAvatar(usuario)
-                                    )}
+                                    {buildPersonAvatar(usuario, {
+                                      onOpen: openHistorialPhotoModal,
+                                    })}
 
                                     <div className="space-y-2">
                                       <div className="flex flex-wrap items-center gap-2">
