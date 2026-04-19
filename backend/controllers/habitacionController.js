@@ -398,6 +398,17 @@ const getHabitacionById = async (req, res) => {
       [habitacionId]
     );
 
+
+    const fotosPisoQ = await pool.query(
+      `
+      SELECT id, piso_id, url, orden, created_at
+      FROM foto_piso
+      WHERE piso_id = $1
+      ORDER BY orden ASC, id ASC
+      `,
+      [habitacion.piso_id]
+    );
+
     const convivientesQ = await pool.query(
       `
       SELECT
@@ -434,6 +445,7 @@ const getHabitacionById = async (req, res) => {
       return res.json({
         habitacion,
         fotos: fotosQ.rows,
+        fotos_piso: fotosPisoQ.rows,
         manager: {
           id: habitacion.manager_usuario_id,
           nombre: habitacion.manager_nombre,
@@ -607,6 +619,7 @@ const getHabitacionById = async (req, res) => {
     return res.json({
       habitacion,
       fotos: fotosQ.rows,
+      fotos_piso: fotosPisoQ.rows,
       manager: {
         id: habitacion.manager_usuario_id,
         nombre: habitacion.manager_nombre,

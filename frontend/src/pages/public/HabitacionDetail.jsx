@@ -149,7 +149,7 @@ function MiniVoteList({ items = [], onOpen }) {
             {voterPhoto ? (
               <button
                 type="button"
-                className="overflow-hidden rounded-full"
+                className="overflow-hidden rounded-full cursor-pointer"
                 onClick={() => onOpen(voterPhoto, voterName)}
                 aria-label={`Abrir foto de ${voterName}`}
                 title={voterName}
@@ -219,11 +219,25 @@ function ConvivienteMetricPanel({
   );
 }
 
+function GallerySourceBadge({ source }) {
+  const classes =
+    source === "piso"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : "border-sky-200 bg-sky-50 text-sky-700";
+
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${classes}`}>
+      {source === "piso" ? "Piso" : "Habitación"}
+    </span>
+  );
+}
+
 export default function HabitacionDetail() {
   const { habitacionId } = useParams();
 
   const [habitacion, setHabitacion] = useState(null);
   const [fotos, setFotos] = useState([]);
+  const [fotosPiso, setFotosPiso] = useState([]);
   const [manager, setManager] = useState(null);
   const [convivenciaActual, setConvivenciaActual] = useState(null);
   const [ocupantesActuales, setOcupantesActuales] = useState([]);
@@ -232,17 +246,28 @@ export default function HabitacionDetail() {
   const [errorMsg, setErrorMsg] = useState("");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [activeImage, setActiveImage] = useState(null);
+  const [modalMode, setModalMode] = useState(null);
+  const [singleModalImage, setSingleModalImage] = useState(null);
+  const [modalGalleryIndex, setModalGalleryIndex] = useState(0);
 
-  function openImage(url, label = "Foto") {
+  function openSingleImage(url, label = "Foto") {
     if (!url) return;
-    setActiveImage({ url, label });
+    setSingleModalImage({ url, label });
+    setModalMode("single");
+    setIsModalOpen(true);
+  }
+
+  function openGalleryModal(index = 0) {
+    if (!galleryImages.length) return;
+    setModalGalleryIndex(index);
+    setModalMode("gallery");
     setIsModalOpen(true);
   }
 
   function closeImage() {
     setIsModalOpen(false);
-    setActiveImage(null);
+    setModalMode(null);
+    setSingleModalImage(null);
   }
 
   function scrollToConvivencia() {
@@ -269,6 +294,7 @@ export default function HabitacionDetail() {
 
         setHabitacion(res?.habitacion || null);
         setFotos(Array.isArray(res?.fotos) ? res.fotos : []);
+        setFotosPiso(Array.isArray(res?.fotos_piso) ? res.fotos_piso : []);
         setManager(res?.manager || null);
         setConvivenciaActual(res?.convivencia_actual || null);
         setOcupantesActuales(Array.isArray(res?.ocupantes_actuales) ? res.ocupantes_actuales : []);
@@ -278,6 +304,7 @@ export default function HabitacionDetail() {
         setErrorMsg(err?.error || err?.message || "No se pudo cargar la habitación.");
         setHabitacion(null);
         setFotos([]);
+        setFotosPiso([]);
         setManager(null);
         setConvivenciaActual(null);
         setOcupantesActuales([]);
@@ -298,10 +325,87 @@ export default function HabitacionDetail() {
     return Boolean(habitacion.disponible) && !Boolean(habitacion.ocupada);
   }, [habitacion]);
 
-  const coverUrl = useMemo(() => {
-    if (fotos.length > 0) return buildImageUrl(fotos[0]?.url);
-    return null;
-  }, [fotos]);
+  const galleryImages = useMemo(() => {
+    const roomImages = fotos
+      .map((foto, index) => {
+        const url = buildImageUrl(foto.url);
+        if (!url) return null;
+
+        return {
+          key: `habitacion-${foto.id}`,
+          source: "habitacion",
+          url,
+          alt: `Foto de la habitación ${index + 1}`,
+          label:
+            fotos.length > 1
+              ? `Foto de la habitación ${index + 1}`
+              : habitacion?.titulo || "Habitación",
+        };
+      })
+      .filter(Boolean);
+
+    const pisoImages = fotosPiso
+      .map((foto, index) => {
+        const url = buildImageUrl(foto.url);
+        if (!url) return null;
+
+        return {
+          key: `piso-${foto.id}`,
+          source: "piso",
+          url,
+          alt: `Foto del piso ${index + 1}`,
+          label: `Foto del piso ${index + 1}`,
+        };
+      })
+      .filter(Boolean);
+
+    return [...roomImages, ...pisoImages];
+  }, [fotos, fotosPiso, habitacion?.titulo]);
+
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
+
+  useEffect(() => {
+    setActiveGalleryIndex(0);
+  }, [habitacionId]);
+
+  useEffect(() => {
+    if (activeGalleryIndex >= galleryImages.length) {
+      setActiveGalleryIndex(0);
+    }
+  }, [galleryImages.length, activeGalleryIndex]);
+
+  useEffect(() => {
+    if (modalGalleryIndex >= galleryImages.length) {
+      setModalGalleryIndex(0);
+    }
+  }, [galleryImages.length, modalGalleryIndex]);
+
+  function showPrevGalleryImage() {
+    setActiveGalleryIndex((prev) =>
+      prev === 0 ? galleryImages.length - 1 : prev - 1
+    );
+  }
+
+  function showNextGalleryImage() {
+    setActiveGalleryIndex((prev) =>
+      prev === galleryImages.length - 1 ? 0 : prev + 1
+    );
+  }
+
+  function showPrevModalGalleryImage() {
+    setModalGalleryIndex((prev) =>
+      prev === 0 ? galleryImages.length - 1 : prev - 1
+    );
+  }
+
+  function showNextModalGalleryImage() {
+    setModalGalleryIndex((prev) =>
+      prev === galleryImages.length - 1 ? 0 : prev + 1
+    );
+  }
+
+  const currentGalleryImage = galleryImages[activeGalleryIndex] || null;
+  const currentModalGalleryImage = galleryImages[modalGalleryIndex] || null;
 
   const convivenciaMediaGlobal = formatMetric(convivenciaActual?.media_global);
 
@@ -363,6 +467,16 @@ export default function HabitacionDetail() {
           <div className="grid gap-6 lg:grid-cols-12">
             <div className="space-y-4 lg:col-span-8">
               <div className="skeleton aspect-[4/3] w-full" />
+
+              <div className="flex gap-3 overflow-hidden">
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="skeleton h-24 min-w-[110px] flex-1 rounded-xl"
+                  />
+                ))}
+              </div>
+
               <div className="card">
                 <div className="card-body space-y-3">
                   <div className="skeleton h-4 w-3/4" />
@@ -427,42 +541,98 @@ export default function HabitacionDetail() {
         <div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-12">
             <div className="space-y-6 lg:col-span-8">
-              {coverUrl ? (
-                <img
-                  className="aspect-[4/3] w-full cursor-zoom-in rounded-lg border border-ui-border object-cover"
-                  src={coverUrl}
-                  alt={habitacion.titulo}
-                  loading="lazy"
-                  onClick={() => openImage(coverUrl, habitacion.titulo || "Habitación")}
-                />
+              {currentGalleryImage ? (
+                <div className="space-y-3">
+                  <div className="relative overflow-hidden rounded-lg border border-ui-border bg-white">
+                    <button
+                      type="button"
+                      className="block w-full cursor-pointer"
+                      onClick={() => openGalleryModal(activeGalleryIndex)}
+                    >
+                      <img
+                        className="aspect-[4/3] w-full object-cover"
+                        src={currentGalleryImage.url}
+                        alt={currentGalleryImage.alt}
+                        loading="lazy"
+                      />
+                    </button>
+
+                    <div className="absolute left-3 top-3">
+                      <GallerySourceBadge source={currentGalleryImage.source} />
+                    </div>
+
+                    {galleryImages.length > 1 ? (
+                      <>
+                        <button
+                          type="button"
+                          className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                          onClick={showPrevGalleryImage}
+                          aria-label="Foto anterior"
+                        >
+                          &lt;
+                        </button>
+
+                        <button
+                          type="button"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                          onClick={showNextGalleryImage}
+                          aria-label="Foto siguiente"
+                        >
+                          &gt;
+                        </button>
+
+                        <div className="absolute bottom-3 right-3 rounded-full border border-black/10 bg-black/65 px-3 py-1 text-xs font-medium text-white">
+                          {activeGalleryIndex + 1} / {galleryImages.length}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+
+                  {galleryImages.length > 1 ? (
+                    <div className="flex gap-3 overflow-x-auto pb-1">
+                      {galleryImages.map((image, index) => {
+                        const isActive = index === activeGalleryIndex;
+
+                        return (
+                          <button
+                            key={image.key}
+                            type="button"
+                            className={`relative min-w-[110px] overflow-hidden rounded-xl border transition-all ${
+                              isActive
+                                ? "border-brand-primary ring-2 ring-blue-200"
+                                : "border-ui-border hover:border-sky-300"
+                            }`}
+                            onClick={() => setActiveGalleryIndex(index)}
+                            aria-label={image.label}
+                            title={image.label}
+                          >
+                            <img
+                              src={image.url}
+                              alt={image.alt}
+                              className="h-24 w-[110px] object-cover"
+                              loading="lazy"
+                            />
+
+                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-2 py-2 text-left">
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                  image.source === "piso"
+                                    ? "bg-emerald-100 text-emerald-700"
+                                    : "bg-sky-100 text-sky-700"
+                                }`}
+                              >
+                                {image.source === "piso" ? "Piso" : "Habitación"}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                </div>
               ) : (
                 <div className="skeleton aspect-[4/3] w-full" />
               )}
-
-              {fotos.length > 1 ? (
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  {fotos.slice(0, 8).map((f) => {
-                    const url = buildImageUrl(f.url);
-
-                    return (
-                      <button
-                        key={f.id}
-                        type="button"
-                        className="cursor-zoom-in overflow-hidden rounded-md border border-ui-border"
-                        onClick={() => openImage(url, `Foto ${f.orden + 1}`)}
-                        aria-label={`Abrir foto ${f.orden + 1}`}
-                      >
-                        <img
-                          className="aspect-[4/3] w-full object-cover"
-                          src={url}
-                          alt={`Foto ${f.orden + 1}`}
-                          loading="lazy"
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : null}
 
               <div className="card">
                 <div className="card-body space-y-3">
@@ -540,7 +710,7 @@ export default function HabitacionDetail() {
                   {manager ? (
                     <div className="rounded-xl border border-sky-200 bg-sky-50 p-4">
                       <div className="flex items-center gap-3">
-                        <PersonAvatar entity={manager} onOpen={openImage} />
+                        <PersonAvatar entity={manager} onOpen={openSingleImage} />
 
                         <div className="min-w-0">
                           <p className="truncate text-sm font-semibold text-ui-text">
@@ -689,7 +859,7 @@ export default function HabitacionDetail() {
                           <div className="flex items-center gap-4">
                             <PersonAvatar
                               entity={ocupante}
-                              onOpen={openImage}
+                              onOpen={openSingleImage}
                               sizeClassName="h-16 w-16"
                             />
 
@@ -724,7 +894,7 @@ export default function HabitacionDetail() {
                             )}
                             tone="success"
                             items={limpiezaVotes}
-                            onOpen={openImage}
+                            onOpen={openSingleImage}
                           />
 
                           <ConvivienteMetricPanel
@@ -734,7 +904,7 @@ export default function HabitacionDetail() {
                             )}
                             tone="warning"
                             items={ruidoVotes}
-                            onOpen={openImage}
+                            onOpen={openSingleImage}
                           />
 
                           <ConvivienteMetricPanel
@@ -745,7 +915,7 @@ export default function HabitacionDetail() {
                             )}
                             tone="info"
                             items={pagosVotes}
-                            onOpen={openImage}
+                            onOpen={openSingleImage}
                           />
                         </div>
                       </div>
@@ -760,14 +930,87 @@ export default function HabitacionDetail() {
 
       <Modal
         open={isModalOpen}
-        title={activeImage?.label || "Foto"}
+        title={
+          modalMode === "gallery"
+            ? currentModalGalleryImage?.label || "Foto"
+            : singleModalImage?.label || "Foto"
+        }
         onClose={closeImage}
       >
-        {activeImage ? (
+        {modalMode === "gallery" && currentModalGalleryImage ? (
+          <div className="space-y-4">
+            <div className="relative">
+              <img
+                className="max-h-[82vh] w-full rounded-lg object-contain"
+                src={currentModalGalleryImage.url}
+                alt={currentModalGalleryImage.alt}
+              />
+
+              <div className="absolute left-3 top-3">
+                <GallerySourceBadge source={currentModalGalleryImage.source} />
+              </div>
+
+              {galleryImages.length > 1 ? (
+                <>
+                  <button
+                    type="button"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                    onClick={showPrevModalGalleryImage}
+                    aria-label="Foto anterior"
+                  >
+                    &lt;
+                  </button>
+
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                    onClick={showNextModalGalleryImage}
+                    aria-label="Foto siguiente"
+                  >
+                    &gt;
+                  </button>
+                </>
+              ) : null}
+            </div>
+
+            {galleryImages.length > 1 ? (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {galleryImages.map((image, index) => {
+                  const isActive = index === modalGalleryIndex;
+
+                  return (
+                    <button
+                      key={`modal-${image.key}`}
+                      type="button"
+                      className={`relative min-w-[92px] overflow-hidden rounded-lg border transition-all ${
+                        isActive
+                          ? "border-brand-primary ring-2 ring-blue-200"
+                          : "border-ui-border hover:border-sky-300"
+                      }`}
+                      onClick={() => setModalGalleryIndex(index)}
+                      aria-label={image.label}
+                      title={image.label}
+                    >
+                      <img
+                        src={image.url}
+                        alt={image.alt}
+                        className="h-20 w-[92px] object-cover"
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            <div className="text-center text-sm text-ui-text-secondary">
+              Foto {modalGalleryIndex + 1} de {galleryImages.length}
+            </div>
+          </div>
+        ) : singleModalImage ? (
           <img
-            className="max-h-[75vh] w-full rounded-md object-contain"
-            src={activeImage.url}
-            alt={activeImage.label || "Foto ampliada"}
+            className="max-h-[82vh] w-full rounded-md object-contain"
+            src={singleModalImage.url}
+            alt={singleModalImage.label || "Foto ampliada"}
           />
         ) : null}
       </Modal>

@@ -40,15 +40,14 @@ export default function AppRoutes() {
   return (
     <Routes>
       <Route element={<RootLayout />}>
-        {/* Entrada principal: mostrar contenido directamente */}
-        <Route index element={<HabitacionesList />} />
+        <Route index element={<Home />} />
         <Route element={<ScrollToTop />} />
 
         {/* Auth */}
         <Route path="login" element={<Login />} />
         <Route path="register" element={<Register />} />
 
-        {/* Público: producto = habitaciones */}
+        {/* Público */}
         <Route path="habitaciones" element={<HabitacionesList />} />
         <Route path="habitaciones/:habitacionId" element={<HabitacionDetail />} />
         <Route path="usuarios/:usuarioId" element={<UsuarioPublicDetail />} />
@@ -61,8 +60,8 @@ export default function AppRoutes() {
           <Route path="convivientes/:usuarioId/votar" element={<VotarConviviente />} />
           <Route path="mis-votos" element={<MisVotos />} />
           <Route path="mi-reputacion" element={<MiReputacion />} />
-          <Route path="votos-recibidos" element={<VotosRecibidos />} />          
-          
+          <Route path="votos-recibidos" element={<VotosRecibidos />} />
+
           <Route element={<RoleGuard allowedRoles={["user"]} />}>
             <Route path="convertirse-anunciante" element={<ConvertirseEnAdvertiser />} />
           </Route>
@@ -84,7 +83,7 @@ export default function AppRoutes() {
           </Route>
         </Route>
 
-        {/* Landing opcional (si quieres conservarla) */}
+        {/* Opcional */}
         <Route path="home" element={<Home />} />
 
         {/* 404 */}
