@@ -692,32 +692,53 @@ const getMeEstancia = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const result = await pool.query(
-      `SELECT
-         uh.id,
-         uh.usuario_id,
-         uh.habitacion_id,
-         uh.fecha_entrada,
-         uh.fecha_salida,
-         uh.estado,
-         h.titulo AS habitacion_titulo,
-         p.id AS piso_id,
-         p.ciudad,
-         p.direccion
-       FROM usuario_habitacion uh
-       JOIN habitacion h ON h.id = uh.habitacion_id
-       JOIN piso p ON p.id = h.piso_id
-       WHERE uh.usuario_id = $1
-         AND uh.fecha_salida IS NULL
-       LIMIT 1`,
-      [userId]
-    );
+    const [activeStayResult, historialResult] = await Promise.all([
+      pool.query(
+        `SELECT
+           uh.id,
+           uh.usuario_id,
+           uh.habitacion_id,
+           uh.fecha_entrada,
+           uh.fecha_salida,
+           uh.estado,
+           h.titulo AS habitacion_titulo,
+           p.id AS piso_id,
+           p.ciudad,
+           p.direccion
+         FROM usuario_habitacion uh
+         JOIN habitacion h ON h.id = uh.habitacion_id
+         JOIN piso p ON p.id = h.piso_id
+         WHERE uh.usuario_id = $1
+           AND uh.fecha_salida IS NULL
+         LIMIT 1`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT
+           uh.id,
+           uh.usuario_id,
+           uh.habitacion_id,
+           uh.fecha_entrada,
+           uh.fecha_salida,
+           uh.estado,
+           h.titulo AS habitacion_titulo,
+           p.id AS piso_id,
+           p.ciudad,
+           p.direccion
+         FROM usuario_habitacion uh
+         JOIN habitacion h ON h.id = uh.habitacion_id
+         JOIN piso p ON p.id = h.piso_id
+         WHERE uh.usuario_id = $1
+           AND uh.fecha_salida IS NOT NULL
+         ORDER BY uh.fecha_entrada DESC, uh.id DESC`,
+        [userId]
+      )
+    ]);
 
-    if (result.rows.length === 0) {
-      return res.status(200).json({ stay: null });
-    }
-
-    return res.status(200).json({ stay: result.rows[0] });
+    return res.status(200).json({
+      stay: activeStayResult.rows[0] || null,
+      historial_estancias: historialResult.rows
+    });
   } catch (error) {
     console.error("Me estancia error:", error);
     return res.status(500).json({ error: "INTERNAL_ERROR" });
