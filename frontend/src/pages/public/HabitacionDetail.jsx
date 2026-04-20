@@ -936,82 +936,87 @@ export default function HabitacionDetail() {
             : singleModalImage?.label || "Foto"
         }
         onClose={closeImage}
+        size="default"
       >
         {modalMode === "gallery" && currentModalGalleryImage ? (
           <div className="space-y-4">
-            <div className="relative">
-              <img
-                className="max-h-[82vh] w-full rounded-lg object-contain"
-                src={currentModalGalleryImage.url}
-                alt={currentModalGalleryImage.alt}
-              />
-
-              <div className="absolute left-3 top-3">
-                <GallerySourceBadge source={currentModalGalleryImage.source} />
-              </div>
-
-              {galleryImages.length > 1 ? (
-                <>
-                  <button
-                    type="button"
-                    className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
-                    onClick={showPrevModalGalleryImage}
-                    aria-label="Foto anterior"
-                  >
-                    &lt;
-                  </button>
-
-                  <button
-                    type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
-                    onClick={showNextModalGalleryImage}
-                    aria-label="Foto siguiente"
-                  >
-                    &gt;
-                  </button>
-                </>
-              ) : null}
-            </div>
-
-            {galleryImages.length > 1 ? (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {galleryImages.map((image, index) => {
-                  const isActive = index === modalGalleryIndex;
-
-                  return (
+            <div className="mx-auto w-full max-w-[940px] space-y-4">
+              <div className="relative">
+                <img
+                  className="max-h-[82vh] w-full rounded-lg object-contain"
+                  src={currentModalGalleryImage.url}
+                  alt={currentModalGalleryImage.alt}
+                />
+      
+                <div className="absolute left-3 top-3">
+                  <GallerySourceBadge source={currentModalGalleryImage.source} />
+                </div>
+        
+                {galleryImages.length > 1 ? (
+                  <>
                     <button
-                      key={`modal-${image.key}`}
                       type="button"
-                      className={`relative min-w-[92px] overflow-hidden rounded-lg border transition-all ${
-                        isActive
-                          ? "border-brand-primary ring-2 ring-blue-200"
-                          : "border-ui-border hover:border-sky-300"
-                      }`}
-                      onClick={() => setModalGalleryIndex(index)}
-                      aria-label={image.label}
-                      title={image.label}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                      onClick={showPrevModalGalleryImage}
+                      aria-label="Foto anterior"
                     >
-                      <img
-                        src={image.url}
-                        alt={image.alt}
-                        className="h-20 w-[92px] object-cover"
-                      />
+                      &lt;
                     </button>
-                  );
-                })}
+                
+                    <button
+                      type="button"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                      onClick={showNextModalGalleryImage}
+                      aria-label="Foto siguiente"
+                    >
+                      &gt;
+                    </button>
+                  </>
+                ) : null}
               </div>
-            ) : null}
-
-            <div className="text-center text-sm text-ui-text-secondary">
-              Foto {modalGalleryIndex + 1} de {galleryImages.length}
+              
+              {galleryImages.length > 1 ? (
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {galleryImages.map((image, index) => {
+                    const isActive = index === modalGalleryIndex;
+                  
+                    return (
+                      <button
+                        key={`modal-${image.key}`}
+                        type="button"
+                        className={`relative min-w-[92px] overflow-hidden rounded-lg border transition-all ${
+                          isActive
+                            ? "border-brand-primary ring-2 ring-blue-200"
+                            : "border-ui-border hover:border-sky-300"
+                        }`}
+                        onClick={() => setModalGalleryIndex(index)}
+                        aria-label={image.label}
+                        title={image.label}
+                      >
+                        <img
+                          src={image.url}
+                          alt={image.alt}
+                          className="h-20 w-[92px] object-cover"
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+      
+              <div className="text-center text-sm text-ui-text-secondary">
+                Foto {modalGalleryIndex + 1} de {galleryImages.length}
+              </div>
             </div>
           </div>
         ) : singleModalImage ? (
-          <img
-            className="max-h-[82vh] w-full rounded-md object-contain"
-            src={singleModalImage.url}
-            alt={singleModalImage.label || "Foto ampliada"}
-          />
+          <div className="mx-auto w-full max-w-[860px]">
+            <img
+              className="max-h-[82vh] w-full rounded-md object-contain"
+              src={singleModalImage.url}
+              alt={singleModalImage.label || "Foto ampliada"}
+            />
+          </div>
         ) : null}
       </Modal>
     </PageShell>

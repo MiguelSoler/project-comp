@@ -8,6 +8,11 @@ function toInt(value, fallback = NaN) {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function toNumber(value, fallback = NaN) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function toBool(value) {
   if (value === undefined || value === null) return undefined;
   if (typeof value === "boolean") return value;
@@ -111,6 +116,11 @@ const listHabitaciones = async (req, res) => {
     const tamanoMax =
       req.query.tamanoMax !== undefined ? toInt(req.query.tamanoMax, NaN) : NaN;
 
+    const reputacionMin =
+      req.query.reputacionMin !== undefined
+        ? toNumber(req.query.reputacionMin, NaN)
+        : NaN;
+
     const disponible = toBool(req.query.disponible);
     const bano = toBool(req.query.bano);
     const balcon = toBool(req.query.balcon);
@@ -124,6 +134,10 @@ const listHabitaciones = async (req, res) => {
     const sortMap = {
       precio_asc: "h.precio_mensual ASC, h.id ASC",
       precio_desc: "h.precio_mensual DESC, h.id DESC",
+      reputacion_desc:
+        "convivencia.media_global DESC NULLS LAST, h.precio_mensual ASC, h.id ASC",
+      reputacion_asc:
+        "convivencia.media_global ASC NULLS LAST, h.precio_mensual ASC, h.id ASC",
       newest: "h.created_at DESC, h.id DESC",
       tamano_desc: "h.tamano_m2 DESC NULLS LAST, h.precio_mensual ASC, h.id ASC",
     };
@@ -193,6 +207,11 @@ const listHabitaciones = async (req, res) => {
       where.push(
         `to_tsvector('spanish', coalesce(h.titulo,'') || ' ' || coalesce(h.descripcion,'')) @@ plainto_tsquery('spanish', $${i++})`
       );
+    }
+
+    if (Number.isFinite(reputacionMin)) {
+      params.push(reputacionMin);
+      where.push(`convivencia.media_global >= $${i++}`);
     }
 
     params.push(limit);

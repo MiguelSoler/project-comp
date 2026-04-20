@@ -6,6 +6,7 @@ export function listHabitaciones({
   limit = 10,
   ciudad,
   precioMax,
+  reputacionMin,
   disponible,
   bano,
   balcon,
@@ -23,6 +24,9 @@ export function listHabitaciones({
   if (ciudad) params.set("ciudad", ciudad);
   if (precioMax !== undefined && precioMax !== null && precioMax !== "") {
     params.set("precioMax", String(precioMax));
+  }
+  if (reputacionMin !== undefined && reputacionMin !== null && reputacionMin !== "") {
+    params.set("reputacionMin", String(reputacionMin));
   }
   if (disponible !== undefined && disponible !== null && disponible !== "") {
     params.set("disponible", String(disponible));

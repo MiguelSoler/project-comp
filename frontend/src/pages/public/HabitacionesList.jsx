@@ -28,6 +28,7 @@ function buildImageUrl(pathOrNull) {
 const INITIAL_FILTERS = {
   ciudad: "",
   precioMax: "",
+  reputacionMin: "",
   disponible: "true",
   bano: "",
   balcon: "",
@@ -140,11 +141,11 @@ export default function HabitacionesList() {
         </div>
       }
     >
-      <div className="card mb-4">
+      <div className="card mb-4 overflow-hidden border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-violet-50 shadow-sm">
         <div className="card-body space-y-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">Búsqueda y filtros</h2>
-
+          
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -153,7 +154,7 @@ export default function HabitacionesList() {
               Limpiar filtros
             </button>
           </div>
-
+          
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
             <div>
               <label className="label" htmlFor="q">
@@ -169,7 +170,7 @@ export default function HabitacionesList() {
                 onChange={handleFilterChange}
               />
             </div>
-
+          
             <div>
               <label className="label" htmlFor="ciudad">
                 Ciudad
@@ -184,7 +185,7 @@ export default function HabitacionesList() {
                 onChange={handleFilterChange}
               />
             </div>
-
+          
             <div>
               <label className="label" htmlFor="precioMax">
                 Precio máximo
@@ -200,7 +201,7 @@ export default function HabitacionesList() {
                 onChange={handleFilterChange}
               />
             </div>
-
+          
             <div>
               <label className="label" htmlFor="tamanoMin">
                 Tamaño mínimo (m²)
@@ -216,25 +217,27 @@ export default function HabitacionesList() {
                 onChange={handleFilterChange}
               />
             </div>
-
+          
             <div>
-              <label className="label" htmlFor="sort">
+              <label className="label font-semibold text-brand-primary" htmlFor="sort">
                 Ordenar por
               </label>
               <select
                 id="sort"
                 name="sort"
-                className="select"
+                className="select border-2 border-brand-primary bg-white font-semibold text-ui-text shadow-sm focus:border-brand-primary"
                 value={filters.sort}
                 onChange={handleFilterChange}
               >
                 <option value="precio_asc">Precio: menor a mayor</option>
                 <option value="precio_desc">Precio: mayor a menor</option>
+                <option value="reputacion_desc">Reputación: mayor a menor</option>
+                <option value="reputacion_asc">Reputación: menor a mayor</option>
                 <option value="newest">Más recientes</option>
                 <option value="tamano_desc">Tamaño: mayor a menor</option>
               </select>
             </div>
-
+          
             <div>
               <label className="label" htmlFor="tamanoMax">
                 Tamaño máximo (m²)
@@ -250,7 +253,26 @@ export default function HabitacionesList() {
                 onChange={handleFilterChange}
               />
             </div>
-
+          
+            <div>
+              <label className="label" htmlFor="reputacionMin">
+                Reputación mínima
+              </label>
+              <select
+                id="reputacionMin"
+                name="reputacionMin"
+                className="select"
+                value={filters.reputacionMin}
+                onChange={handleFilterChange}
+              >
+                <option value="">Todas</option>
+                <option value="4.5">4.5 o más</option>
+                <option value="4">4 o más</option>
+                <option value="3.5">3.5 o más</option>
+                <option value="3">3 o más</option>
+              </select>
+            </div>
+          
             {isAdmin ? (
               <div>
                 <label className="label" htmlFor="disponible">
@@ -269,7 +291,7 @@ export default function HabitacionesList() {
                 </select>
               </div>
             ) : null}
-
+      
             <div>
               <label className="label" htmlFor="amueblada">
                 Amueblada
@@ -286,7 +308,7 @@ export default function HabitacionesList() {
                 <option value="false">No</option>
               </select>
             </div>
-
+          
             <div>
               <label className="label" htmlFor="bano">
                 Baño
@@ -303,7 +325,7 @@ export default function HabitacionesList() {
                 <option value="false">No</option>
               </select>
             </div>
-
+          
             <div>
               <label className="label" htmlFor="balcon">
                 Balcón
