@@ -50,10 +50,10 @@ export default function AppRoutes() {
         {/* Público */}
         <Route path="habitaciones" element={<HabitacionesList />} />
         <Route path="habitaciones/:habitacionId" element={<HabitacionDetail />} />
-        <Route path="usuarios/:usuarioId" element={<UsuarioPublicDetail />} />
 
         {/* Privado */}
         <Route element={<AuthGuard />}>
+          <Route path="usuarios/:usuarioId" element={<UsuarioPublicDetail />} />
           <Route path="perfil" element={<Perfil />} />
           <Route path="mi-estancia" element={<MiEstancia />} />
           <Route path="convivientes" element={<Convivientes />} />
@@ -83,10 +83,7 @@ export default function AppRoutes() {
           </Route>
         </Route>
 
-        {/* Opcional */}
         <Route path="home" element={<Home />} />
-
-        {/* 404 */}
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

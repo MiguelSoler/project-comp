@@ -287,6 +287,20 @@ const listMisVotosEmitidos = async (req, res) => {
             AND h_votado.piso_id = vu.piso_id
         ) AS can_edit,
 
+        EXISTS (
+          SELECT 1
+          FROM usuario_habitacion uh_votante_current
+          JOIN habitacion h_votante_current ON h_votante_current.id = uh_votante_current.habitacion_id
+          JOIN usuario_habitacion uh_votado_current ON uh_votado_current.usuario_id = vu.votado_id
+          JOIN habitacion h_votado_current ON h_votado_current.id = uh_votado_current.habitacion_id
+          WHERE uh_votante_current.usuario_id = vu.votante_id
+            AND uh_votante_current.fecha_salida IS NULL
+            AND uh_votante_current.estado = 'active'
+            AND uh_votado_current.fecha_salida IS NULL
+            AND uh_votado_current.estado = 'active'
+            AND h_votante_current.piso_id = h_votado_current.piso_id
+        ) AS can_view_profile,
+
         COUNT(*) OVER() AS total_count
       FROM voto_usuario vu
       JOIN usuario u ON u.id = vu.votado_id
@@ -305,6 +319,7 @@ const listMisVotosEmitidos = async (req, res) => {
       .map(({ total_count, ...row }) => ({
         ...row,
         can_edit: Boolean(row.can_edit),
+        can_view_profile: Boolean(row.can_view_profile),
         votado: {
           id: row.votado_id_ref,
           nombre: row.votado_nombre,

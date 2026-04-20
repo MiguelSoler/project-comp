@@ -61,6 +61,19 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function getUsuarioPublicDetailErrorMessage(error) {
+  const code = error?.error || error?.message;
+
+  switch (code) {
+    case "FORBIDDEN_CURRENT_PROFILE":
+      return "No puedes ver la reputación actual de este usuario porque ya no convivís actualmente.";
+    case "NOT_FOUND":
+      return "No se encontró el usuario.";
+    default:
+      return "No se pudo cargar el perfil del usuario.";
+  }
+}
+
 export default function UsuarioPublicDetail() {
   const { usuarioId } = useParams();
   const navigate = useNavigate();
@@ -94,7 +107,7 @@ export default function UsuarioPublicDetail() {
         setVotes(Array.isArray(votesData?.items) ? votesData.items : []);
       } catch (err) {
         if (!isMounted) return;
-        setError(err?.message || "No se pudo cargar el perfil público del usuario.");
+        setError(getUsuarioPublicDetailErrorMessage(err));
         setUsuario(null);
         setSummary(null);
         setVotes([]);
@@ -282,34 +295,62 @@ export default function UsuarioPublicDetail() {
                         return (
                           <article key={vote.id} className="card">
                             <div className="card-body space-y-4">
-                              <Link
-                                to={`/usuarios/${vote.votante?.id}`}
-                                className="group block rounded-xl border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
-                              >
-                                <div className="flex items-center gap-3">
-                                  {vote.votante?.foto_perfil_url ? (
-                                    <img
-                                      src={buildImageUrl(vote.votante.foto_perfil_url)}
-                                      alt={votanteNombre || "Usuario"}
-                                      className="h-14 w-14 rounded-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-brand-primary">
-                                      {getInitials(vote.votante)}
+                              {vote.can_view_profile ? (
+                                <Link
+                                  to={`/usuarios/${vote.votante?.id}`}
+                                  className="group block rounded-xl border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    {vote.votante?.foto_perfil_url ? (
+                                      <img
+                                        src={buildImageUrl(vote.votante.foto_perfil_url)}
+                                        alt={votanteNombre || "Usuario"}
+                                        className="h-14 w-14 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-brand-primary">
+                                        {getInitials(vote.votante)}
+                                      </div>
+                                    )}
+                              
+                                    <div className="min-w-0">
+                                      <p className="truncate text-base font-semibold text-ui-text group-hover:text-brand-primary">
+                                        {votanteNombre || "Sin nombre"}
+                                      </p>
+                                      <p className="truncate text-sm text-ui-text-secondary">
+                                        {vote.piso?.ciudad || "—"}
+                                        {vote.piso?.direccion ? ` · ${vote.piso.direccion}` : ""}
+                                      </p>
                                     </div>
-                                  )}
-
-                                  <div className="min-w-0">
-                                    <p className="truncate text-base font-semibold text-ui-text group-hover:text-brand-primary">
-                                      {votanteNombre || "Sin nombre"}
-                                    </p>
-                                    <p className="truncate text-sm text-ui-text-secondary">
-                                      {vote.piso?.ciudad || "—"}
-                                      {vote.piso?.direccion ? ` · ${vote.piso.direccion}` : ""}
-                                    </p>
+                                  </div>
+                                </Link>
+                              ) : (
+                                <div className="block rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                  <div className="flex items-center gap-3">
+                                    {vote.votante?.foto_perfil_url ? (
+                                      <img
+                                        src={buildImageUrl(vote.votante.foto_perfil_url)}
+                                        alt={votanteNombre || "Usuario"}
+                                        className="h-14 w-14 rounded-full object-cover"
+                                      />
+                                    ) : (
+                                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-brand-primary">
+                                        {getInitials(vote.votante)}
+                                      </div>
+                                    )}
+                              
+                                    <div className="min-w-0">
+                                      <p className="truncate text-base font-semibold text-ui-text">
+                                        {votanteNombre || "Sin nombre"}
+                                      </p>
+                                      <p className="truncate text-sm text-ui-text-secondary">
+                                        {vote.piso?.ciudad || "—"}
+                                        {vote.piso?.direccion ? ` · ${vote.piso.direccion}` : ""}
+                                      </p>
+                                    </div>
                                   </div>
                                 </div>
-                              </Link>
+                              )}
 
                               <div className="grid grid-cols-3 gap-3">
                                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-center">

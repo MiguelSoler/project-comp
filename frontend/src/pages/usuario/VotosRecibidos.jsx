@@ -219,20 +219,37 @@ export default function VotosRecibidos() {
                                 </div>
                               )}
 
-                              <Link
-                                to={`/usuarios/${item.votante_id}`}
-                                className="group block rounded-xl border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
-                              >
-                                <div>
-                                  <h2 className="text-lg font-semibold text-ui-text group-hover:text-brand-primary">
-                                    {nombreCompleto || "Sin nombre"}
-                                  </h2>
-                                  <p className="text-sm text-ui-text-secondary">
-                                    {item.piso?.ciudad || "—"}
-                                    {item.piso?.direccion ? ` · ${item.piso.direccion}` : ""}
-                                  </p>
+                              {item.can_view_profile ? (
+                                <Link
+                                  to={`/usuarios/${item.votante_id}`}
+                                  className="group block rounded-xl border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
+                                >
+                                  <div>
+                                    <h2 className="text-lg font-semibold text-ui-text group-hover:text-brand-primary">
+                                      {nombreCompleto || "Sin nombre"}
+                                    </h2>
+                                    <p className="text-sm text-ui-text-secondary">
+                                      {item.piso?.ciudad || "—"}
+                                      {item.piso?.direccion ? ` · ${item.piso.direccion}` : ""}
+                                    </p>
+                                  </div>
+                                </Link>
+                              ) : (
+                                <div className="block rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                  <div>
+                                    <h2 className="text-lg font-semibold text-ui-text">
+                                      {nombreCompleto || "Sin nombre"}
+                                    </h2>
+                                    <p className="text-sm text-ui-text-secondary">
+                                      {item.piso?.ciudad || "—"}
+                                      {item.piso?.direccion ? ` · ${item.piso.direccion}` : ""}
+                                    </p>
+                                    <p className="mt-2 text-xs text-ui-text-secondary">
+                                      La reputación actual de este usuario ya no está disponible para ti.
+                                    </p>
+                                  </div>
                                 </div>
-                              </Link>
+                              )}
                             </div>
 
                             <span className="badge badge-info">

@@ -1,6 +1,3 @@
-// backend/controllers/votoUsuarioController.js
-// Controllers PÚBLICOS de voto_usuario (reputación)
-
 const pool = require("../db/pool");
 
 function toInt(value, fallback = NaN) {
@@ -29,8 +26,41 @@ async function assertPublicUserExists(usuarioId) {
   return q.rows[0];
 }
 
+async function canViewCurrentProfile(req, targetUserId) {
+  const requesterId = Number(req.user?.id);
+  const requesterRol = req.user?.rol;
+
+  if (!Number.isFinite(requesterId)) return false;
+  if (requesterRol === "admin") return true;
+  if (requesterId === Number(targetUserId)) return true;
+
+  const q = await pool.query(
+    `
+    SELECT 1
+    FROM usuario_habitacion uh_requester
+    JOIN habitacion h_requester ON h_requester.id = uh_requester.habitacion_id
+    JOIN usuario_habitacion uh_target ON uh_target.usuario_id = $2
+    JOIN habitacion h_target ON h_target.id = uh_target.habitacion_id
+    WHERE uh_requester.usuario_id = $1
+      AND uh_requester.fecha_salida IS NULL
+      AND uh_requester.estado = 'active'
+      AND uh_target.fecha_salida IS NULL
+      AND uh_target.estado = 'active'
+      AND h_requester.piso_id = h_target.piso_id
+    LIMIT 1
+    `,
+    [requesterId, targetUserId]
+  );
+
+  return q.rowCount > 0;
+}
+
 // ---------------------------------------------------------
-// GET /api/voto-usuario/usuario/:usuarioId/resumen (public)
+// GET /api/voto-usuario/usuario/:usuarioId/resumen
+// Protegido:
+// - self
+// - conviviente actual del usuario
+// - admin
 // ---------------------------------------------------------
 const getResumenVotosUsuario = async (req, res) => {
   try {
@@ -39,6 +69,11 @@ const getResumenVotosUsuario = async (req, res) => {
 
     const usuario = await assertPublicUserExists(usuarioId);
     if (!usuario) return notFound(res);
+
+    const allowed = await canViewCurrentProfile(req, usuarioId);
+    if (!allowed) {
+      return res.status(403).json({ error: "FORBIDDEN_CURRENT_PROFILE" });
+    }
 
     const q = await pool.query(
       `
@@ -124,16 +159,31 @@ const getResumenVotosUsuario = async (req, res) => {
 };
 
 // ---------------------------------------------------------
-// GET /api/voto-usuario/usuario/:usuarioId/recibidos (public)
-// Query params: page, limit, sort=newest|oldest, pisoId(optional)
+// GET /api/voto-usuario/usuario/:usuarioId/recibidos
+// Protegido:
+// - self
+// - conviviente actual del usuario
+// - admin
+//
+// Devuelve además can_view_profile para cada votante
 // ---------------------------------------------------------
 const listVotosRecibidosUsuario = async (req, res) => {
   try {
+    const requesterId = Number(req.user?.id);
+    if (!Number.isFinite(requesterId)) {
+      return res.status(401).json({ error: "UNAUTHORIZED" });
+    }
+
     const usuarioId = toInt(req.params.usuarioId, NaN);
     if (!Number.isFinite(usuarioId)) return badRequest(res, ["usuarioId"]);
 
     const usuario = await assertPublicUserExists(usuarioId);
     if (!usuario) return notFound(res);
+
+    const allowed = await canViewCurrentProfile(req, usuarioId);
+    if (!allowed) {
+      return res.status(403).json({ error: "FORBIDDEN_CURRENT_PROFILE" });
+    }
 
     const page = Math.max(1, toInt(req.query.page, 1));
     const limit = Math.min(100, Math.max(1, toInt(req.query.limit, 10)));
@@ -152,8 +202,8 @@ const listVotosRecibidosUsuario = async (req, res) => {
         : "vu.created_at DESC, vu.id DESC";
 
     const where = ["vu.votado_id = $1"];
-    const params = [usuarioId];
-    let i = 2;
+    const params = [usuarioId, requesterId];
+    let i = 3;
 
     if (Number.isFinite(pisoId)) {
       where.push(`vu.piso_id = $${i++}`);
@@ -184,6 +234,20 @@ const listVotosRecibidosUsuario = async (req, res) => {
         p.direccion,
         p.activo AS piso_activo,
 
+        EXISTS (
+          SELECT 1
+          FROM usuario_habitacion uh_requester
+          JOIN habitacion h_requester ON h_requester.id = uh_requester.habitacion_id
+          JOIN usuario_habitacion uh_votante ON uh_votante.usuario_id = vu.votante_id
+          JOIN habitacion h_votante ON h_votante.id = uh_votante.habitacion_id
+          WHERE uh_requester.usuario_id = $2
+            AND uh_requester.fecha_salida IS NULL
+            AND uh_requester.estado = 'active'
+            AND uh_votante.fecha_salida IS NULL
+            AND uh_votante.estado = 'active'
+            AND h_requester.piso_id = h_votante.piso_id
+        ) AS can_view_profile,
+
         COUNT(*) OVER() AS total_count
       FROM voto_usuario vu
       JOIN usuario u ON u.id = vu.votante_id
@@ -198,34 +262,35 @@ const listVotosRecibidosUsuario = async (req, res) => {
     const total = q.rowCount ? Number(q.rows[0].total_count) : 0;
     const totalPages = total ? Math.ceil(total / limit) : 0;
 
-    const items = q.rows.map(({ total_count, ...row }) => ({
-      ...row,
-      votante: {
-        id: row.votante_id,
-        nombre: row.votante_nombre,
-        apellidos: row.votante_apellidos,
-        rol: row.rol,
-        foto_perfil_url: row.votante_foto_perfil_url,
-      },
-      piso: {
-        id: row.piso_id,
-        ciudad: row.ciudad,
-        direccion: row.direccion,
-        activo: row.piso_activo,
-      },
-    })).map((row) => {
-      // limpiamos campos duplicados ya anidados
-      const {
-        votante_nombre,
-        votante_apellidos,
-        votante_foto_perfil_url,
-        ciudad,
-        direccion,
-        piso_activo,
-        ...clean
-      } = row;
-      return clean;
-    });
+    const items = q.rows
+      .map(({ total_count, ...row }) => ({
+        ...row,
+        can_view_profile: Boolean(row.can_view_profile),
+        votante: {
+          id: row.votante_id,
+          nombre: row.votante_nombre,
+          apellidos: row.votante_apellidos,
+          foto_perfil_url: row.votante_foto_perfil_url,
+        },
+        piso: {
+          id: row.piso_id,
+          ciudad: row.ciudad,
+          direccion: row.direccion,
+          activo: row.piso_activo,
+        },
+      }))
+      .map((row) => {
+        const {
+          votante_nombre,
+          votante_apellidos,
+          votante_foto_perfil_url,
+          ciudad,
+          direccion,
+          piso_activo,
+          ...clean
+        } = row;
+        return clean;
+      });
 
     return res.json({
       usuario: {
