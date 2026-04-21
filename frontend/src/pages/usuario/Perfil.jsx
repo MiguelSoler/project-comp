@@ -288,8 +288,6 @@ export default function Perfil() {
         new_password: newPassword,
       });
 
-      // El backend devuelve token nuevo porque incrementa token_version.
-      // Refrescamos la sesión para no invalidar el login actual.
       if (data?.token && meta) {
         setSession(data.token, meta);
       }
@@ -510,22 +508,32 @@ export default function Perfil() {
       <section className="section">
         <div className="app-container">
           <div className="mx-auto max-w-3xl space-y-6">
-            <header className="space-y-3">
-              <div className="flex items-center justify-end">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => navigate(-1)}
-                >
-                  Volver
-                </button>
-              </div>
+            <header className="overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-violet-50 shadow-sm">
+              <div className="flex flex-col gap-4 p-6 md:flex-row md:items-start md:justify-between md:p-8">
+                <div className="space-y-3">
+                  <div className="inline-flex rounded-full border border-sky-200 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">
+                    Zona personal
+                  </div>
 
-              <div>
-                <h1>Mi perfil</h1>
-                <p className="text-sm text-ui-text-secondary">
-                  Consulta y actualiza tus datos personales.
-                </p>
+                  <div>
+                    <h1 className="text-3xl font-bold tracking-tight text-ui-text">
+                      Mi perfil
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sm text-ui-text-secondary">
+                      Consulta y actualiza tus datos personales.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => navigate(-1)}
+                  >
+                    Volver
+                  </button>
+                </div>
               </div>
             </header>
 
@@ -550,7 +558,7 @@ export default function Perfil() {
               </div>
             ) : null}
 
-            <div className="card">
+            <div className="overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-violet-50 shadow-sm">
               <div className="card-body space-y-4">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                   <div className="flex items-center gap-4">
@@ -693,7 +701,7 @@ export default function Perfil() {
               </div>
 
               <div
-                className={`border border-slate-300 bg-white p-4 md:p-5 ${
+                className={`border border-slate-300 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-4 shadow-sm md:p-5 ${
                   activeTab === "perfil"
                     ? "rounded-b-2xl rounded-tr-2xl rounded-tl-none"
                     : activeTab === "seguridad"
@@ -888,7 +896,7 @@ export default function Perfil() {
                       </p>
                     </div>
 
-                    <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
+                    <div className="rounded-2xl border border-slate-300 bg-gradient-to-br from-slate-50 via-white to-sky-50 p-4">
                       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                         <div className="text-sm text-ui-text-secondary">
                           {selectedPhotoFile
@@ -956,7 +964,7 @@ export default function Perfil() {
 
                 {activeTab === "cuenta" && hasCuentaTab ? (
                   <section className="space-y-4">
-                    <div className="rounded-xl border border-violet-300 bg-violet-50">
+                    <div className="rounded-2xl border border-violet-300 bg-gradient-to-br from-violet-50 via-white to-sky-50">
                       <div className="card-body">
                         <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
                           Rol actual
@@ -966,7 +974,7 @@ export default function Perfil() {
                         </p>
                       </div>
                     </div>
-                                
+
                     {meta?.rol === "user" ? (
                       <>
                         <div>
@@ -977,7 +985,7 @@ export default function Perfil() {
                             Crea tu primer piso y tu cuenta pasará a rol anunciante.
                           </p>
                         </div>
-                    
+
                         <div className="flex justify-end">
                           <button
                             type="button"
@@ -989,7 +997,7 @@ export default function Perfil() {
                         </div>
                       </>
                     ) : null}
-                
+
                     {meta?.rol === "advertiser" ? (
                       <>
                         <div>
@@ -1000,7 +1008,7 @@ export default function Perfil() {
                             Volverás a rol usuario. Antes debes asegurarte de no tener pisos activos.
                           </p>
                         </div>
-                    
+
                         <div className="flex justify-end">
                           <button
                             type="button"

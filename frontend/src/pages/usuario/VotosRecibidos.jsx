@@ -39,6 +39,30 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+function SummaryCard({ label, value, tone = "default" }) {
+  const toneClass =
+    tone === "emerald"
+      ? "border-emerald-300 bg-emerald-50"
+      : tone === "sky"
+        ? "border-sky-300 bg-sky-50"
+        : tone === "violet"
+          ? "border-violet-300 bg-violet-50"
+          : "border-amber-300 bg-amber-50";
+
+  return (
+    <div className={`rounded-2xl border ${toneClass}`}>
+      <div className="card-body">
+        <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+          {label}
+        </p>
+        <p className="mt-2 text-2xl font-bold text-ui-text">
+          {value}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export default function VotosRecibidos() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -111,15 +135,33 @@ export default function VotosRecibidos() {
 
   const hasPrev = page > 1;
   const hasNext = page < totalPages;
+  const visibleProfilesCount = items.filter((item) => Boolean(item.can_view_profile)).length;
+  const hiddenProfilesCount = items.filter((item) => !item.can_view_profile).length;
 
   if (loading) {
     return (
       <section className="section">
         <div className="app-container">
-          <div className="space-y-4">
-            <div className="skeleton h-8 w-56" />
-            <div className="skeleton h-32 w-full" />
-            <div className="skeleton h-32 w-full" />
+          <div className="mx-auto max-w-5xl space-y-6">
+            <div className="card">
+              <div className="card-body space-y-4">
+                <div className="skeleton h-10 w-56" />
+                <div className="skeleton h-28 w-full" />
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                  <div className="skeleton h-24 w-full rounded-2xl" />
+                  <div className="skeleton h-24 w-full rounded-2xl" />
+                  <div className="skeleton h-24 w-full rounded-2xl" />
+                  <div className="skeleton h-24 w-full rounded-2xl" />
+                </div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="card-body space-y-4">
+                <div className="skeleton h-32 w-full rounded-2xl" />
+                <div className="skeleton h-32 w-full rounded-2xl" />
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -131,53 +173,120 @@ export default function VotosRecibidos() {
       <section className="section">
         <div className="app-container">
           <div className="mx-auto max-w-5xl space-y-6">
-            <header className="space-y-3">
-              <div className="flex items-center justify-end">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  onClick={() => navigate(-1)}
-                >
-                  Volver
-                </button>
-              </div>
-              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                <div>
-                  <h1>Votos recibidos</h1>
-                  <p className="text-sm text-ui-text-secondary">
-                    Consulta el detalle de las valoraciones que has recibido.
-                  </p>
+            <header className="overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-violet-50 shadow-sm">
+              <div className="flex flex-col gap-4 p-6 md:flex-row md:items-start md:justify-between md:p-8">
+                <div className="space-y-3">
+                  <div className="inline-flex rounded-full border border-sky-200 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">
+                    Zona personal
+                  </div>
+
+                  <div>
+                    <h1 className="text-3xl font-bold tracking-tight text-ui-text">
+                      Votos recibidos
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sm text-ui-text-secondary">
+                      Consulta en detalle las valoraciones que has recibido y revisa
+                      quién te ha puntuado y en qué contexto.
+                    </p>
+                  </div>
                 </div>
 
-                <div className="w-full md:w-[260px]">
-                  <label className="label" htmlFor="sort">
-                    Ordenar por
-                  </label>
-                  <select
-                    id="sort"
-                    name="sort"
-                    className="select"
-                    value={sort}
-                    onChange={(event) => setSort(event.target.value)}
+                <div className="flex items-center justify-end">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => navigate(-1)}
                   >
-                    <option value="newest">Más recientes</option>
-                    <option value="oldest">Más antiguos</option>
-                  </select>
+                    Volver
+                  </button>
                 </div>
               </div>
-
-              <p className="text-xs text-ui-text-secondary">
-                Total de votos recibidos: <span className="font-medium text-ui-text">{total}</span>
-              </p>
             </header>
+
+            {!error ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <SummaryCard
+                  label="Total recibidos"
+                  value={total}
+                  tone="violet"
+                />
+                <SummaryCard
+                  label="En esta página"
+                  value={items.length}
+                  tone="sky"
+                />
+                <SummaryCard
+                  label="Perfiles visibles"
+                  value={visibleProfilesCount}
+                  tone="emerald"
+                />
+                <SummaryCard
+                  label="Perfiles ocultos"
+                  value={hiddenProfilesCount}
+                  tone="default"
+                />
+              </div>
+            ) : null}
+
+            <div className="rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-sky-50 shadow-sm">
+              <div className="card-body space-y-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <div className="inline-flex rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-violet-700">
+                      Filtros
+                    </div>
+
+                    <h2 className="mt-3 text-xl font-bold tracking-tight text-ui-text">
+                      Ordenación de votos
+                    </h2>
+
+                    <p className="mt-1 text-sm text-ui-text-secondary">
+                      Cambia el orden para revisar primero las valoraciones más
+                      recientes o las más antiguas.
+                    </p>
+                  </div>
+
+                  <div className="w-full md:w-[260px]">
+                    <label className="label" htmlFor="sort">
+                      Ordenar por
+                    </label>
+                    <select
+                      id="sort"
+                      name="sort"
+                      className="select"
+                      value={sort}
+                      onChange={(event) => setSort(event.target.value)}
+                    >
+                      <option value="newest">Más recientes</option>
+                      <option value="oldest">Más antiguos</option>
+                    </select>
+                  </div>
+                </div>
+
+                <p className="text-xs text-ui-text-secondary">
+                  Página <span className="font-medium text-ui-text">{page}</span> de{" "}
+                  <span className="font-medium text-ui-text">{totalPages}</span> ·
+                  Total histórico:{" "}
+                  <span className="font-medium text-ui-text">{total}</span>
+                </p>
+              </div>
+            </div>
 
             {error ? <div className="alert-error">{error}</div> : null}
 
             {!error && items.length === 0 ? (
-              <div className="card">
-                <div className="card-body">
-                  <p className="text-ui-text-secondary">
-                    Todavía no has recibido ningún voto.
+              <div className="rounded-3xl border border-slate-300 bg-gradient-to-br from-slate-50 via-white to-slate-100 shadow-sm">
+                <div className="card-body space-y-3">
+                  <div className="inline-flex w-fit rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                    Sin votos
+                  </div>
+
+                  <h2 className="text-lg font-semibold text-ui-text">
+                    Todavía no has recibido ningún voto
+                  </h2>
+
+                  <p className="text-sm text-ui-text-secondary">
+                    Cuando tus convivientes te valoren, sus votos aparecerán aquí.
                   </p>
                 </div>
               </div>
@@ -194,7 +303,16 @@ export default function VotosRecibidos() {
                     const avatarUrl = buildImageUrl(item.votante?.foto_perfil_url);
 
                     return (
-                      <article key={item.id} className="card">
+                      <article
+                        key={item.id}
+                        className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
+                      >
+                        <div
+                          className={`h-2 w-full ${
+                            item.can_view_profile ? "bg-emerald-500" : "bg-slate-400"
+                          }`}
+                        />
+
                         <div className="card-body space-y-4">
                           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                             <div className="flex items-start gap-4">
@@ -222,7 +340,7 @@ export default function VotosRecibidos() {
                               {item.can_view_profile ? (
                                 <Link
                                   to={`/usuarios/${item.votante_id}`}
-                                  className="group block rounded-xl border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
+                                  className="group block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
                                 >
                                   <div>
                                     <h2 className="text-lg font-semibold text-ui-text group-hover:text-brand-primary">
@@ -235,7 +353,7 @@ export default function VotosRecibidos() {
                                   </div>
                                 </Link>
                               ) : (
-                                <div className="block rounded-xl border border-slate-200 bg-slate-50 p-4">
+                                <div className="block rounded-2xl border border-slate-200 bg-slate-50 p-4">
                                   <div>
                                     <h2 className="text-lg font-semibold text-ui-text">
                                       {nombreCompleto || "Sin nombre"}
@@ -257,8 +375,24 @@ export default function VotosRecibidos() {
                             </span>
                           </div>
 
+                          {!item.can_view_profile ? (
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                              <p className="text-sm text-ui-text-secondary">
+                                Este voto sigue siendo visible como histórico, pero el
+                                acceso al perfil actual del votante ya no está disponible.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                              <p className="text-sm text-emerald-800">
+                                El perfil actual de este votante sigue disponible para ti
+                                porque todavía existe una relación válida de acceso.
+                              </p>
+                            </div>
+                          )}
+
                           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                               <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">
                                 Limpieza
                               </p>
@@ -267,7 +401,7 @@ export default function VotosRecibidos() {
                               </p>
                             </div>
 
-                            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
                               <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
                                 Ruido
                               </p>
@@ -276,7 +410,7 @@ export default function VotosRecibidos() {
                               </p>
                             </div>
 
-                            <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
+                            <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
                               <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
                                 Puntualidad de pagos
                               </p>
