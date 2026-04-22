@@ -12,8 +12,11 @@ function formatEur(value) {
 }
 
 function formatMetric(value) {
+  if (value === null || value === undefined || value === "") return "—";
+
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
+
   return n.toFixed(1);
 }
 
@@ -23,6 +26,55 @@ function buildImageUrl(pathOrNull) {
 
   const base = import.meta.env.VITE_API_BASE_URL || "";
   return `${base}${pathOrNull}`;
+}
+
+function getReputationVisuals({ score, hasVisibleReputation, convivientesActuales }) {
+  if (!hasVisibleReputation) {
+    return {
+      boxClass: "rounded-xl border border-slate-300 bg-slate-50 p-3",
+      bubbleClass:
+        "flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-xl font-bold text-slate-500 shadow-sm",
+      labelClass: "text-[11px] font-semibold uppercase tracking-wide text-slate-600",
+      statusText: convivientesActuales > 0 ? "Sin valoraciones todavía" : "Sin convivientes actuales",
+      helperText:
+        convivientesActuales > 0
+          ? "Todavía no se han emitido votos visibles en este piso"
+          : "Ahora mismo no hay convivencia activa en este piso",
+    };
+  }
+
+  const n = Number(score);
+
+  if (n >= 3.5) {
+    return {
+      boxClass: "rounded-xl border border-emerald-300 bg-emerald-50 p-3",
+      bubbleClass:
+        "flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-emerald-200 bg-white text-xl font-bold text-emerald-700 shadow-sm",
+      labelClass: "text-[11px] font-semibold uppercase tracking-wide text-emerald-700",
+      statusText: "Buena convivencia",
+      helperText: "El ambiente del piso transmite una convivencia positiva",
+    };
+  }
+
+  if (n >= 2) {
+    return {
+      boxClass: "rounded-xl border border-amber-300 bg-amber-50 p-3",
+      bubbleClass:
+        "flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-white text-xl font-bold text-amber-700 shadow-sm",
+      labelClass: "text-[11px] font-semibold uppercase tracking-wide text-amber-700",
+      statusText: "Convivencia media",
+      helperText: "La convivencia muestra señales mixtas o mejorables",
+    };
+  }
+
+  return {
+    boxClass: "rounded-xl border border-rose-300 bg-rose-50 p-3",
+    bubbleClass:
+      "flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-rose-200 bg-white text-xl font-bold text-rose-700 shadow-sm",
+    labelClass: "text-[11px] font-semibold uppercase tracking-wide text-rose-700",
+    statusText: "Convivencia mejorable",
+    helperText: "La reputación visible del piso es baja actualmente",
+  };
 }
 
 const INITIAL_FILTERS = {
@@ -145,7 +197,7 @@ export default function HabitacionesList() {
         <div className="card-body space-y-4">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-lg font-semibold">Búsqueda y filtros</h2>
-          
+
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -154,7 +206,7 @@ export default function HabitacionesList() {
               Limpiar filtros
             </button>
           </div>
-          
+
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
             <div>
               <label className="label" htmlFor="q">
@@ -170,7 +222,7 @@ export default function HabitacionesList() {
                 onChange={handleFilterChange}
               />
             </div>
-          
+
             <div>
               <label className="label" htmlFor="ciudad">
                 Ciudad
@@ -185,7 +237,7 @@ export default function HabitacionesList() {
                 onChange={handleFilterChange}
               />
             </div>
-          
+
             <div>
               <label className="label" htmlFor="precioMax">
                 Precio máximo
@@ -201,7 +253,7 @@ export default function HabitacionesList() {
                 onChange={handleFilterChange}
               />
             </div>
-          
+
             <div>
               <label className="label" htmlFor="tamanoMin">
                 Tamaño mínimo (m²)
@@ -217,7 +269,7 @@ export default function HabitacionesList() {
                 onChange={handleFilterChange}
               />
             </div>
-          
+
             <div>
               <label className="label font-semibold text-brand-primary" htmlFor="sort">
                 Ordenar por
@@ -237,7 +289,7 @@ export default function HabitacionesList() {
                 <option value="tamano_desc">Tamaño: mayor a menor</option>
               </select>
             </div>
-          
+
             <div>
               <label className="label" htmlFor="tamanoMax">
                 Tamaño máximo (m²)
@@ -253,7 +305,7 @@ export default function HabitacionesList() {
                 onChange={handleFilterChange}
               />
             </div>
-          
+
             <div>
               <label className="label" htmlFor="reputacionMin">
                 Reputación mínima
@@ -272,7 +324,7 @@ export default function HabitacionesList() {
                 <option value="3">3 o más</option>
               </select>
             </div>
-          
+
             {isAdmin ? (
               <div>
                 <label className="label" htmlFor="disponible">
@@ -291,7 +343,7 @@ export default function HabitacionesList() {
                 </select>
               </div>
             ) : null}
-      
+
             <div>
               <label className="label" htmlFor="amueblada">
                 Amueblada
@@ -308,7 +360,7 @@ export default function HabitacionesList() {
                 <option value="false">No</option>
               </select>
             </div>
-          
+
             <div>
               <label className="label" htmlFor="bano">
                 Baño
@@ -325,7 +377,7 @@ export default function HabitacionesList() {
                 <option value="false">No</option>
               </select>
             </div>
-          
+
             <div>
               <label className="label" htmlFor="balcon">
                 Balcón
@@ -388,9 +440,19 @@ export default function HabitacionesList() {
                 h.cover_foto_habitacion_url || h.cover_foto_piso_url
               );
 
-              const convivenciaMedia = formatMetric(h.convivencia_media_global);
               const convivientesActuales = Number(h.convivencia_convivientes_actuales || 0);
               const convivientesConVotos = Number(h.convivencia_convivientes_con_votos || 0);
+              const hasVisibleReputation = convivientesConVotos > 0;
+              const reputationScore = hasVisibleReputation
+                ? Number(h.convivencia_media_global)
+                : null;
+              const convivenciaMedia = formatMetric(reputationScore);
+
+              const reputationVisuals = getReputationVisuals({
+                score: reputationScore,
+                hasVisibleReputation,
+                convivientesActuales,
+              });
 
               return (
                 <Link
@@ -433,26 +495,31 @@ export default function HabitacionesList() {
                       {h.balcon ? "Balcón" : ""}
                     </p>
 
-                    <div className="rounded-xl border border-violet-300 bg-violet-50 p-3">
+                    <div className={reputationVisuals.boxClass}>
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-violet-700">
+                          <p className={reputationVisuals.labelClass}>
                             Ambiente del piso
                           </p>
-                          <p className="mt-1 text-xs font-medium text-ui-text-secondary">
-                            {convivientesConVotos > 0
-                              ? `${convivientesConVotos} valorado${convivientesConVotos === 1 ? "" : "s"}`
-                              : "Sin valoraciones"}
+                          <p className="mt-1 text-xs font-semibold text-ui-text">
+                            {reputationVisuals.statusText}
                           </p>
                         </div>
 
-                        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-violet-200 bg-white text-xl font-bold text-violet-700 shadow-sm">
+                        <div className={reputationVisuals.bubbleClass}>
                           {convivenciaMedia}
                         </div>
                       </div>
 
                       <p className="mt-2 text-xs text-ui-text-secondary">
+                        {reputationVisuals.helperText}
+                      </p>
+
+                      <p className="mt-2 text-xs text-ui-text-secondary">
                         {convivientesActuales} conviviente{convivientesActuales === 1 ? "" : "s"} actual{convivientesActuales === 1 ? "" : "es"}
+                        {hasVisibleReputation
+                          ? ` · ${convivientesConVotos} valorado${convivientesConVotos === 1 ? "" : "s"}`
+                          : ""}
                       </p>
                     </div>
                   </div>

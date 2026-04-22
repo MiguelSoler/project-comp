@@ -12,8 +12,11 @@ function formatEur(value) {
 }
 
 function formatMetric(value) {
+  if (value === null || value === undefined || value === "") return "—";
+
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
+
   return n.toFixed(1);
 }
 
@@ -72,7 +75,13 @@ function Feature({ label, value }) {
   );
 }
 
-function MetricCard({ title, value, tone = "neutral", strongBorder = false }) {
+function MetricCard({
+  title,
+  value,
+  tone = "neutral",
+  strongBorder = false,
+  helperText = null,
+}) {
   const toneClasses =
     tone === "success"
       ? "border-emerald-300 bg-emerald-50 text-emerald-700"
@@ -90,6 +99,12 @@ function MetricCard({ title, value, tone = "neutral", strongBorder = false }) {
     <div className={`rounded-xl p-4 ${toneClasses}`}>
       <p className="text-xs font-medium uppercase tracking-wide">{title}</p>
       <p className="mt-2 text-2xl font-bold text-ui-text">{value}</p>
+
+      {helperText ? (
+        <p className="mt-2 text-xs text-ui-text-secondary">
+          {helperText}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -125,7 +140,28 @@ function PersonAvatar({ entity, onOpen, sizeClassName = "h-14 w-14" }) {
   );
 }
 
-function MiniVoteList({ items = [], onOpen }) {
+function MiniVoteList({
+  items = [],
+  onOpen,
+  sourceMode = "actual",
+  hasVisibleVotes = false,
+}) {
+  if (!hasVisibleVotes) {
+    return (
+      <p className="mt-2 text-xs text-ui-text-secondary">
+        No tiene valoraciones visibles todavía.
+      </p>
+    );
+  }
+
+  if (!items.length && sourceMode === "historico_global") {
+    return (
+      <p className="mt-2 text-xs text-ui-text-secondary">
+        No hay votos actuales. Se muestra reputación histórica.
+      </p>
+    );
+  }
+
   if (!items.length) {
     return (
       <p className="mt-2 text-xs text-ui-text-secondary">
@@ -149,7 +185,7 @@ function MiniVoteList({ items = [], onOpen }) {
             {voterPhoto ? (
               <button
                 type="button"
-                className="overflow-hidden rounded-full cursor-pointer"
+                className="cursor-pointer overflow-hidden rounded-full"
                 onClick={() => onOpen(voterPhoto, voterName)}
                 aria-label={`Abrir foto de ${voterName}`}
                 title={voterName}
@@ -185,6 +221,8 @@ function ConvivienteMetricPanel({
   tone = "neutral",
   items = [],
   onOpen,
+  sourceMode = "actual",
+  hasVisibleVotes = false,
 }) {
   const toneClasses =
     tone === "success"
@@ -214,7 +252,12 @@ function ConvivienteMetricPanel({
         {value}
       </p>
 
-      <MiniVoteList items={items} onOpen={onOpen} />
+      <MiniVoteList
+        items={items}
+        onOpen={onOpen}
+        sourceMode={sourceMode}
+        hasVisibleVotes={hasVisibleVotes}
+      />
     </div>
   );
 }
@@ -228,6 +271,22 @@ function GallerySourceBadge({ source }) {
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${classes}`}>
       {source === "piso" ? "Piso" : "Habitación"}
+    </span>
+  );
+}
+
+function SourceModeBadge({ sourceMode }) {
+  if (sourceMode === "historico_global") {
+    return (
+      <span className="badge badge-warning">
+        Reputación histórica
+      </span>
+    );
+  }
+
+  return (
+    <span className="badge badge-success">
+      Reputación actual
     </span>
   );
 }
@@ -407,32 +466,59 @@ export default function HabitacionDetail() {
   const currentGalleryImage = galleryImages[activeGalleryIndex] || null;
   const currentModalGalleryImage = galleryImages[modalGalleryIndex] || null;
 
-  const convivenciaMediaGlobal = formatMetric(convivenciaActual?.media_global);
-
-  const convivenciaLimpieza = formatMetric(
-    convivenciaActual?.medias?.limpieza ?? convivenciaActual?.media_limpieza
-  );
-
-  const convivenciaRuido = formatMetric(
-    convivenciaActual?.medias?.ruido ?? convivenciaActual?.media_ruido
-  );
-
-  const convivenciaPagos = formatMetric(
-    convivenciaActual?.medias?.puntualidad_pagos ??
-      convivenciaActual?.media_puntualidad_pagos
-  );
-
+  const convivenciaOrigin = convivenciaActual?.origen_metricas || "actual";
   const convivenciaConvivientesActuales = Number(
     convivenciaActual?.convivientes_actuales ?? 0
   );
-
   const convivenciaConvivientesConVotos = Number(
     convivenciaActual?.convivientes_con_votos ?? 0
   );
-
   const convivenciaTotalVotosActuales = Number(
     convivenciaActual?.total_votos_actuales ?? 0
   );
+
+  const hasConvivenciaVisibleVotes = convivenciaConvivientesConVotos > 0;
+  const hasCurrentVotesInPiso = convivenciaTotalVotosActuales > 0;
+  const hasConvivientes = convivenciaConvivientesActuales > 0;
+
+  const convivenciaMediaGlobal = formatMetric(
+    hasConvivenciaVisibleVotes ? convivenciaActual?.media_global : null
+  );
+
+  const convivenciaLimpieza = formatMetric(
+    hasConvivenciaVisibleVotes
+      ? (convivenciaActual?.medias?.limpieza ?? convivenciaActual?.media_limpieza)
+      : null
+  );
+
+  const convivenciaRuido = formatMetric(
+    hasConvivenciaVisibleVotes
+      ? (convivenciaActual?.medias?.ruido ?? convivenciaActual?.media_ruido)
+      : null
+  );
+
+  const convivenciaPagos = formatMetric(
+    hasConvivenciaVisibleVotes
+      ? (
+          convivenciaActual?.medias?.puntualidad_pagos ??
+          convivenciaActual?.media_puntualidad_pagos
+        )
+      : null
+  );
+
+  const convivenciaInfoTone = !hasConvivientes
+    ? "border-slate-300 bg-slate-50"
+    : convivenciaOrigin === "historico_global"
+      ? "border-amber-300 bg-amber-50"
+      : "border-emerald-300 bg-emerald-50";
+
+  const convivenciaInfoText = !hasConvivientes
+    ? "Este piso no tiene convivientes activos en este momento."
+    : !hasConvivenciaVisibleVotes
+      ? "No se han emitido votos en este piso todavía."
+      : convivenciaOrigin === "historico_global"
+        ? "Este piso no tiene valoraciones actuales entre convivientes. Se muestra como referencia la reputación histórica de los ocupantes actuales."
+        : "Aquí ves la reputación real de la convivencia actual del piso, sin mezclar votos históricos.";
 
   return (
     <PageShell
@@ -756,10 +842,16 @@ export default function HabitacionDetail() {
           <section id="convivencia-actual-piso" className="space-y-6">
             <div>
               <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
-                Convivencia actual del piso
+                Convivencia visible del piso
               </h3>
               <p className="mt-1 text-sm text-ui-text-secondary">
-                Aquí ves la reputación real de la convivencia actual del piso, sin mezclar votos históricos.
+                Esta sección muestra la información de convivencia disponible en este momento.
+              </p>
+            </div>
+
+            <div className={`rounded-xl border p-4 ${convivenciaInfoTone}`}>
+              <p className="text-sm font-medium text-ui-text">
+                {convivenciaInfoText}
               </p>
             </div>
 
@@ -769,21 +861,25 @@ export default function HabitacionDetail() {
                 value={convivenciaMediaGlobal}
                 tone="violet"
                 strongBorder
+                helperText={!hasConvivenciaVisibleVotes ? "Sin valoraciones visibles" : null}
               />
               <MetricCard
                 title="Limpieza media"
                 value={convivenciaLimpieza}
                 tone="success"
+                helperText={!hasConvivenciaVisibleVotes ? "Sin valoraciones visibles" : null}
               />
               <MetricCard
                 title="Ruido medio"
                 value={convivenciaRuido}
                 tone="warning"
+                helperText={!hasConvivenciaVisibleVotes ? "Sin valoraciones visibles" : null}
               />
               <MetricCard
                 title="Pagos medios"
                 value={convivenciaPagos}
                 tone="info"
+                helperText={!hasConvivenciaVisibleVotes ? "Sin valoraciones visibles" : null}
               />
               <MetricCard
                 title="Convivientes actuales"
@@ -799,7 +895,7 @@ export default function HabitacionDetail() {
 
               <div className="mt-3 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-4">
                 <p className="text-sm text-ui-text-secondary">
-                  Media global actual del piso:{" "}
+                  Media global visible del piso:{" "}
                   <span className="font-semibold text-ui-text">
                     {convivenciaMediaGlobal}
                   </span>
@@ -813,7 +909,7 @@ export default function HabitacionDetail() {
                 </p>
 
                 <p className="text-sm text-ui-text-secondary">
-                  Convivientes con votos:{" "}
+                  Convivientes con reputación visible:{" "}
                   <span className="font-semibold text-ui-text">
                     {convivenciaConvivientesConVotos}
                   </span>
@@ -833,6 +929,11 @@ export default function HabitacionDetail() {
               <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                 {ocupantesActuales.map((ocupante) => {
                   const reputacionActual = ocupante.reputacion_actual || null;
+                  const reputacionSource = reputacionActual?.origen_metricas || "actual";
+                  const totalVisibleVotes = Number(
+                    reputacionActual?.total_votos ?? ocupante.total_votos ?? 0
+                  );
+                  const hasVisibleOccupantVotes = totalVisibleVotes > 0;
 
                   const limpiezaVotes = getMetricVoteItems(
                     reputacionActual,
@@ -881,41 +982,74 @@ export default function HabitacionDetail() {
                             </div>
                           </div>
 
-                          <span className="badge badge-info">
-                            Total votos: {Number(reputacionActual?.total_votos ?? ocupante.total_votos ?? 0)}
-                          </span>
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <SourceModeBadge sourceMode={reputacionSource} />
+
+                            <span className="badge badge-info">
+                              Total votos: {totalVisibleVotes}
+                            </span>
+                          </div>
                         </div>
+
+                        {reputacionSource === "historico_global" ? (
+                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                            <p className="text-sm text-amber-800">
+                              Este usuario no tiene votos actuales en la convivencia de este piso.
+                              Se muestra como referencia su reputación histórica.
+                            </p>
+                          </div>
+                        ) : !hasVisibleOccupantVotes ? (
+                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                            <p className="text-sm text-ui-text-secondary">
+                              Este conviviente todavía no ha recibido votos visibles.
+                            </p>
+                          </div>
+                        ) : null}
 
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                           <ConvivienteMetricPanel
                             title="Limpieza"
                             value={formatMetric(
-                              reputacionActual?.medias?.limpieza ?? ocupante.media_limpieza
+                              hasVisibleOccupantVotes
+                                ? (reputacionActual?.medias?.limpieza ?? ocupante.media_limpieza)
+                                : null
                             )}
                             tone="success"
                             items={limpiezaVotes}
                             onOpen={openSingleImage}
+                            sourceMode={reputacionSource}
+                            hasVisibleVotes={hasVisibleOccupantVotes}
                           />
 
                           <ConvivienteMetricPanel
                             title="Ruido"
                             value={formatMetric(
-                              reputacionActual?.medias?.ruido ?? ocupante.media_ruido
+                              hasVisibleOccupantVotes
+                                ? (reputacionActual?.medias?.ruido ?? ocupante.media_ruido)
+                                : null
                             )}
                             tone="warning"
                             items={ruidoVotes}
                             onOpen={openSingleImage}
+                            sourceMode={reputacionSource}
+                            hasVisibleVotes={hasVisibleOccupantVotes}
                           />
 
                           <ConvivienteMetricPanel
                             title="Puntualid. pagos"
                             value={formatMetric(
-                              reputacionActual?.medias?.puntualidad_pagos ??
-                                ocupante.media_puntualidad_pagos
+                              hasVisibleOccupantVotes
+                                ? (
+                                    reputacionActual?.medias?.puntualidad_pagos ??
+                                    ocupante.media_puntualidad_pagos
+                                  )
+                                : null
                             )}
                             tone="info"
                             items={pagosVotes}
                             onOpen={openSingleImage}
+                            sourceMode={reputacionSource}
+                            hasVisibleVotes={hasVisibleOccupantVotes}
                           />
                         </div>
                       </div>
@@ -947,11 +1081,11 @@ export default function HabitacionDetail() {
                   src={currentModalGalleryImage.url}
                   alt={currentModalGalleryImage.alt}
                 />
-      
+
                 <div className="absolute left-3 top-3">
                   <GallerySourceBadge source={currentModalGalleryImage.source} />
                 </div>
-        
+
                 {galleryImages.length > 1 ? (
                   <>
                     <button
@@ -962,7 +1096,7 @@ export default function HabitacionDetail() {
                     >
                       &lt;
                     </button>
-                
+
                     <button
                       type="button"
                       className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
@@ -974,12 +1108,12 @@ export default function HabitacionDetail() {
                   </>
                 ) : null}
               </div>
-              
+
               {galleryImages.length > 1 ? (
                 <div className="flex gap-2 overflow-x-auto pb-1">
                   {galleryImages.map((image, index) => {
                     const isActive = index === modalGalleryIndex;
-                  
+
                     return (
                       <button
                         key={`modal-${image.key}`}
@@ -1003,7 +1137,7 @@ export default function HabitacionDetail() {
                   })}
                 </div>
               ) : null}
-      
+
               <div className="text-center text-sm text-ui-text-secondary">
                 Foto {modalGalleryIndex + 1} de {galleryImages.length}
               </div>

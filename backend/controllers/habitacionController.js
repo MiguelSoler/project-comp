@@ -538,6 +538,45 @@ const getHabitacionById = async (req, res) => {
       },
     }));
 
+    const reputacionHistoricaQ = await pool.query(
+      `
+      SELECT
+        vu.votado_id,
+        COUNT(vu.id)::int AS total_votos,
+        ROUND(AVG(vu.limpieza)::numeric, 2) AS media_limpieza,
+        ROUND(AVG(vu.ruido)::numeric, 2) AS media_ruido,
+        ROUND(AVG(vu.puntualidad_pagos)::numeric, 2) AS media_puntualidad_pagos,
+        ROUND(
+          AVG(
+            ((vu.limpieza + vu.ruido + vu.puntualidad_pagos)::numeric / 3)
+          ),
+          2
+        ) AS media_global
+      FROM voto_usuario vu
+      WHERE vu.votado_id = ANY($1::int[])
+      GROUP BY vu.votado_id
+      `,
+      [convivienteIds]
+    );
+
+    const reputacionHistoricaMap = new Map(
+      reputacionHistoricaQ.rows.map((row) => [
+        Number(row.votado_id),
+        {
+          total_votos: Number(row.total_votos || 0),
+          medias: {
+            limpieza: row.media_limpieza !== null ? Number(row.media_limpieza) : null,
+            ruido: row.media_ruido !== null ? Number(row.media_ruido) : null,
+            puntualidad_pagos:
+              row.media_puntualidad_pagos !== null
+                ? Number(row.media_puntualidad_pagos)
+                : null,
+          },
+          media_global: row.media_global !== null ? Number(row.media_global) : null,
+        },
+      ])
+    );
+
     function buildDetalleMetricas(votosRecibidos) {
       return {
         limpieza: votosRecibidos.map((vote) => ({
@@ -564,76 +603,99 @@ const getHabitacionById = async (req, res) => {
       };
     }
 
-    function buildReputacionActualForUser(userId) {
-      const votosRecibidos = votosActuales.filter(
+    function buildVisibleReputacionForUser(userId) {
+      const votosRecibidosActuales = votosActuales.filter(
         (vote) => Number(vote.votado_id) === Number(userId)
       );
-
-      const limpieza = round2(avgNumbers(votosRecibidos.map((vote) => vote.limpieza)));
-      const ruido = round2(avgNumbers(votosRecibidos.map((vote) => vote.ruido)));
-      const puntualidad_pagos = round2(
-        avgNumbers(votosRecibidos.map((vote) => vote.puntualidad_pagos))
-      );
-
-      const media_global = round2(
-        avgNumbers(
-          votosRecibidos.map(
-            (vote) =>
-              (Number(vote.limpieza) +
-                Number(vote.ruido) +
-                Number(vote.puntualidad_pagos)) / 3
-          )
-        )
-      );
-
-      return {
-        total_votos: votosRecibidos.length,
+    
+      const actual = {
+        total_votos_actuales: votosRecibidosActuales.length,
+        total_votos: votosRecibidosActuales.length,
         medias: {
-          limpieza,
-          ruido,
-          puntualidad_pagos,
+          limpieza: round2(avgNumbers(votosRecibidosActuales.map((vote) => vote.limpieza))),
+          ruido: round2(avgNumbers(votosRecibidosActuales.map((vote) => vote.ruido))),
+          puntualidad_pagos: round2(
+            avgNumbers(votosRecibidosActuales.map((vote) => vote.puntualidad_pagos))
+          ),
         },
-        media_global,
-        detalle_votos: buildDetalleMetricas(votosRecibidos),
+        media_global: round2(
+          avgNumbers(
+            votosRecibidosActuales.map(
+              (vote) =>
+                (Number(vote.limpieza) +
+                  Number(vote.ruido) +
+                  Number(vote.puntualidad_pagos)) / 3
+            )
+          )
+        ),
+        detalle_votos: buildDetalleMetricas(votosRecibidosActuales),
+        origen_metricas: "actual",
+        fallback_historico_aplicado: false,
+      };
+    
+      const historica = reputacionHistoricaMap.get(Number(userId)) || null;
+      const usarFallback =
+        actual.total_votos_actuales === 0 &&
+        historica &&
+        Number(historica.total_votos || 0) > 0;
+    
+      if (!usarFallback) {
+        return actual;
+      }
+    
+      return {
+        total_votos_actuales: 0,
+        total_votos: historica.total_votos,
+        medias: historica.medias,
+        media_global: historica.media_global,
+        detalle_votos: buildDetalleMetricas(votosRecibidosActuales),
+        origen_metricas: "historico_global",
+        fallback_historico_aplicado: true,
       };
     }
 
     const ocupantesActuales = convivientes.map((conviviente) => {
-      const reputacionActual = buildReputacionActualForUser(conviviente.id);
+      const reputacionVisible = buildVisibleReputacionForUser(conviviente.id);
 
       return {
         ...conviviente,
-        reputacion_actual: reputacionActual,
-
+        reputacion_actual: reputacionVisible,
+      
         // Alias para compatibilidad con el frontend público actual
-        total_votos: reputacionActual.total_votos,
-        media_global: reputacionActual.media_global,
-        media_limpieza: reputacionActual.medias.limpieza,
-        media_ruido: reputacionActual.medias.ruido,
-        media_puntualidad_pagos: reputacionActual.medias.puntualidad_pagos,
+        total_votos: reputacionVisible.total_votos,
+        media_global: reputacionVisible.media_global,
+        media_limpieza: reputacionVisible.medias.limpieza,
+        media_ruido: reputacionVisible.medias.ruido,
+        media_puntualidad_pagos: reputacionVisible.medias.puntualidad_pagos,
       };
     });
 
-    const convivientesConVotos = ocupantesActuales.filter(
-      (item) => Number(item.reputacion_actual?.total_votos || 0) > 0
-    ).length;
+    const ocupantesConReputacionVisible = ocupantesActuales.filter(
+      (item) => Number(item.total_votos || 0) > 0
+    );
 
-    const limpiezaMedia = round2(avgNumbers(votosActuales.map((vote) => vote.limpieza)));
-    const ruidoMedio = round2(avgNumbers(votosActuales.map((vote) => vote.ruido)));
+    const convivientesConVotos = ocupantesConReputacionVisible.length;
+
+    const limpiezaMedia = round2(
+      avgNumbers(ocupantesConReputacionVisible.map((item) => item.media_limpieza))
+    );
+
+    const ruidoMedio = round2(
+      avgNumbers(ocupantesConReputacionVisible.map((item) => item.media_ruido))
+    );
+
     const pagosMedios = round2(
-      avgNumbers(votosActuales.map((vote) => vote.puntualidad_pagos))
+      avgNumbers(
+        ocupantesConReputacionVisible.map((item) => item.media_puntualidad_pagos)
+      )
     );
 
     const mediaGlobal = round2(
-      avgNumbers(
-        votosActuales.map(
-          (vote) =>
-            (Number(vote.limpieza) +
-              Number(vote.ruido) +
-              Number(vote.puntualidad_pagos)) / 3
-        )
-      )
+      avgNumbers(ocupantesConReputacionVisible.map((item) => item.media_global))
     );
+
+    const origenMetricasConvivencia =
+      votosActuales.length > 0 ? "actual" : "historico_global";
 
     return res.json({
       habitacion,
@@ -655,11 +717,10 @@ const getHabitacionById = async (req, res) => {
           puntualidad_pagos: pagosMedios,
         },
         media_global: mediaGlobal,
-
-        // Alias para compatibilidad con el frontend público actual
         media_limpieza: limpiezaMedia,
         media_ruido: ruidoMedio,
         media_puntualidad_pagos: pagosMedios,
+        origen_metricas: origenMetricasConvivencia,
       },
       ocupantes_actuales: ocupantesActuales,
     });
