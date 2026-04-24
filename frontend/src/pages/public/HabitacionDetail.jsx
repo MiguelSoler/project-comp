@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import { getApiErrorMessage } from "../../services/apiClient.js";
 import { getHabitacionById } from "../../services/habitacionService.js";
 
 function formatEur(value) {
@@ -308,6 +309,7 @@ export default function HabitacionDetail() {
   const [modalMode, setModalMode] = useState(null);
   const [singleModalImage, setSingleModalImage] = useState(null);
   const [modalGalleryIndex, setModalGalleryIndex] = useState(0);
+  const [showManagerPhone, setShowManagerPhone] = useState(false);
 
   function openSingleImage(url, label = "Foto") {
     if (!url) return;
@@ -340,6 +342,7 @@ export default function HabitacionDetail() {
   }
 
   useEffect(() => {
+    setShowManagerPhone(false);
     let cancelled = false;
 
     async function load() {
@@ -360,7 +363,7 @@ export default function HabitacionDetail() {
       } catch (err) {
         if (cancelled) return;
 
-        setErrorMsg(err?.error || err?.message || "No se pudo cargar la habitación.");
+        setErrorMsg(getApiErrorMessage(err, "No se pudo cargar la habitación."));
         setHabitacion(null);
         setFotos([]);
         setFotosPiso([]);
@@ -802,19 +805,28 @@ export default function HabitacionDetail() {
                           <p className="truncate text-sm font-semibold text-ui-text">
                             {formatDisplayName(manager)}
                           </p>
-                          <p className="mt-1 text-sm text-ui-text-secondary">
-                            {manager.telefono || "Teléfono no disponible"}
-                          </p>
+                          {!showManagerPhone ? (
+                            <p className="mt-1 text-sm text-ui-text-secondary">
+                              Teléfono oculto
+                            </p>
+                          ) : null}
                         </div>
                       </div>
 
                       {manager.telefono ? (
-                        <a
-                          href={`tel:${manager.telefono}`}
-                          className="btn btn-primary mt-4 w-full"
-                        >
-                          Llamar al manager
-                        </a>
+                        showManagerPhone ? (
+                          <div className="mt-4 rounded-lg border border-sky-200 bg-white px-4 py-3 text-center text-sm font-semibold text-ui-text">
+                            {manager.telefono}
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-primary mt-4 w-full"
+                            onClick={() => setShowManagerPhone(true)}
+                          >
+                            Ver teléfono del manager
+                          </button>
+                        )
                       ) : null}
                     </div>
                   ) : (

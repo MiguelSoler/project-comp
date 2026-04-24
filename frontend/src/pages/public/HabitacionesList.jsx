@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 import PageShell from "../../components/layout/PageShell.jsx";
+import { getApiErrorMessage } from "../../services/apiClient.js";
 import { listHabitaciones } from "../../services/habitacionService.js";
 import useAuth from "../../hooks/useAuth.js";
 
@@ -124,7 +125,7 @@ export default function HabitacionesList() {
       } catch (err) {
         if (cancelled) return;
 
-        setErrorMsg(err?.error || err?.message || "No se pudieron cargar las habitaciones.");
+        setErrorMsg(getApiErrorMessage(err, "No se pudieron cargar las habitaciones."));
         setItems([]);
         setTotalPages(1);
         setTotal(0);

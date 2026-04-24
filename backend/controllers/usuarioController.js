@@ -601,7 +601,7 @@ const changeMePassword = async (req, res) => {
     const ok = await bcrypt.compare(currentPassword, user.password_hash);
     if (!ok) {
       await client.query("ROLLBACK");
-      return res.status(401).json({ error: "INVALID_CREDENTIALS" });
+      return res.status(400).json({ error: "INVALID_CREDENTIALS" });
     }
 
     const sameAsOld = await bcrypt.compare(newPassword, user.password_hash);

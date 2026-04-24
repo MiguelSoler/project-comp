@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import { getApiErrorMessage } from "../../services/apiClient.js";
 import {
   addAdminHabitacionFoto,
   deleteAdminHabitacionFoto,
@@ -242,7 +243,7 @@ export default function HabitacionAdminDetail() {
     } catch (err) {
       setPhotoSectionFeedback({
         type: "error",
-        message: err?.error || err?.message || "No se pudo subir la foto.",
+        message: getApiErrorMessage(err, "No se pudo subir la foto."),
       });
     } finally {
       setUploadingPhoto(false);
@@ -395,7 +396,7 @@ export default function HabitacionAdminDetail() {
     } catch (err) {
       setPhotoSectionFeedback({
         type: "error",
-        message: err?.error || err?.message || "No se pudo eliminar la foto.",
+        message: getApiErrorMessage(err, "No se pudo eliminar la foto."),
       });
     } finally {
       setDeletingPhotoId(null);
@@ -432,7 +433,7 @@ export default function HabitacionAdminDetail() {
     } catch (err) {
       setEditFeedback({
         type: "error",
-        message: err?.error || err?.message || "No se pudo actualizar la habitación.",
+        message: getApiErrorMessage(err, "No se pudo actualizar la habitación."),
       });
     } finally {
       setSaving(false);

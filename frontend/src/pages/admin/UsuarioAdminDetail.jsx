@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import { getApiErrorMessage } from "../../services/apiClient.js";
 import {
   deleteAdminUsuarioFoto,
   getAdminUsuarioById,
@@ -552,7 +553,7 @@ export default function UsuarioAdminDetail() {
     } catch (err) {
       setEditFeedback({
         type: "error",
-        message: err?.error || err?.message || "No se pudo actualizar el usuario.",
+        message: getApiErrorMessage(err, "No se pudo actualizar el usuario."),
       });
     } finally {
       setSavingUser(false);
@@ -592,7 +593,7 @@ export default function UsuarioAdminDetail() {
     } catch (err) {
       setPhotoFeedback({
         type: "error",
-        message: err?.error || err?.message || "No se pudo actualizar la foto.",
+        message: getApiErrorMessage(err, "No se pudo actualizar la foto."),
       });
     } finally {
       setUploadingPhoto(false);
@@ -623,7 +624,7 @@ export default function UsuarioAdminDetail() {
     } catch (err) {
       setPhotoFeedback({
         type: "error",
-        message: err?.error || err?.message || "No se pudo eliminar la foto.",
+        message: getApiErrorMessage(err, "No se pudo eliminar la foto."),
       });
     } finally {
       setDeletingPhoto(false);
@@ -756,7 +757,7 @@ export default function UsuarioAdminDetail() {
     } catch (err) {
       setPasswordFeedback({
         type: "error",
-        message: err?.error || err?.message || "No se pudo restablecer la contraseña.",
+        message: getApiErrorMessage(err, "No se pudo restablecer la contraseña."),
       });
     } finally {
       setResettingPassword(false);

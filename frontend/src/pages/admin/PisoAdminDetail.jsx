@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import { getApiErrorMessage } from "../../services/apiClient.js";
 import {
   addAdminPisoFoto,
   deleteAdminPisoFoto,
@@ -230,7 +231,7 @@ export default function PisoAdminDetail() {
     } catch (err) {
       setEditPisoFeedback({
         type: "error",
-        message: err?.error || err?.message || "No se pudo actualizar el piso.",
+        message: getApiErrorMessage(err, "No se pudo actualizar el piso."),
       });
     } finally {
       setSavingPiso(false);
@@ -307,7 +308,7 @@ export default function PisoAdminDetail() {
       setIsCreateHabitacionOpen(false);
       setCreateHabitacionSuccess("Habitación creada correctamente.");
     } catch (err) {
-      setError(err?.error || err?.message || "No se pudo crear la habitación.");
+      setError(getApiErrorMessage(err, "No se pudo crear la habitación."));
     } finally {
       setCreatingHabitacion(false);
     }
@@ -411,7 +412,7 @@ export default function PisoAdminDetail() {
         ...prev,
         [habitacion.id]: {
           type: "error",
-          message: err?.error || err?.message || "No se pudo reactivar la habitación.",
+          message: getApiErrorMessage(err, "No se pudo reactivar la habitación."),
         },
       }));
     } finally {
@@ -487,7 +488,7 @@ export default function PisoAdminDetail() {
     const message =
       err?.error === "ROOM_OCCUPIED"
         ? "No puedes desactivar esta habitación mientras esté ocupada."
-        : err?.error || err?.message || "No se pudo desactivar la habitación.";
+        : getApiErrorMessage(err, "No se pudo desactivar la habitación.");
 
     setHabitacionCardFeedback((prev) => ({
       ...prev,
@@ -587,7 +588,7 @@ export default function PisoAdminDetail() {
       setPisoUploadForm(EMPTY_PISO_UPLOAD_FORM);
       setSuccess("Foto del piso subida correctamente.");
     } catch (err) {
-      setError(err?.error || err?.message || "No se pudo subir la foto del piso.");
+      setError(getApiErrorMessage(err, "No se pudo subir la foto del piso."));
     } finally {
       setUploadingPisoPhoto(false);
     }
@@ -705,7 +706,7 @@ export default function PisoAdminDetail() {
         ...prev,
         [pisoPhotoToDelete.id]: {
           type: "error",
-          message: err?.error || err?.message || "No se pudo eliminar la foto del piso.",
+          message: getApiErrorMessage(err, "No se pudo eliminar la foto del piso."),
         },
       }));
     } finally {

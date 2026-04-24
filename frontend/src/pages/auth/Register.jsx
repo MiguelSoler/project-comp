@@ -105,7 +105,7 @@ export default function Register() {
 
     try {
       await register(payload);
-      navigate("/");
+      navigate("/habitaciones");
     } catch (err) {
       setErrorMsg(getRegisterErrorMessage(err));
     } finally {

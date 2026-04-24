@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import { getApiErrorMessage } from "../../services/apiClient.js";
 import {
   deactivateAdminHabitacion,
   listAdminHabitaciones,
@@ -203,11 +204,12 @@ export default function AdminHabitacionesList() {
     const message =
       err?.error === "ROOM_OCCUPIED"
         ? "No puedes desactivar esta habitación mientras esté ocupada."
-        : err?.error ||
-          err?.message ||
-          (actionType === "deactivate"
+        : getApiErrorMessage(
+          err,
+          actionType === "deactivate"
             ? "No se pudo desactivar la habitación."
-            : "No se pudo reactivar la habitación.");
+            : "No se pudo reactivar la habitación."
+        );
 
     setHabitacionCardFeedback((prev) => ({
       ...prev,

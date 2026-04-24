@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import { getApiErrorMessage } from "../../services/apiClient.js";
 import {
   createAdminPiso,
   deactivateAdminPiso,
@@ -209,7 +210,7 @@ export default function DashboardManager() {
     } catch (err) {
       setCreatePisoFeedback({
         type: "error",
-        message: err?.error || err?.message || "No se pudo crear el piso.",
+        message: getApiErrorMessage(err, "No se pudo crear el piso."),
       });
     } finally {
       setCreatingPiso(false);
@@ -284,11 +285,12 @@ export default function DashboardManager() {
       const message =
         err?.error === "PISO_HAS_ACTIVE_OCCUPANTS"
           ? "No puedes desactivar este piso mientras tenga convivientes activos."
-          : err?.error ||
-            err?.message ||
-            (actionType === "deactivate"
+          : getApiErrorMessage(
+            err,
+            actionType === "deactivate"
               ? "No se pudo desactivar el piso."
-              : "No se pudo reactivar el piso.");
+              : "No se pudo reactivar el piso."
+          );
 
       setPisoCardFeedback((prev) => ({
         ...prev,

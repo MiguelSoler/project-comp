@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import { getApiErrorMessage } from "../../services/apiClient.js";
 import {
   deactivateAdminUsuario,
   listAdminUsuarios,
@@ -209,12 +210,12 @@ export default function AdminUsuariosList() {
         ...prev,
         [usuarioActionTarget.id]: {
           type: "error",
-          message:
-            err?.error ||
-            err?.message ||
-            (usuarioActionType === "deactivate"
+          message: getApiErrorMessage(
+            err,
+            usuarioActionType === "deactivate"
               ? "No se pudo desactivar el usuario."
-              : "No se pudo reactivar el usuario."),
+              : "No se pudo reactivar el usuario."
+          ),
         },
       }));
     } finally {

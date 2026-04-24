@@ -2,6 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import { getApiErrorMessage } from "../../services/apiClient.js";
 import {
   deactivateAdminPiso,
   listAdminPisos,
@@ -173,11 +174,12 @@ export default function AdminPisosList() {
     const message =
       err?.error === "PISO_HAS_ACTIVE_OCCUPANTS"
         ? "No puedes desactivar este piso mientras tenga convivientes activos."
-        : err?.error ||
-          err?.message ||
-          (actionType === "deactivate"
+        : getApiErrorMessage(
+          err,
+          actionType === "deactivate"
             ? "No se pudo desactivar el piso."
-            : "No se pudo reactivar el piso.");
+            : "No se pudo reactivar el piso."
+        );
 
     setPisoCardFeedback((prev) => ({
       ...prev,

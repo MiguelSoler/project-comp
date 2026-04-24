@@ -2,10 +2,8 @@ import { post } from "./apiClient.js";
 import { setToken, setUser, clearAuthStorage } from "../utilities/storage.js";
 
 /**
- * Esperamos que el backend devuelva algo tipo:
- * { token, user }  (user ya “sanitizado”)
- *
- * Si tu backend devuelve otra forma (p.ej. { token, usuario }), lo ajustamos.
+ * backend devuelve:
+ * { token, user }  (user ya “sanitizado”)  
  */
 
 export async function register(payload) {
