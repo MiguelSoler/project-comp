@@ -86,7 +86,7 @@ export default function Navbar() {
             </Link>
           </div>
 
-          <nav className="hidden lg:flex lg:items-center lg:gap-6 xl:gap-8">
+          <nav className="hidden xl:flex xl:items-center xl:gap-5 2xl:gap-8">
             <NavLink className={desktopNavLink} to="/habitaciones">
               Habitaciones
             </NavLink>
@@ -101,7 +101,7 @@ export default function Navbar() {
                 </Link>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-1.5 2xl:gap-2">
                 <NavLink className={desktopNavLink} to="/mi-estancia">
                   Mi estancia
                 </NavLink>
@@ -127,7 +127,7 @@ export default function Navbar() {
                   </Link>
                 ) : null}
 
-                <span className="text-sm text-ui-text-secondary">
+                <span className="max-w-[150px] truncate text-sm text-ui-text-secondary 2xl:max-w-none">
                   Hola{user?.nombre ? `, ${user.nombre}` : ""}
                 </span>
 
@@ -144,7 +144,7 @@ export default function Navbar() {
 
           <button
             type="button"
-            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/70 bg-white/80 text-ui-text shadow-sm transition-colors hover:bg-white lg:hidden"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-xl border border-white/70 bg-white/80 text-ui-text shadow-sm transition-colors hover:bg-white xl:hidden"
             aria-label={isMobileMenuOpen ? "Cerrar menú" : "Abrir menú"}
             aria-expanded={isMobileMenuOpen}
             aria-controls="mobile-navbar-menu"
@@ -157,7 +157,7 @@ export default function Navbar() {
         {isMobileMenuOpen ? (
           <div
             id="mobile-navbar-menu"
-            className="mt-4 rounded-2xl border border-white/70 bg-white/85 p-3 shadow-md backdrop-blur lg:hidden"
+            className="mt-4 max-h-[calc(100dvh-88px)] overflow-y-auto rounded-2xl border border-white/70 bg-white/85 p-3 shadow-md backdrop-blur xl:hidden"
           >
             <div className="space-y-2">
               <NavLink

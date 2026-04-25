@@ -14,7 +14,7 @@ export default function PageShell({
       <Container>
         <div className="space-y-6 md:space-y-8">
           {(title || subtitle || actions) && (
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex min-w-0 flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="min-w-0 flex-1 space-y-2">
                 {title ? (
                   <h1 className="text-2xl font-bold tracking-tight text-ui-text sm:text-3xl md:text-4xl">
@@ -30,7 +30,7 @@ export default function PageShell({
               </div>
 
               {actions ? (
-                <div className="flex w-full flex-wrap items-stretch gap-2 md:w-auto md:justify-end md:pt-1">
+                <div className="responsive-actions md:pt-1">
                   {actions}
                 </div>
               ) : null}
@@ -44,7 +44,7 @@ export default function PageShell({
               </div>
             </div>
           ) : (
-            <div className={contentClassName}>{children}</div>
+            <div className={`min-w-0 ${contentClassName}`.trim()}>{children}</div>
           )}
         </div>
       </Container>

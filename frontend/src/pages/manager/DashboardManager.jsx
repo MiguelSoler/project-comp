@@ -319,7 +319,7 @@ export default function DashboardManager() {
         variant="plain"
         contentClassName="space-y-4"
         actions={
-          <div className="flex items-center gap-2">
+          <div className="responsive-actions">
             <button
               type="button"
               className="btn btn-secondary btn-sm"
@@ -384,7 +384,7 @@ export default function DashboardManager() {
                 </div>
 
                 <form className="space-y-4" onSubmit={handleCreatePiso}>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="md:col-span-2">
                       <label className="label" htmlFor="direccion">
                         Dirección
@@ -480,7 +480,7 @@ export default function DashboardManager() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 3 }).map((_, index) => (
               <div key={index} className="card">
                 <div className="card-body space-y-3">
@@ -502,7 +502,7 @@ export default function DashboardManager() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {items.map((piso) => {
                 const cover = buildImageUrl(piso.cover_foto_piso_url);
 
@@ -630,13 +630,13 @@ export default function DashboardManager() {
               })}
             </div>
 
-            <div className="flex items-center justify-between gap-3 pt-2">
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-ui-text-secondary">
                 Página <span className="font-medium text-ui-text">{page}</span> de{" "}
                 <span className="font-medium text-ui-text">{totalPages}</span>
               </p>
 
-              <div className="flex items-center gap-2">
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"

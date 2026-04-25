@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Modal from "../../components/ui/Modal.jsx";
+import ResponsiveDisclosureCard from "../../components/ui/ResponsiveDisclosureCard.jsx";
 import { listMyVotes } from "../../services/votoUsuarioAuthService.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
@@ -38,7 +39,7 @@ function formatDateTime(value) {
   }).format(date);
 }
 
-function SummaryCard({ label, value, tone = "default" }) {
+function SummaryCard({ label, value, tone = "default", description }) {
   const toneClass =
     tone === "emerald"
       ? "border-emerald-300 bg-emerald-50"
@@ -49,8 +50,12 @@ function SummaryCard({ label, value, tone = "default" }) {
           : "border-amber-300 bg-amber-50";
 
   return (
-    <div className={`rounded-2xl border ${toneClass}`}>
-      <div className="card-body">
+    <div
+      className={`group relative rounded-2xl border ${toneClass}`}
+      tabIndex={description ? 0 : undefined}
+      aria-label={description ? `${label}: ${description}` : undefined}
+    >
+      <div className="p-3 sm:p-4">
         <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
           {label}
         </p>
@@ -58,6 +63,12 @@ function SummaryCard({ label, value, tone = "default" }) {
           {value}
         </p>
       </div>
+
+      {description ? (
+        <div className="pointer-events-none absolute inset-x-0 top-full z-20 mt-2 hidden rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-ui-text-secondary shadow-modal group-hover:block group-focus:block">
+          {description}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -76,6 +87,7 @@ export default function MisVotos() {
 
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState({ url: "", alt: "" });
+  const [openVoteId, setOpenVoteId] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -90,6 +102,7 @@ export default function MisVotos() {
         if (!isMounted) return;
 
         setItems(Array.isArray(data?.items) ? data.items : []);
+        setOpenVoteId(null);
         setTotalPages(Number(data?.totalPages || 1));
         setTotal(Number(data?.total || 0));
       } catch (err) {
@@ -139,7 +152,8 @@ export default function MisVotos() {
               <div className="card-body space-y-4">
                 <div className="skeleton h-10 w-56" />
                 <div className="skeleton h-28 w-full" />
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="skeleton h-24 w-full rounded-2xl" />
                   <div className="skeleton h-24 w-full rounded-2xl" />
                   <div className="skeleton h-24 w-full rounded-2xl" />
                   <div className="skeleton h-24 w-full rounded-2xl" />
@@ -195,26 +209,30 @@ export default function MisVotos() {
             </header>
 
             {!error ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-3">
                 <SummaryCard
                   label="Total emitidos"
                   value={total}
                   tone="violet"
+                  description="Número total de votos que has emitido en toda tu actividad."
                 />
                 <SummaryCard
                   label="En esta página"
                   value={items.length}
                   tone="sky"
+                  description="Votos que se están mostrando ahora mismo en esta página."
                 />
                 <SummaryCard
                   label="Editables"
                   value={editableCount}
                   tone="emerald"
+                  description="Votos que todavía puedes modificar porque seguís conviviendo actualmente."
                 />
                 <SummaryCard
                   label="Cerrados"
                   value={closedCount}
                   tone="default"
+                  description="Votos históricos que ya no se pueden editar."
                 />
               </div>
             ) : null}
@@ -295,35 +313,62 @@ export default function MisVotos() {
                     const canEdit = Boolean(item.can_edit);
 
                     return (
-                      <article
+                      <ResponsiveDisclosureCard
                         key={item.id}
-                        className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
-                      >
-                        <div className={`h-2 w-full ${canEdit ? "bg-emerald-500" : "bg-slate-400"}`} />
-
-                        <div className="card-body space-y-4">
-                          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                            <div className="flex items-start gap-4">
+                        id={`mis-votos-${item.id}`}
+                        open={openVoteId === item.id}
+                        onToggle={() =>
+                          setOpenVoteId((prev) => (prev === item.id ? null : item.id))
+                        }
+                        accentClassName={canEdit ? "bg-emerald-500" : "bg-slate-400"}
+                        summary={
+                          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                            <div className="shrink-0">
                               {avatarUrl ? (
                                 <button
                                   type="button"
-                                  className="block"
-                                  onClick={() =>
-                                    openPhotoModal(avatarUrl, nombreCompleto || "Usuario")
-                                  }
+                                  className="block rounded-full"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openPhotoModal(avatarUrl, nombreCompleto || "Usuario");
+                                  }}
                                   aria-label="Ver foto de perfil"
                                 >
                                   <img
                                     src={avatarUrl}
                                     alt={nombreCompleto || "Conviviente"}
-                                    className="h-16 w-16 rounded-full border border-ui-border object-cover"
+                                    className="h-14 w-14 rounded-full border border-ui-border object-cover sm:h-16 sm:w-16"
                                   />
                                 </button>
                               ) : (
-                                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary sm:h-16 sm:w-16">
                                   {getInitials(item.votado)}
                                 </div>
                               )}
+                            </div>
+
+                            <div className="min-w-0">
+                              <h2 className="truncate text-base font-semibold text-ui-text sm:text-lg">
+                                {nombreCompleto || "Sin nombre"}
+                              </h2>
+                              <p className="truncate text-sm text-ui-text-secondary">
+                                {item.piso?.ciudad || "â€”"}
+                                {item.piso?.direccion ? ` Â· ${item.piso.direccion}` : ""}
+                              </p>
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <span className={canEdit ? "badge badge-success" : "badge badge-neutral"}>
+                                  {canEdit ? "Editable" : "Cerrado"}
+                                </span>
+                                <span className="badge badge-info">
+                                  {item.limpieza}/{item.ruido}/{item.puntualidad_pagos}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        }
+                      >
+                          <div className="flex flex-wrap items-center justify-end gap-2">
+                            <div className="hidden">
 
                               {item.can_view_profile ? (
                                 <Link
@@ -358,11 +403,16 @@ export default function MisVotos() {
                               )}
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="badge badge-info">
-                                Cambios: {item.num_cambios}
-                              </span>
+                            {item.can_view_profile ? (
+                              <Link
+                                to={`/usuarios/${item.votado_id}`}
+                                className="btn btn-secondary btn-sm"
+                              >
+                                Ver perfil
+                              </Link>
+                            ) : null}
 
+                            <div className="flex flex-wrap items-center gap-2">
                               {canEdit ? (
                                 <Link
                                   to={`/convivientes/${item.votado_id}/votar`}
@@ -394,7 +444,7 @@ export default function MisVotos() {
                             </div>
                           )}
 
-                          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                          <div className="grid grid-cols-2 gap-2 sm:gap-3">
                             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
                               <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">
                                 Limpieza
@@ -415,10 +465,19 @@ export default function MisVotos() {
 
                             <div className="rounded-xl border border-sky-200 bg-sky-50 p-3">
                               <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
-                                Puntualidad de pagos
+                                Pagos
                               </p>
                               <p className="mt-1 text-lg font-semibold text-ui-text">
                                 {item.puntualidad_pagos}/5
+                              </p>
+                            </div>
+
+                            <div className="rounded-xl border border-violet-200 bg-violet-50 p-3">
+                              <p className="text-xs font-medium uppercase tracking-wide text-violet-700">
+                                Cambios
+                              </p>
+                              <p className="mt-1 text-lg font-semibold text-ui-text">
+                                {item.num_cambios}
                               </p>
                             </div>
                           </div>
@@ -432,8 +491,7 @@ export default function MisVotos() {
                               Última actualización: {formatDateTime(item.updated_at)}
                             </span>
                           </div>
-                        </div>
-                      </article>
+                      </ResponsiveDisclosureCard>
                     );
                   })}
                 </div>

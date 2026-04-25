@@ -96,7 +96,7 @@ export default function Modal({
       ? "w-full max-w-xl"
       : modalSize === "lg"
         ? "w-full max-w-3xl"
-        : "w-[75vw] max-w-none";
+        : "w-full max-w-5xl";
   }, [modalSize]);
 
   const headerClass =
@@ -122,7 +122,7 @@ export default function Modal({
 
   return (
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-300 ease-in-out ${
+      className={`fixed inset-0 z-50 flex items-end justify-center p-0 transition-opacity duration-300 ease-in-out sm:items-center sm:p-4 ${
         isVisible ? "bg-black/45 opacity-100" : "bg-black/0 opacity-0"
       }`}
       role="dialog"
@@ -131,14 +131,14 @@ export default function Modal({
       onClick={handleOverlayClick}
     >
       <div
-        className={`${sizeClass} overflow-hidden rounded-xl border border-ui-border bg-ui-surface shadow-modal transition-opacity duration-300 ease-in-out ${
+        className={`${sizeClass} max-h-[92dvh] overflow-hidden rounded-t-xl border border-ui-border bg-ui-surface shadow-modal transition-opacity duration-300 ease-in-out sm:rounded-xl ${
           isVisible ? "opacity-100" : "opacity-0"
         }`}
         style={{ willChange: "opacity" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className={headerClass}>
-          <h3 className={titleClass}>{modalTitle || ""}</h3>
+          <h3 className={`${titleClass} min-w-0 break-words`}>{modalTitle || ""}</h3>
 
           {showCloseButton ? (
             <button
@@ -151,7 +151,7 @@ export default function Modal({
           ) : null}
         </div>
 
-        <div className="p-4">{modalChildren}</div>
+        <div className="max-h-[calc(92dvh-64px)] overflow-y-auto p-4">{modalChildren}</div>
       </div>
     </div>
   );

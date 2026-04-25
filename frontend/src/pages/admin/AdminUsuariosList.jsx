@@ -234,12 +234,12 @@ export default function AdminUsuariosList() {
         variant="plain"
         contentClassName="space-y-4"
         actions={
-          <div className="flex flex-col items-end gap-4">
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end sm:gap-4">
             <Link to="/admin" className="btn btn-secondary btn-sm">
               Volver
             </Link>
 
-            <div className="flex items-center gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
@@ -265,13 +265,13 @@ export default function AdminUsuariosList() {
 
         <div className="rounded-2xl border border-slate-300 bg-white p-4 md:p-5">
           <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h2 className="text-lg font-semibold text-ui-text">Búsqueda y filtros</h2>
 
-              <div className="flex items-center gap-2">
+              <div className="flex w-full items-center gap-2 sm:w-auto">
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-secondary btn-sm w-full sm:w-auto"
                   onClick={handleClearFilters}
                 >
                   Limpiar filtros
@@ -279,8 +279,8 @@ export default function AdminUsuariosList() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <div className="xl:col-span-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="sm:col-span-2 xl:col-span-2">
                 <label className="label" htmlFor="admin-usuarios-q">
                   Buscar
                 </label>
@@ -337,7 +337,7 @@ export default function AdminUsuariosList() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <div>
                 <label className="label" htmlFor="admin-usuarios-sort">
                   Ordenar por
@@ -361,7 +361,7 @@ export default function AdminUsuariosList() {
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {Array.from({ length: 6 }).map((_, index) => (
               <div key={index} className="card">
                 <div className="card-body space-y-4">
@@ -389,7 +389,7 @@ export default function AdminUsuariosList() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {items.map((usuario) => {
                 const avatarUrl = buildImageUrl(usuario.foto_perfil_url);
                 const isInactive = !usuario.activo;
@@ -525,13 +525,13 @@ export default function AdminUsuariosList() {
               })}
             </div>
 
-            <div className="flex items-center justify-between gap-3 pt-2">
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-ui-text-secondary">
                 Página <span className="font-medium text-ui-text">{page}</span> de{" "}
                 <span className="font-medium text-ui-text">{totalPages}</span>
               </p>
 
-              <div className="flex items-center gap-2">
+              <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
                 <button
                   type="button"
                   className="btn btn-secondary btn-sm"

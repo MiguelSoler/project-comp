@@ -384,7 +384,7 @@ export default function HabitacionDetail() {
 
   const isDisponible = useMemo(() => {
     if (!habitacion) return false;
-    return Boolean(habitacion.disponible) && !Boolean(habitacion.ocupada);
+    return habitacion.disponible && !habitacion.ocupada;
   }, [habitacion]);
 
   const galleryImages = useMemo(() => {
@@ -481,7 +481,6 @@ export default function HabitacionDetail() {
   );
 
   const hasConvivenciaVisibleVotes = convivenciaConvivientesConVotos > 0;
-  const hasCurrentVotesInPiso = convivenciaTotalVotosActuales > 0;
   const hasConvivientes = convivenciaConvivientesActuales > 0;
 
   const convivenciaMediaGlobal = formatMetric(
@@ -628,8 +627,8 @@ export default function HabitacionDetail() {
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-12">
-            <div className="space-y-6 lg:col-span-8">
+          <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
+            <div className="space-y-4 sm:space-y-6 lg:col-span-8">
               {currentGalleryImage ? (
                 <div className="space-y-3">
                   <div className="relative overflow-hidden rounded-lg border border-ui-border bg-white">
@@ -639,7 +638,7 @@ export default function HabitacionDetail() {
                       onClick={() => openGalleryModal(activeGalleryIndex)}
                     >
                       <img
-                        className="aspect-[4/3] w-full object-cover"
+                        className="aspect-square w-full object-cover sm:aspect-[4/3]"
                         src={currentGalleryImage.url}
                         alt={currentGalleryImage.alt}
                         loading="lazy"
@@ -654,7 +653,7 @@ export default function HabitacionDetail() {
                       <>
                         <button
                           type="button"
-                          className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                          className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-2.5 py-1.5 text-base font-semibold text-ui-text shadow sm:left-3 sm:px-3 sm:py-2 sm:text-lg"
                           onClick={showPrevGalleryImage}
                           aria-label="Foto anterior"
                         >
@@ -663,7 +662,7 @@ export default function HabitacionDetail() {
 
                         <button
                           type="button"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-2.5 py-1.5 text-base font-semibold text-ui-text shadow sm:right-3 sm:px-3 sm:py-2 sm:text-lg"
                           onClick={showNextGalleryImage}
                           aria-label="Foto siguiente"
                         >
@@ -720,7 +719,7 @@ export default function HabitacionDetail() {
                   ) : null}
                 </div>
               ) : (
-                <div className="skeleton aspect-[4/3] w-full" />
+                <div className="skeleton aspect-square w-full sm:aspect-[4/3]" />
               )}
 
               <div className="card">
@@ -758,10 +757,10 @@ export default function HabitacionDetail() {
               ) : null}
             </div>
 
-            <aside className="space-y-4 lg:col-span-4">
+            <aside className="order-first space-y-4 lg:order-none lg:col-span-4">
               <div className="card">
                 <div className="card-body space-y-3">
-                  <div className="flex items-end justify-between gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between lg:flex-col lg:items-stretch xl:flex-row xl:items-end">
                     <div>
                       <p className="text-sm text-ui-text-secondary">Precio</p>
                       <p className="text-2xl font-bold text-ui-text">
@@ -867,7 +866,7 @@ export default function HabitacionDetail() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
               <MetricCard
                 title="Media global"
                 value={convivenciaMediaGlobal}
@@ -900,12 +899,12 @@ export default function HabitacionDetail() {
               />
             </div>
 
-            <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
+            <div className="rounded-xl border border-slate-300 bg-slate-50 p-3 sm:p-4">
               <p className="text-sm font-semibold text-ui-text">
                 Resumen general visible del grupo
               </p>
 
-              <div className="mt-3 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-4">
+              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <p className="text-sm text-ui-text-secondary">
                   Media global visible del piso:{" "}
                   <span className="font-semibold text-ui-text">
@@ -938,7 +937,7 @@ export default function HabitacionDetail() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                 {ocupantesActuales.map((ocupante) => {
                   const reputacionActual = ocupante.reputacion_actual || null;
                   const reputacionSource = reputacionActual?.origen_metricas || "actual";
@@ -968,7 +967,7 @@ export default function HabitacionDetail() {
                       className="card"
                     >
                       <div className="card-body space-y-4">
-                        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                           <div className="flex items-center gap-4">
                             <PersonAvatar
                               entity={ocupante}
@@ -1018,7 +1017,7 @@ export default function HabitacionDetail() {
                           </div>
                         ) : null}
 
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                           <ConvivienteMetricPanel
                             title="Limpieza"
                             value={formatMetric(

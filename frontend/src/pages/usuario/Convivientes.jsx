@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import ResponsiveDisclosureCard from "../../components/ui/ResponsiveDisclosureCard.jsx";
 import { getMyStay } from "../../services/usuarioService.js";
 import { listConvivientesByPiso } from "../../services/usuarioHabitacionService.js";
 
@@ -68,6 +69,7 @@ export default function Convivientes() {
   const navigate = useNavigate();
   const [stay, setStay] = useState(null);
   const [convivientes, setConvivientes] = useState([]);
+  const [openConvivienteId, setOpenConvivienteId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -105,6 +107,7 @@ export default function Convivientes() {
             (item) => Number(item?.usuario_habitacion_id) !== Number(currentStay?.id)
           )
         );
+        setOpenConvivienteId(null);
       } catch (err) {
         if (!isMounted) return;
         setError(err?.message || "No se pudieron cargar los convivientes.");
@@ -289,13 +292,46 @@ export default function Convivientes() {
                   .join(" ");
 
                 return (
-                  <article
+                  <ResponsiveDisclosureCard
                     key={conviviente.usuario_habitacion_id}
-                    className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"
-                  >
-                    <div className="h-2 w-full bg-sky-500" />
+                    id={`conviviente-${conviviente.usuario_habitacion_id}`}
+                    open={openConvivienteId === conviviente.usuario_habitacion_id}
+                    onToggle={() =>
+                      setOpenConvivienteId((prev) =>
+                        prev === conviviente.usuario_habitacion_id
+                          ? null
+                          : conviviente.usuario_habitacion_id
+                      )
+                    }
+                    accentClassName="bg-sky-500"
+                    summary={
+                      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                        {conviviente.foto_perfil_url ? (
+                          <img
+                            src={buildImageUrl(conviviente.foto_perfil_url)}
+                            alt={nombreCompleto || "Conviviente"}
+                            className="h-14 w-14 shrink-0 rounded-full border border-ui-border object-cover sm:h-16 sm:w-16"
+                          />
+                        ) : (
+                          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary sm:h-16 sm:w-16">
+                            {getInitials(conviviente)}
+                          </div>
+                        )}
 
-                    <div className="card-body space-y-4">
+                        <div className="min-w-0">
+                          <h2 className="truncate text-base font-semibold text-ui-text sm:text-lg">
+                            {nombreCompleto || "Sin nombre"}
+                          </h2>
+                          <p className="truncate text-sm text-ui-text-secondary">
+                            HabitaciÃ³n #{conviviente.habitacion_id}
+                          </p>
+                          <span className="mt-2 inline-flex badge badge-success">
+                            Conviviente actual
+                          </span>
+                        </div>
+                      </div>
+                    }
+                  >
                       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                         <Link
                           to={`/usuarios/${conviviente.id}`}
@@ -363,8 +399,7 @@ export default function Convivientes() {
                           </p>
                         </div>
                       </div>
-                    </div>
-                  </article>
+                  </ResponsiveDisclosureCard>
                 );
               })}
             </div>

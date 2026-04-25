@@ -6,9 +6,11 @@ import {
   updateMyProfile,
   updateMyProfileFoto,
   deleteMyProfileFoto,
+  deleteMyAccount,
   dejarDeSerAdvertiser,
   updateMyPassword,
 } from "../../services/usuarioService.js";
+import { getApiErrorMessage } from "../../services/apiClient.js";
 import useAuth from "../../hooks/useAuth.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
@@ -95,7 +97,7 @@ function getPasswordErrorMessage(err) {
 export default function Perfil() {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
-  const { setUser, setSession } = useAuth();
+  const { logout, setUser, setSession } = useAuth();
 
   const [activeTab, setActiveTab] = useState("perfil");
 
@@ -111,16 +113,19 @@ export default function Perfil() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [deletingPhoto, setDeletingPhoto] = useState(false);
   const [changingRole, setChangingRole] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [photoFeedback, setPhotoFeedback] = useState(null);
   const [passwordFeedback, setPasswordFeedback] = useState(null);
   const [roleFeedback, setRoleFeedback] = useState(null);
+  const [accountFeedback, setAccountFeedback] = useState(null);
 
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [isDeletePhotoModalOpen, setIsDeletePhotoModalOpen] = useState(false);
   const [isLeaveAdvertiserModalOpen, setIsLeaveAdvertiserModalOpen] = useState(false);
+  const [isDeleteAccountModalOpen, setIsDeleteAccountModalOpen] = useState(false);
 
   const avatarUrl = buildImageUrl(meta?.foto_perfil_url);
   const hasCuentaTab = meta?.rol === "user" || meta?.rol === "advertiser";
@@ -136,6 +141,7 @@ export default function Perfil() {
         setPhotoFeedback(null);
         setPasswordFeedback(null);
         setRoleFeedback(null);
+        setAccountFeedback(null);
 
         const data = await getMyProfile();
         const user = data?.user || null;
@@ -213,6 +219,7 @@ export default function Perfil() {
       setPhotoFeedback(null);
       setPasswordFeedback(null);
       setRoleFeedback(null);
+      setAccountFeedback(null);
 
       const payload = {
         nombre: form.nombre.trim(),
@@ -282,6 +289,7 @@ export default function Perfil() {
       setPhotoFeedback(null);
       setPasswordFeedback(null);
       setRoleFeedback(null);
+      setAccountFeedback(null);
 
       const data = await updateMyPassword({
         current_password: currentPassword,
@@ -324,6 +332,7 @@ export default function Perfil() {
       setPhotoFeedback(null);
       setPasswordFeedback(null);
       setRoleFeedback(null);
+      setAccountFeedback(null);
 
       const formData = new FormData();
       formData.append("foto", selectedPhotoFile);
@@ -358,6 +367,7 @@ export default function Perfil() {
     setPhotoFeedback(null);
     setPasswordFeedback(null);
     setRoleFeedback(null);
+    setAccountFeedback(null);
     setIsDeletePhotoModalOpen(true);
   }
 
@@ -374,6 +384,7 @@ export default function Perfil() {
       setPhotoFeedback(null);
       setPasswordFeedback(null);
       setRoleFeedback(null);
+      setAccountFeedback(null);
 
       await deleteMyProfileFoto();
 
@@ -423,6 +434,7 @@ export default function Perfil() {
     setPhotoFeedback(null);
     setPasswordFeedback(null);
     setRoleFeedback(null);
+    setAccountFeedback(null);
     setIsLeaveAdvertiserModalOpen(true);
   }
 
@@ -439,6 +451,7 @@ export default function Perfil() {
       setPhotoFeedback(null);
       setPasswordFeedback(null);
       setRoleFeedback(null);
+      setAccountFeedback(null);
 
       const data = await dejarDeSerAdvertiser();
 
@@ -485,6 +498,47 @@ export default function Perfil() {
     }
   }
 
+  function openDeleteAccountModal() {
+    setError(null);
+    setSuccess(null);
+    setPhotoFeedback(null);
+    setPasswordFeedback(null);
+    setRoleFeedback(null);
+    setAccountFeedback(null);
+    setIsDeleteAccountModalOpen(true);
+  }
+
+  function closeDeleteAccountModal() {
+    if (deletingAccount) return;
+    setIsDeleteAccountModalOpen(false);
+  }
+
+  async function handleConfirmDeleteAccount() {
+    try {
+      setDeletingAccount(true);
+      setError(null);
+      setSuccess(null);
+      setPhotoFeedback(null);
+      setPasswordFeedback(null);
+      setRoleFeedback(null);
+      setAccountFeedback(null);
+
+      await deleteMyAccount();
+
+      setIsDeleteAccountModalOpen(false);
+      logout();
+      navigate("/", { replace: true });
+    } catch (err) {
+      setIsDeleteAccountModalOpen(false);
+      setAccountFeedback({
+        type: "error",
+        message: getApiErrorMessage(err, "No se pudo eliminar la cuenta."),
+      });
+    } finally {
+      setDeletingAccount(false);
+    }
+  }
+
   if (loading) {
     return (
       <section className="section">
@@ -507,9 +561,9 @@ export default function Perfil() {
     <>
       <section className="section">
         <div className="app-container">
-          <div className="mx-auto max-w-3xl space-y-6">
+          <div className="mx-auto max-w-3xl space-y-4 sm:space-y-6">
             <header className="overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-violet-50 shadow-sm">
-              <div className="flex flex-col gap-4 p-6 md:flex-row md:items-start md:justify-between md:p-8">
+              <div className="flex flex-col gap-4 p-4 sm:p-6 md:flex-row md:items-start md:justify-between md:p-8">
                 <div className="space-y-3">
                   <div className="inline-flex rounded-full border border-sky-200 bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-sky-700">
                     Zona personal
@@ -525,10 +579,10 @@ export default function Perfil() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-stretch sm:justify-end">
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className="btn btn-secondary btn-sm w-full sm:w-auto"
                     onClick={() => navigate(-1)}
                   >
                     Volver
@@ -558,10 +612,16 @@ export default function Perfil() {
               </div>
             ) : null}
 
+            {accountFeedback ? (
+              <div className={accountFeedback.type === "success" ? "alert-success" : "alert-error"}>
+                {accountFeedback.message}
+              </div>
+            ) : null}
+
             <div className="overflow-hidden rounded-3xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-violet-50 shadow-sm">
               <div className="card-body space-y-4">
                 <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div className="flex items-center gap-4">
+                  <div className="flex min-w-0 items-center gap-3 sm:gap-4">
                     {avatarUrl ? (
                       <button
                         type="button"
@@ -572,20 +632,20 @@ export default function Perfil() {
                         <img
                           src={avatarUrl}
                           alt={meta?.nombre || "Foto de perfil"}
-                          className="h-20 w-20 rounded-full object-cover"
+                          className="h-16 w-16 rounded-full object-cover sm:h-20 sm:w-20"
                         />
                       </button>
                     ) : (
-                      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-blue-100 text-xl font-semibold text-brand-primary">
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xl font-semibold text-brand-primary sm:h-20 sm:w-20">
                         {getInitials(meta)}
                       </div>
                     )}
 
-                    <div>
-                      <p className="text-lg font-semibold text-ui-text">
+                    <div className="min-w-0">
+                      <p className="truncate text-lg font-semibold text-ui-text">
                         {[meta?.nombre, meta?.apellidos].filter(Boolean).join(" ") || "Usuario"}
                       </p>
-                      <p className="text-sm text-ui-text-secondary">
+                      <p className="truncate text-sm text-ui-text-secondary">
                         {meta?.email || "—"}
                       </p>
                       <p className="mt-1 text-xs text-ui-text-secondary">
@@ -601,8 +661,8 @@ export default function Perfil() {
               <div
                 role="tablist"
                 aria-label="Secciones del perfil"
-                className={`grid grid-cols-1 gap-2 ${
-                  hasCuentaTab ? "md:grid-cols-4" : "md:grid-cols-3"
+                className={`grid grid-cols-2 gap-2 ${
+                  hasCuentaTab ? "lg:grid-cols-4" : "sm:grid-cols-3"
                 }`}
               >
                 <button
@@ -701,7 +761,7 @@ export default function Perfil() {
               </div>
 
               <div
-                className={`border border-slate-300 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-4 shadow-sm md:p-5 ${
+                className={`border border-slate-300 bg-gradient-to-br from-white via-slate-50 to-sky-50 p-3 shadow-sm sm:p-4 md:p-5 ${
                   activeTab === "perfil"
                     ? "rounded-b-2xl rounded-tr-2xl rounded-tl-none"
                     : activeTab === "seguridad"
@@ -789,10 +849,10 @@ export default function Perfil() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-end">
+                      <div className="flex items-center justify-stretch sm:justify-end">
                         <button
                           type="submit"
-                          className="btn btn-primary"
+                          className="btn btn-primary w-full sm:w-auto"
                           disabled={saving}
                           aria-busy={saving}
                         >
@@ -862,10 +922,10 @@ export default function Perfil() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center sm:justify-end">
                         <button
                           type="button"
-                          className="btn btn-secondary"
+                          className="btn btn-secondary w-full sm:w-auto"
                           onClick={resetPasswordForm}
                           disabled={changingPassword}
                         >
@@ -874,7 +934,7 @@ export default function Perfil() {
 
                         <button
                           type="submit"
-                          className="btn btn-primary"
+                          className="btn btn-primary w-full sm:w-auto"
                           disabled={changingPassword}
                           aria-busy={changingPassword}
                         >
@@ -906,7 +966,7 @@ export default function Perfil() {
                               : "Todavía no has subido ninguna foto de perfil."}
                         </div>
 
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center">
                           <input
                             ref={fileInputRef}
                             id="perfil-foto"
@@ -919,7 +979,7 @@ export default function Perfil() {
 
                           <label
                             htmlFor="perfil-foto"
-                            className="btn btn-secondary btn-sm cursor-pointer"
+                            className="btn btn-secondary btn-sm w-full cursor-pointer sm:w-auto"
                           >
                             Seleccionar foto
                           </label>
@@ -928,7 +988,7 @@ export default function Perfil() {
                             <>
                               <button
                                 type="button"
-                                className="btn btn-primary btn-sm"
+                                className="btn btn-primary btn-sm w-full sm:w-auto"
                                 onClick={handleUploadPhoto}
                                 disabled={uploadingPhoto || deletingPhoto}
                               >
@@ -937,7 +997,7 @@ export default function Perfil() {
 
                               <button
                                 type="button"
-                                className="btn btn-secondary btn-sm"
+                                className="btn btn-secondary btn-sm w-full sm:w-auto"
                                 onClick={resetPhotoSelection}
                                 disabled={uploadingPhoto || deletingPhoto}
                               >
@@ -949,7 +1009,7 @@ export default function Perfil() {
                           {meta?.foto_perfil_url ? (
                             <button
                               type="button"
-                              className="btn btn-danger btn-sm"
+                              className="btn btn-danger btn-sm w-full sm:w-auto"
                               onClick={openDeletePhotoModal}
                               disabled={uploadingPhoto || deletingPhoto}
                             >
@@ -986,10 +1046,10 @@ export default function Perfil() {
                           </p>
                         </div>
 
-                        <div className="flex justify-end">
+                        <div className="flex justify-stretch sm:justify-end">
                           <button
                             type="button"
-                            className="btn btn-primary"
+                            className="btn btn-primary w-full sm:w-auto"
                             onClick={() => navigate("/convertirse-anunciante")}
                           >
                             Empezar
@@ -1009,10 +1069,10 @@ export default function Perfil() {
                           </p>
                         </div>
 
-                        <div className="flex justify-end">
+                        <div className="flex justify-stretch sm:justify-end">
                           <button
                             type="button"
-                            className="btn btn-danger"
+                            className="btn btn-danger w-full sm:w-auto"
                             onClick={openLeaveAdvertiserModal}
                           >
                             Dejar de ser anunciante
@@ -1020,6 +1080,28 @@ export default function Perfil() {
                         </div>
                       </>
                     ) : null}
+
+                    <div className="border-t border-slate-300 pt-4">
+                      <div>
+                        <h2 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                          Eliminar cuenta
+                        </h2>
+                        <p className="mt-1 text-sm text-ui-text-secondary">
+                          Desactiva tu cuenta y cierra tu sesión en este dispositivo.
+                        </p>
+                      </div>
+
+                      <div className="mt-4 flex justify-stretch sm:justify-end">
+                        <button
+                          type="button"
+                          className="btn btn-danger w-full sm:w-auto"
+                          onClick={openDeleteAccountModal}
+                          disabled={deletingAccount}
+                        >
+                          Eliminar cuenta
+                        </button>
+                      </div>
+                    </div>
                   </section>
                 ) : null}
               </div>
@@ -1127,6 +1209,49 @@ export default function Perfil() {
               disabled={changingRole}
             >
               {changingRole ? "Procesando..." : "Sí, continuar"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={isDeleteAccountModalOpen}
+        title="Eliminar cuenta"
+        onClose={closeDeleteAccountModal}
+        size="md"
+        tone="default"
+        closeLabel="Cancelar"
+        closeOnOverlay={false}
+        showCloseButton={false}
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-ui-text-secondary">
+            Vas a eliminar tu cuenta. Se cerrará tu sesión y no podrás acceder con este usuario.
+          </p>
+
+          <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+            <p className="text-sm font-semibold text-rose-800">
+              Esta acción no se puede deshacer desde la aplicación.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={closeDeleteAccountModal}
+              disabled={deletingAccount}
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              onClick={handleConfirmDeleteAccount}
+              disabled={deletingAccount}
+            >
+              {deletingAccount ? "Eliminando..." : "Sí, eliminar cuenta"}
             </button>
           </div>
         </div>

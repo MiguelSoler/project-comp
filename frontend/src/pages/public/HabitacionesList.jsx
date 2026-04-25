@@ -173,7 +173,7 @@ export default function HabitacionesList() {
       subtitle={subtitle}
       variant="plain"
       actions={
-        <div className="flex items-center gap-2">
+        <div className="responsive-actions">
           <button
             className="btn btn-secondary btn-sm"
             type="button"
@@ -196,20 +196,20 @@ export default function HabitacionesList() {
     >
       <div className="card mb-4 overflow-hidden border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-violet-50 shadow-sm">
         <div className="card-body space-y-4">
-          <div className="flex items-center justify-between gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-semibold">Búsqueda y filtros</h2>
 
             <button
               type="button"
-              className="btn btn-secondary btn-sm"
+              className="btn btn-secondary btn-sm w-full sm:w-auto"
               onClick={resetFilters}
             >
               Limpiar filtros
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-5">
-            <div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="sm:col-span-2 lg:col-span-2">
               <label className="label" htmlFor="q">
                 Buscar
               </label>
@@ -224,7 +224,7 @@ export default function HabitacionesList() {
               />
             </div>
 
-            <div>
+            <div className="sm:col-span-2 lg:col-span-1">
               <label className="label" htmlFor="ciudad">
                 Ciudad
               </label>
@@ -413,11 +413,11 @@ export default function HabitacionesList() {
       ) : null}
 
       {loading ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="card">
               <div className="card-body space-y-3">
-                <div className="skeleton aspect-[4/3] w-full" />
+                <div className="skeleton aspect-[16/10] w-full sm:aspect-[4/3]" />
                 <div className="skeleton h-4 w-3/4" />
                 <div className="skeleton h-4 w-1/2" />
               </div>
@@ -434,9 +434,9 @@ export default function HabitacionesList() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((h) => {
-              const disponible = Boolean(h.disponible) && !Boolean(h.ocupada);
+              const disponible = h.disponible && !h.ocupada;
               const cover = buildImageUrl(
                 h.cover_foto_habitacion_url || h.cover_foto_piso_url
               );
@@ -464,17 +464,17 @@ export default function HabitacionesList() {
                   <div className="card-body space-y-3">
                     {cover ? (
                       <img
-                        className="aspect-[4/3] w-full rounded-md object-cover"
+                        className="aspect-[16/10] w-full rounded-md object-cover sm:aspect-[4/3]"
                         src={cover}
                         alt={h.titulo || `Habitación ${h.id}`}
                         loading="lazy"
                       />
                     ) : (
-                      <div className="skeleton aspect-[4/3] w-full" />
+                      <div className="skeleton aspect-[16/10] w-full sm:aspect-[4/3]" />
                     )}
 
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-base font-semibold">{h.titulo}</h3>
+                      <h3 className="min-w-0 text-base font-semibold leading-6">{h.titulo}</h3>
 
                       <span className={disponible ? "badge badge-success" : "badge badge-neutral"}>
                         {disponible ? "Disponible" : "No disponible"}
@@ -529,14 +529,14 @@ export default function HabitacionesList() {
             })}
           </div>
 
-          <div className="flex items-center justify-between gap-3 pt-4">
+          <div className="flex flex-col gap-3 pt-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-ui-text-secondary">
               Página <span className="font-medium text-ui-text">{page}</span> de{" "}
               <span className="font-medium text-ui-text">{totalPages}</span> · Total:{" "}
               <span className="font-medium text-ui-text">{total}</span>
             </p>
 
-            <div className="flex items-center gap-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
               <button
                 className="btn btn-secondary btn-sm"
                 type="button"
