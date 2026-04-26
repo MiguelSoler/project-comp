@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import MetricSummaryCard from "../../components/ui/MetricSummaryCard.jsx";
 import Modal from "../../components/ui/Modal.jsx";
 import {
   getUserVotesSummary,
@@ -46,6 +47,19 @@ function formatMetric(value) {
   return n.toFixed(1);
 }
 
+function formatDate(value) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return new Intl.DateTimeFormat("es-ES", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
 
@@ -59,6 +73,42 @@ function formatDateTime(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function getVoteIsCurrentCohabitant(vote) {
+  return Boolean(
+    vote?.is_current_cohabitant ??
+      vote?.es_actual ??
+      vote?.is_current ??
+      vote?.can_view_profile
+  );
+}
+
+function getVoteIntervalLabel(vote) {
+  const start =
+    vote?.fecha_inicio_convivencia ||
+    vote?.convivencia_fecha_inicio ||
+    vote?.convivencia?.fecha_inicio ||
+    vote?.fecha_entrada;
+  const end =
+    vote?.fecha_fin_convivencia ||
+    vote?.convivencia_fecha_fin ||
+    vote?.convivencia?.fecha_fin ||
+    vote?.fecha_salida;
+
+  if (start && end) {
+    return `Han convivido desde ${formatDate(start)} hasta ${formatDate(end)}`;
+  }
+
+  if (start) {
+    return `Han convivido desde ${formatDate(start)} hasta la actualidad`;
+  }
+
+  if (end) {
+    return `Han convivido hasta ${formatDate(end)}`;
+  }
+
+  return "Han convivido en el piso de este voto";
 }
 
 function getUsuarioPublicDetailErrorMessage(error) {
@@ -85,7 +135,7 @@ export default function UsuarioPublicDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState({ url: "", alt: "" });
 
   useEffect(() => {
     let isMounted = true;
@@ -129,6 +179,15 @@ export default function UsuarioPublicDetail() {
   const mediaRuido = summary?.medias?.ruido ?? null;
   const mediaPagos = summary?.medias?.puntualidad_pagos ?? null;
 
+  function openPhotoModal(url, alt) {
+    if (!url) return;
+    setSelectedPhoto({ url, alt: alt || "Foto de perfil" });
+  }
+
+  function closePhotoModal() {
+    setSelectedPhoto({ url: "", alt: "" });
+  }
+
   if (loading) {
     return (
       <section className="section">
@@ -146,7 +205,7 @@ export default function UsuarioPublicDetail() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
               {Array.from({ length: 4 }).map((_, index) => (
                 <div key={index} className="rounded-xl border border-slate-300 bg-slate-50 p-4">
                   <div className="skeleton h-4 w-1/2" />
@@ -165,10 +224,19 @@ export default function UsuarioPublicDetail() {
       <section className="section">
         <div className="app-container">
           <div className="mx-auto max-w-5xl space-y-6">
-            <header className="flex items-center justify-end">
+            <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-ui-text">
+                  Reputación de usuario
+                </h1>
+                <p className="mt-1 text-sm text-ui-text-secondary">
+                  Consulta las valoraciones recibidas y la convivencia asociada a cada voto.
+                </p>
+              </div>
+
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="btn btn-secondary btn-sm w-full sm:w-auto"
                 onClick={() => navigate(-1)}
               >
                 Volver
@@ -187,7 +255,12 @@ export default function UsuarioPublicDetail() {
                           <button
                             type="button"
                             className="block"
-                            onClick={() => setIsPhotoModalOpen(true)}
+                            onClick={() =>
+                              openPhotoModal(
+                                avatarUrl,
+                                [usuario.nombre, usuario.apellidos].filter(Boolean).join(" ")
+                              )
+                            }
                             aria-label="Ver foto de perfil"
                           >
                             <img
@@ -218,50 +291,43 @@ export default function UsuarioPublicDetail() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <div className="rounded-xl border border-emerald-300 bg-emerald-50">
-                    <div className="card-body">
-                      <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
-                        Limpieza
-                      </p>
-                      <p className="mt-2 text-3xl font-bold text-ui-text">
-                        {formatMetric(mediaLimpieza)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-amber-300 bg-amber-50">
-                    <div className="card-body">
-                      <p className="text-xs font-medium uppercase tracking-wide text-amber-600">
-                        Ruido
-                      </p>
-                      <p className="mt-2 text-3xl font-bold text-ui-text">
-                        {formatMetric(mediaRuido)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-sky-300 bg-sky-50">
-                    <div className="card-body">
-                      <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
-                        Puntualidad pagos
-                      </p>
-                      <p className="mt-2 text-3xl font-bold text-ui-text">
-                        {formatMetric(mediaPagos)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-violet-300 bg-violet-50">
-                    <div className="card-body">
-                      <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
-                        Total votos
-                      </p>
-                      <p className="mt-2 text-3xl font-bold text-ui-text">
-                        {totalVotos}
-                      </p>
-                    </div>
-                  </div>
+                <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+                  <MetricSummaryCard
+                    label="Limpieza"
+                    value={formatMetric(mediaLimpieza)}
+                    tone="emerald"
+                    bodyClassName="p-2 sm:p-4"
+                    labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                    valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                    description="Media de valoraciones recibidas sobre limpieza y cuidado de los espacios compartidos."
+                  />
+                  <MetricSummaryCard
+                    label="Ruido"
+                    value={formatMetric(mediaRuido)}
+                    tone="default"
+                    bodyClassName="p-2 sm:p-4"
+                    labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                    valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                    description="Media de valoraciones recibidas sobre respeto del descanso y nivel de ruido."
+                  />
+                  <MetricSummaryCard
+                    label="Pagos"
+                    value={formatMetric(mediaPagos)}
+                    tone="sky"
+                    bodyClassName="p-2 sm:p-4"
+                    labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                    valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                    description="Media de valoraciones recibidas sobre puntualidad en pagos y gastos compartidos."
+                  />
+                  <MetricSummaryCard
+                    label="Total votos"
+                    value={totalVotos}
+                    tone="violet"
+                    bodyClassName="p-2 sm:p-4"
+                    labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                    valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                    description="Numero total de votos recibidos que forman parte de la reputación visible."
+                  />
                 </div>
 
                 {votes.length === 0 ? (
@@ -291,6 +357,8 @@ export default function UsuarioPublicDetail() {
                         ]
                           .filter(Boolean)
                           .join(" ");
+                        const isCurrentCohabitant = getVoteIsCurrentCohabitant(vote);
+                        const intervalLabel = getVoteIntervalLabel(vote);
 
                         return (
                           <article key={vote.id} className="card">
@@ -298,15 +366,33 @@ export default function UsuarioPublicDetail() {
                               {vote.can_view_profile ? (
                                 <Link
                                   to={`/usuarios/${vote.votante?.id}`}
-                                  className="group block rounded-xl border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
+                                  className={
+                                    isCurrentCohabitant
+                                      ? "group block rounded-xl border border-emerald-200 bg-emerald-50 p-4 transition-all hover:-translate-y-0.5 hover:border-emerald-400 hover:bg-emerald-100 hover:shadow-md"
+                                      : "group block rounded-xl border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
+                                  }
                                 >
                                   <div className="flex items-center gap-3">
                                     {vote.votante?.foto_perfil_url ? (
-                                      <img
-                                        src={buildImageUrl(vote.votante.foto_perfil_url)}
-                                        alt={votanteNombre || "Usuario"}
-                                        className="h-14 w-14 rounded-full object-cover"
-                                      />
+                                      <button
+                                        type="button"
+                                        className="shrink-0"
+                                        onClick={(event) => {
+                                          event.preventDefault();
+                                          event.stopPropagation();
+                                          openPhotoModal(
+                                            buildImageUrl(vote.votante.foto_perfil_url),
+                                            votanteNombre || "Usuario"
+                                          );
+                                        }}
+                                        aria-label={`Ver foto de ${votanteNombre || "usuario"}`}
+                                      >
+                                        <img
+                                          src={buildImageUrl(vote.votante.foto_perfil_url)}
+                                          alt={votanteNombre || "Usuario"}
+                                          className="h-14 w-14 rounded-full object-cover"
+                                        />
+                                      </button>
                                     ) : (
                                       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-brand-primary">
                                         {getInitials(vote.votante)}
@@ -314,7 +400,13 @@ export default function UsuarioPublicDetail() {
                                     )}
                               
                                     <div className="min-w-0">
-                                      <p className="truncate text-base font-semibold text-ui-text group-hover:text-brand-primary">
+                                      <p
+                                        className={
+                                          isCurrentCohabitant
+                                            ? "truncate text-base font-semibold text-ui-text group-hover:text-emerald-800"
+                                            : "truncate text-base font-semibold text-ui-text group-hover:text-brand-primary"
+                                        }
+                                      >
                                         {votanteNombre || "Sin nombre"}
                                       </p>
                                       <p className="truncate text-sm text-ui-text-secondary">
@@ -328,11 +420,23 @@ export default function UsuarioPublicDetail() {
                                 <div className="block rounded-xl border border-slate-200 bg-slate-50 p-4">
                                   <div className="flex items-center gap-3">
                                     {vote.votante?.foto_perfil_url ? (
-                                      <img
-                                        src={buildImageUrl(vote.votante.foto_perfil_url)}
-                                        alt={votanteNombre || "Usuario"}
-                                        className="h-14 w-14 rounded-full object-cover"
-                                      />
+                                      <button
+                                        type="button"
+                                        className="shrink-0"
+                                        onClick={() =>
+                                          openPhotoModal(
+                                            buildImageUrl(vote.votante.foto_perfil_url),
+                                            votanteNombre || "Usuario"
+                                          )
+                                        }
+                                        aria-label={`Ver foto de ${votanteNombre || "usuario"}`}
+                                      >
+                                        <img
+                                          src={buildImageUrl(vote.votante.foto_perfil_url)}
+                                          alt={votanteNombre || "Usuario"}
+                                          className="h-14 w-14 rounded-full object-cover"
+                                        />
+                                      </button>
                                     ) : (
                                       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-brand-primary">
                                         {getInitials(vote.votante)}
@@ -351,6 +455,23 @@ export default function UsuarioPublicDetail() {
                                   </div>
                                 </div>
                               )}
+
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={
+                                    isCurrentCohabitant
+                                      ? "badge badge-success"
+                                      : "badge badge-neutral"
+                                  }
+                                >
+                                  {isCurrentCohabitant
+                                    ? "Compañero actual"
+                                    : "Compañero histórico"}
+                                </span>
+                                <span className="badge badge-info">
+                                  {intervalLabel}
+                                </span>
+                              </div>
 
                               <div className="grid grid-cols-3 gap-3">
                                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-center">
@@ -383,10 +504,7 @@ export default function UsuarioPublicDetail() {
 
                               <div className="flex flex-col gap-1 text-xs text-ui-text-secondary">
                                 <span>
-                                  Creado: {formatDateTime(vote.created_at)}
-                                </span>
-                                <span>
-                                  Última actualización: {formatDateTime(vote.updated_at)}
+                                  Voto emitido: {formatDateTime(vote.updated_at || vote.created_at)}
                                 </span>
                               </div>
                             </div>
@@ -403,17 +521,17 @@ export default function UsuarioPublicDetail() {
       </section>
 
       <Modal
-        open={isPhotoModalOpen}
+        open={Boolean(selectedPhoto.url)}
         title="Foto de perfil"
-        onClose={() => setIsPhotoModalOpen(false)}
+        onClose={closePhotoModal}
         size="default"
         closeLabel="Cerrar"
       >
-        {avatarUrl ? (
+        {selectedPhoto.url ? (
           <div className="space-y-4">
             <img
-              src={avatarUrl}
-              alt={[usuario?.nombre, usuario?.apellidos].filter(Boolean).join(" ")}
+              src={selectedPhoto.url}
+              alt={selectedPhoto.alt}
               className="max-h-[80vh] w-full rounded-lg object-contain"
             />
           </div>

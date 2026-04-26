@@ -76,6 +76,28 @@ function Feature({ label, value }) {
   );
 }
 
+function getMetricTooltip(title) {
+  const normalized = String(title || "").toLowerCase();
+
+  if (normalized.includes("limpieza")) {
+    return "Media de valoraciones sobre limpieza y cuidado de los espacios compartidos.";
+  }
+  if (normalized.includes("ruido")) {
+    return "Media de valoraciones sobre respeto del descanso y nivel de ruido.";
+  }
+  if (normalized.includes("pago")) {
+    return "Media de valoraciones sobre puntualidad en pagos y gastos compartidos.";
+  }
+  if (normalized.includes("convivientes")) {
+    return "Número de personas con estancia activa en el piso en este momento.";
+  }
+  if (normalized.includes("habitacion") || normalized.includes("habitación")) {
+    return "Dato asociado a la habitación que estás consultando.";
+  }
+
+  return null;
+}
+
 function MetricCard({
   title,
   value,
@@ -95,9 +117,15 @@ function MetricCard({
               ? "border-fuchsia-400 bg-fuchsia-50 text-fuchsia-600 border-4"
               : "border-violet-300 bg-violet-50 text-violet-700"
             : "border-slate-200 bg-slate-50 text-slate-700";
+  const tooltip = helperText || getMetricTooltip(title);
 
   return (
-    <div className={`rounded-xl p-4 ${toneClasses}`}>
+    <div
+      className={`rounded-xl p-4 ${toneClasses}`}
+      tabIndex={tooltip ? 0 : undefined}
+      title={tooltip || undefined}
+      aria-label={tooltip ? `${title}: ${tooltip}` : undefined}
+    >
       <p className="text-xs font-medium uppercase tracking-wide">{title}</p>
       <p className="mt-2 text-2xl font-bold text-ui-text">{value}</p>
 

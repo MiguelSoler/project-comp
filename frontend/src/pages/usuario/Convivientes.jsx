@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import MetricSummaryCard from "../../components/ui/MetricSummaryCard.jsx";
+import Modal from "../../components/ui/Modal.jsx";
 import ResponsiveDisclosureCard from "../../components/ui/ResponsiveDisclosureCard.jsx";
 import { getMyStay } from "../../services/usuarioService.js";
 import { listConvivientesByPiso } from "../../services/usuarioHabitacionService.js";
@@ -41,35 +43,12 @@ function getInitials(usuario) {
     .join("");
 }
 
-function SummaryCard({ label, value, tone = "default" }) {
-  const toneClass =
-    tone === "emerald"
-      ? "border-emerald-300 bg-emerald-50"
-      : tone === "sky"
-        ? "border-sky-300 bg-sky-50"
-        : tone === "violet"
-          ? "border-violet-300 bg-violet-50"
-          : "border-amber-300 bg-amber-50";
-
-  return (
-    <div className={`rounded-2xl border ${toneClass}`}>
-      <div className="card-body">
-        <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-          {label}
-        </p>
-        <p className="mt-2 text-2xl font-bold text-ui-text">
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function Convivientes() {
   const navigate = useNavigate();
   const [stay, setStay] = useState(null);
   const [convivientes, setConvivientes] = useState([]);
   const [openConvivienteId, setOpenConvivienteId] = useState(null);
+  const [selectedPhoto, setSelectedPhoto] = useState({ url: "", alt: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -124,6 +103,15 @@ export default function Convivientes() {
     };
   }, []);
 
+  function openPhotoModal(url, alt) {
+    if (!url) return;
+    setSelectedPhoto({ url, alt: alt || "Foto de perfil" });
+  }
+
+  function closePhotoModal() {
+    setSelectedPhoto({ url: "", alt: "" });
+  }
+
   if (loading) {
     return (
       <section className="section">
@@ -133,7 +121,7 @@ export default function Convivientes() {
               <div className="card-body space-y-4">
                 <div className="skeleton h-10 w-56" />
                 <div className="skeleton h-28 w-full" />
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                   <div className="skeleton h-24 w-full rounded-2xl" />
                   <div className="skeleton h-24 w-full rounded-2xl" />
                   <div className="skeleton h-24 w-full rounded-2xl" />
@@ -153,6 +141,7 @@ export default function Convivientes() {
   }
 
   return (
+    <>
     <section className="section">
       <div className="app-container">
         <div className="mx-auto max-w-5xl space-y-6">
@@ -187,26 +176,42 @@ export default function Convivientes() {
           </header>
 
           {!error ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-              <SummaryCard
+            <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+              <MetricSummaryCard
                 label="Estancia activa"
                 value={stay ? "Sí" : "No"}
                 tone="emerald"
+                bodyClassName="p-2 sm:p-4"
+                labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                description="Indica si ahora mismo tienes una estancia activa asociada a una habitación."
               />
-              <SummaryCard
+              <MetricSummaryCard
                 label="Convivientes"
                 value={convivientes.length}
                 tone="sky"
+                bodyClassName="p-2 sm:p-4"
+                labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                description="Número de personas que conviven actualmente contigo en el mismo piso."
               />
-              <SummaryCard
+              <MetricSummaryCard
                 label="Piso actual"
                 value={stay?.piso_id ?? "—"}
                 tone="violet"
+                bodyClassName="p-2 sm:p-4"
+                labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                description="Identificador del piso en el que está registrada tu estancia actual."
               />
-              <SummaryCard
+              <MetricSummaryCard
                 label="Tu habitación"
                 value={stay?.habitacion_id ?? "—"}
                 tone="default"
+                bodyClassName="p-2 sm:p-4"
+                labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                description="Identificador de la habitación que tienes asignada en tu estancia actual."
               />
             </div>
           ) : null}
@@ -303,15 +308,28 @@ export default function Convivientes() {
                           : conviviente.usuario_habitacion_id
                       )
                     }
-                    accentClassName="bg-sky-500"
+                    accentClassName="bg-emerald-500"
                     summary={
-                      <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+                      <div className="flex min-w-0 w-full items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-3 sm:gap-4">
                         {conviviente.foto_perfil_url ? (
-                          <img
-                            src={buildImageUrl(conviviente.foto_perfil_url)}
-                            alt={nombreCompleto || "Conviviente"}
-                            className="h-14 w-14 shrink-0 rounded-full border border-ui-border object-cover sm:h-16 sm:w-16"
-                          />
+                          <button
+                            type="button"
+                            className="shrink-0"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openPhotoModal(
+                                buildImageUrl(conviviente.foto_perfil_url),
+                                nombreCompleto || "Conviviente"
+                              );
+                            }}
+                            aria-label={`Ver foto de ${nombreCompleto || "conviviente"}`}
+                          >
+                            <img
+                              src={buildImageUrl(conviviente.foto_perfil_url)}
+                              alt={nombreCompleto || "Conviviente"}
+                              className="h-14 w-14 rounded-full border border-ui-border object-cover sm:h-16 sm:w-16"
+                            />
+                          </button>
                         ) : (
                           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary sm:h-16 sm:w-16">
                             {getInitials(conviviente)}
@@ -323,7 +341,7 @@ export default function Convivientes() {
                             {nombreCompleto || "Sin nombre"}
                           </h2>
                           <p className="truncate text-sm text-ui-text-secondary">
-                            HabitaciÃ³n #{conviviente.habitacion_id}
+                            Habitación #{conviviente.habitacion_id}
                           </p>
                           <span className="mt-2 inline-flex badge badge-success">
                             Conviviente actual
@@ -332,44 +350,22 @@ export default function Convivientes() {
                       </div>
                     }
                   >
-                      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <Link
                           to={`/usuarios/${conviviente.id}`}
-                          className="group block rounded-2xl border border-slate-200 bg-slate-50 p-4 transition-all hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
+                          className="btn w-full border border-sky-300 bg-sky-100 text-sky-800 hover:bg-sky-200 hover:text-sky-900"
                         >
-                          <div className="flex items-start gap-4">
-                            {conviviente.foto_perfil_url ? (
-                              <img
-                                src={buildImageUrl(conviviente.foto_perfil_url)}
-                                alt={nombreCompleto || "Conviviente"}
-                                className="h-16 w-16 rounded-full border border-ui-border object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-16 w-16 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary">
-                                {getInitials(conviviente)}
-                              </div>
-                            )}
-
-                            <div className="min-w-0">
-                              <h2 className="text-lg font-semibold text-ui-text group-hover:text-brand-primary">
-                                {nombreCompleto || "Sin nombre"}
-                              </h2>
-                              <p className="text-sm text-ui-text-secondary">
-                                Habitación #{conviviente.habitacion_id}
-                              </p>
-                            </div>
-                          </div>
+                          Ver reputación
                         </Link>
 
-                        <div className="flex items-center justify-end">
-                          <Link
-                            to={`/convivientes/${conviviente.id}/votar`}
-                            className="btn btn-primary btn-sm"
-                          >
-                            Votar
-                          </Link>
-                        </div>
+                        <Link
+                          to={`/convivientes/${conviviente.id}/votar`}
+                          className="btn btn-primary w-full"
+                        >
+                          Votar
+                        </Link>
                       </div>
+
 
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                         <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
@@ -407,5 +403,24 @@ export default function Convivientes() {
         </div>
       </div>
     </section>
+
+    <Modal
+      open={Boolean(selectedPhoto.url)}
+      title="Foto de perfil"
+      onClose={closePhotoModal}
+      size="default"
+      closeLabel="Cerrar"
+    >
+      {selectedPhoto.url ? (
+        <div className="space-y-4">
+          <img
+            src={selectedPhoto.url}
+            alt={selectedPhoto.alt}
+            className="max-h-[80vh] w-full rounded-lg object-contain"
+          />
+        </div>
+      ) : null}
+    </Modal>
+    </>
   );
 }

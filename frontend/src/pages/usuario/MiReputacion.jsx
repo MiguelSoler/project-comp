@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import Modal from "../../components/ui/Modal.jsx";
+import MetricSummaryCard from "../../components/ui/MetricSummaryCard.jsx";
+import ResponsiveDisclosureCard from "../../components/ui/ResponsiveDisclosureCard.jsx";
 import useAuth from "../../hooks/useAuth.js";
 import { getUserVotesSummary } from "../../services/votoUsuarioService.js";
 import { useNavigate } from "react-router-dom";
@@ -78,30 +80,6 @@ function DistributionBlock({ title, values, tone = "slate" }) {
   );
 }
 
-function SummaryCard({ label, value, tone = "default" }) {
-  const toneClass =
-    tone === "emerald"
-      ? "border-emerald-300 bg-emerald-50"
-      : tone === "sky"
-        ? "border-sky-300 bg-sky-50"
-        : tone === "violet"
-          ? "border-violet-300 bg-violet-50"
-          : "border-amber-300 bg-amber-50";
-
-  return (
-    <div className={`rounded-2xl border ${toneClass}`}>
-      <div className="card-body">
-        <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-          {label}
-        </p>
-        <p className="mt-2 text-2xl font-bold text-ui-text">
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function MiReputacion() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -113,6 +91,7 @@ export default function MiReputacion() {
   const [error, setError] = useState("");
 
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
+  const [isDistributionOpen, setIsDistributionOpen] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -163,7 +142,7 @@ export default function MiReputacion() {
               <div className="card-body space-y-4">
                 <div className="skeleton h-10 w-56" />
                 <div className="skeleton h-28 w-full" />
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                   {Array.from({ length: 4 }).map((_, index) => (
                     <div key={index} className="skeleton h-24 w-full rounded-2xl" />
                   ))}
@@ -298,31 +277,52 @@ export default function MiReputacion() {
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      <SummaryCard
+                    <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+                      <MetricSummaryCard
                         label="Limpieza"
                         value={formatAverage(medias.limpieza)}
                         tone="emerald"
+                        bodyClassName="p-2 sm:p-4"
+                        labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                        valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                        description="Media de las valoraciones recibidas sobre limpieza y cuidado de los espacios compartidos."
                       />
-                      <SummaryCard
+                      <MetricSummaryCard
                         label="Ruido"
                         value={formatAverage(medias.ruido)}
                         tone="default"
+                        bodyClassName="p-2 sm:p-4"
+                        labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                        valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                        description="Media de las valoraciones recibidas sobre respeto del descanso y nivel de ruido."
                       />
-                      <SummaryCard
+                      <MetricSummaryCard
                         label="Pagos"
                         value={formatAverage(medias.puntualidad_pagos)}
                         tone="sky"
+                        bodyClassName="p-2 sm:p-4"
+                        labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                        valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                        description="Media de las valoraciones recibidas sobre puntualidad en pagos y gastos compartidos."
                       />
-                      <SummaryCard
+                      <MetricSummaryCard
                         label="Total votos"
                         value={totalVotes}
                         tone="violet"
+                        bodyClassName="p-2 sm:p-4"
+                        labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                        valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                        description="Número total de valoraciones que han usado tus convivientes para calcular estas medias."
                       />
                     </div>
 
-                    <div className="rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-sky-50 shadow-sm">
-                      <div className="card-body space-y-5">
+                    <ResponsiveDisclosureCard
+                      id="mi-reputacion-distribucion"
+                      open={isDistributionOpen}
+                      onToggle={() => setIsDistributionOpen((prev) => !prev)}
+                      accentClassName="bg-violet-500"
+                      className="border-violet-200 bg-gradient-to-br from-violet-50 via-white to-sky-50"
+                      summary={
                         <div>
                           <div className="inline-flex rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-violet-700">
                             Distribución
@@ -336,6 +336,8 @@ export default function MiReputacion() {
                             Así se reparten tus votos recibidos en cada métrica.
                           </p>
                         </div>
+                      }
+                    >
 
                         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                           <DistributionBlock
@@ -356,8 +358,7 @@ export default function MiReputacion() {
                             tone="sky"
                           />
                         </div>
-                      </div>
-                    </div>
+                    </ResponsiveDisclosureCard>
                   </>
                 )}
               </>

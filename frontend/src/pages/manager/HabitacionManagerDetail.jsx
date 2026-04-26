@@ -233,6 +233,37 @@ function getStayStateBadgeClass(state) {
   return "badge badge-neutral";
 }
 
+function getMetricTooltip(title) {
+  const normalized = String(title || "").toLowerCase();
+
+  if (normalized.includes("limpieza")) {
+    return "Media de valoraciones sobre limpieza y cuidado de los espacios compartidos.";
+  }
+  if (normalized.includes("ruido")) {
+    return "Media de valoraciones sobre respeto del descanso y nivel de ruido.";
+  }
+  if (normalized.includes("pago")) {
+    return "Media de valoraciones sobre puntualidad en pagos y gastos compartidos.";
+  }
+  if (normalized.includes("total votos")) {
+    return "Número total de votos usados para calcular estas métricas.";
+  }
+  if (normalized.includes("ult.")) {
+    return "Fecha del voto más reciente incluido en esta reputación.";
+  }
+  if (normalized.includes("ocup")) {
+    return "Indica si la habitación tiene una estancia activa asignada ahora mismo.";
+  }
+  if (normalized.includes("disponibilidad")) {
+    return "Indica si la habitación aparece disponible para nuevas solicitudes.";
+  }
+  if (normalized.includes("estado")) {
+    return "Indica si la habitación está activa dentro de la plataforma.";
+  }
+
+  return null;
+}
+
 function MetricCard({ title, value, tone = "neutral" }) {
   const toneClasses =
     tone === "success"
@@ -245,8 +276,15 @@ function MetricCard({ title, value, tone = "neutral" }) {
             ? "border-violet-200 bg-violet-50 text-violet-700"
             : "border-slate-200 bg-slate-50 text-slate-700";
 
+  const tooltip = getMetricTooltip(title);
+
   return (
-    <div className={`rounded-lg border p-4 ${toneClasses}`}>
+    <div
+      className={`rounded-lg border p-4 ${toneClasses}`}
+      tabIndex={tooltip ? 0 : undefined}
+      title={tooltip || undefined}
+      aria-label={tooltip ? `${title}: ${tooltip}` : undefined}
+    >
       <p className="text-xs font-medium uppercase tracking-wide">{title}</p>
       <p className="mt-2 text-2xl font-bold text-ui-text">{value}</p>
     </div>
@@ -265,8 +303,15 @@ function CompactMetricCard({ title, value, tone = "neutral" }) {
             ? "border-violet-200 bg-violet-50 text-violet-700"
             : "border-slate-200 bg-slate-50 text-slate-700";
 
+  const tooltip = getMetricTooltip(title);
+
   return (
-    <div className={`rounded-lg border px-3 py-2.5 ${toneClasses}`}>
+    <div
+      className={`rounded-lg border px-3 py-2.5 ${toneClasses}`}
+      tabIndex={tooltip ? 0 : undefined}
+      title={tooltip || undefined}
+      aria-label={tooltip ? `${title}: ${tooltip}` : undefined}
+    >
       <p className="text-[11px] font-medium uppercase leading-tight tracking-wide">
         {title}
       </p>

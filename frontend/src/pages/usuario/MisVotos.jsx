@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Modal from "../../components/ui/Modal.jsx";
+import MetricSummaryCard from "../../components/ui/MetricSummaryCard.jsx";
 import ResponsiveDisclosureCard from "../../components/ui/ResponsiveDisclosureCard.jsx";
 import { listMyVotes } from "../../services/votoUsuarioAuthService.js";
 
@@ -37,40 +38,6 @@ function formatDateTime(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
-}
-
-function SummaryCard({ label, value, tone = "default", description }) {
-  const toneClass =
-    tone === "emerald"
-      ? "border-emerald-300 bg-emerald-50"
-      : tone === "sky"
-        ? "border-sky-300 bg-sky-50"
-        : tone === "violet"
-          ? "border-violet-300 bg-violet-50"
-          : "border-amber-300 bg-amber-50";
-
-  return (
-    <div
-      className={`group relative rounded-2xl border ${toneClass}`}
-      tabIndex={description ? 0 : undefined}
-      aria-label={description ? `${label}: ${description}` : undefined}
-    >
-      <div className="p-3 sm:p-4">
-        <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-          {label}
-        </p>
-        <p className="mt-2 text-2xl font-bold text-ui-text">
-          {value}
-        </p>
-      </div>
-
-      {description ? (
-        <div className="pointer-events-none absolute inset-x-0 top-full z-20 mt-2 hidden rounded-lg border border-slate-200 bg-white p-3 text-xs leading-5 text-ui-text-secondary shadow-modal group-hover:block group-focus:block">
-          {description}
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 export default function MisVotos() {
@@ -152,7 +119,7 @@ export default function MisVotos() {
               <div className="card-body space-y-4">
                 <div className="skeleton h-10 w-56" />
                 <div className="skeleton h-28 w-full" />
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
                   <div className="skeleton h-24 w-full rounded-2xl" />
                   <div className="skeleton h-24 w-full rounded-2xl" />
                   <div className="skeleton h-24 w-full rounded-2xl" />
@@ -209,29 +176,41 @@ export default function MisVotos() {
             </header>
 
             {!error ? (
-              <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                <SummaryCard
+              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+                <MetricSummaryCard
                   label="Total emitidos"
                   value={total}
                   tone="violet"
+                  bodyClassName="p-2 sm:p-4"
+                  labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                  valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
                   description="Número total de votos que has emitido en toda tu actividad."
                 />
-                <SummaryCard
-                  label="En esta página"
+                <MetricSummaryCard
+                  label="Mostrados"
                   value={items.length}
                   tone="sky"
-                  description="Votos que se están mostrando ahora mismo en esta página."
+                  bodyClassName="p-2 sm:p-4"
+                  labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                  valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                  description="Votos cargados y visibles en la página actual de resultados."
                 />
-                <SummaryCard
+                <MetricSummaryCard
                   label="Editables"
                   value={editableCount}
                   tone="emerald"
+                  bodyClassName="p-2 sm:p-4"
+                  labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                  valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
                   description="Votos que todavía puedes modificar porque seguís conviviendo actualmente."
                 />
-                <SummaryCard
+                <MetricSummaryCard
                   label="Cerrados"
                   value={closedCount}
                   tone="default"
+                  bodyClassName="p-2 sm:p-4"
+                  labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                  valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
                   description="Votos históricos que ya no se pueden editar."
                 />
               </div>
@@ -352,8 +331,8 @@ export default function MisVotos() {
                                 {nombreCompleto || "Sin nombre"}
                               </h2>
                               <p className="truncate text-sm text-ui-text-secondary">
-                                {item.piso?.ciudad || "â€”"}
-                                {item.piso?.direccion ? ` Â· ${item.piso.direccion}` : ""}
+                                {item.piso?.ciudad || "—"}
+                                {item.piso?.direccion ? ` · ${item.piso.direccion}` : ""}
                               </p>
                               <div className="mt-2 flex flex-wrap items-center gap-2">
                                 <span className={canEdit ? "badge badge-success" : "badge badge-neutral"}>

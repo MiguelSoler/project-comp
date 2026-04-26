@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import MetricSummaryCard from "../../components/ui/MetricSummaryCard.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import ResponsiveDisclosureCard from "../../components/ui/ResponsiveDisclosureCard.jsx";
 import { getMyStay } from "../../services/usuarioService.js";
 import { leaveHabitacion } from "../../services/usuarioHabitacionService.js";
 
@@ -134,30 +136,6 @@ function InfoBox({ label, value, tone = "default" }) {
   );
 }
 
-function SummaryCard({ label, value, tone = "default" }) {
-  const toneClass =
-    tone === "emerald"
-      ? "border-emerald-300 bg-emerald-50"
-      : tone === "sky"
-        ? "border-sky-300 bg-sky-50"
-        : tone === "violet"
-          ? "border-violet-300 bg-violet-50"
-          : "border-amber-300 bg-amber-50";
-
-  return (
-    <div className={`rounded-2xl border ${toneClass}`}>
-      <div className="card-body">
-        <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-          {label}
-        </p>
-        <p className="mt-2 text-2xl font-bold text-ui-text">
-          {value}
-        </p>
-      </div>
-    </div>
-  );
-}
-
 export default function MiEstancia() {
   const navigate = useNavigate();
 
@@ -166,6 +144,7 @@ export default function MiEstancia() {
   const [loading, setLoading] = useState(true);
   const [leavingStay, setLeavingStay] = useState(false);
   const [isLeaveModalOpen, setIsLeaveModalOpen] = useState(false);
+  const [openSection, setOpenSection] = useState("");
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -267,7 +246,8 @@ export default function MiEstancia() {
               <div className="card-body space-y-4">
                 <div className="skeleton h-10 w-64" />
                 <div className="skeleton h-28 w-full" />
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+                  <div className="skeleton h-24 w-full rounded-2xl" />
                   <div className="skeleton h-24 w-full rounded-2xl" />
                   <div className="skeleton h-24 w-full rounded-2xl" />
                   <div className="skeleton h-24 w-full rounded-2xl" />
@@ -327,26 +307,42 @@ export default function MiEstancia() {
             {successMsg ? <div className="alert-success">{successMsg}</div> : null}
 
             {!error ? (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-                <SummaryCard
+              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-4">
+                <MetricSummaryCard
                   label="Estancia actual"
                   value={stay ? "Sí" : "No"}
                   tone="emerald"
+                  bodyClassName="p-2 sm:p-4"
+                  labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                  valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                  description="Indica si tienes una estancia activa en este momento."
                 />
-                <SummaryCard
+                <MetricSummaryCard
                   label="Histórico"
                   value={historialCount}
                   tone="sky"
+                  bodyClassName="p-2 sm:p-4"
+                  labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                  valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                  description="Número de estancias anteriores registradas en tu historial."
                 />
-                <SummaryCard
+                <MetricSummaryCard
                   label="Total estancias"
                   value={totalEstancias}
                   tone="violet"
+                  bodyClassName="p-2 sm:p-4"
+                  labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                  valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                  description="Suma de tu estancia activa, si existe, y todas tus estancias históricas."
                 />
-                <SummaryCard
+                <MetricSummaryCard
                   label="Tiempo actual"
                   value={stay ? currentDuration : "—"}
                   tone="default"
+                  bodyClassName="p-2 sm:p-4"
+                  labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                  valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                  description="Tiempo aproximado que llevas en tu estancia activa actual."
                 />
               </div>
             ) : null}
@@ -371,14 +367,15 @@ export default function MiEstancia() {
             ) : null}
 
             {stay ? (
-              <div
-                className={`overflow-hidden rounded-3xl border shadow-sm ${
-                  getStayToneClasses(stay.estado).wrapper
-                }`}
-              >
-                <div className={`h-2 w-full ${getStayToneClasses(stay.estado).accent}`} />
-
-                <div className="card-body space-y-6">
+              <ResponsiveDisclosureCard
+                id="mi-estancia-actual"
+                open={openSection === "actual"}
+                onToggle={() =>
+                  setOpenSection((prev) => (prev === "actual" ? "" : "actual"))
+                }
+                accentClassName={getStayToneClasses(stay.estado).accent}
+                className={getStayToneClasses(stay.estado).wrapper}
+                summary={
                   <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                       <div className="inline-flex rounded-full border border-white/80 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-ui-text-secondary">
@@ -399,7 +396,8 @@ export default function MiEstancia() {
                       {getStayStateLabel(stay?.estado)}
                     </span>
                   </div>
-
+                }
+              >
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                     <div className="rounded-2xl border border-white/80 bg-white/80 p-4">
                       <h3 className={`text-base font-semibold ${getStayToneClasses(stay.estado).title}`}>
@@ -481,12 +479,18 @@ export default function MiEstancia() {
                       ) : null}
                     </div>
                   </div>
-                </div>
-              </div>
+              </ResponsiveDisclosureCard>
             ) : null}
 
-            <div className="rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-sky-50 shadow-sm">
-              <div className="card-body space-y-5">
+            <ResponsiveDisclosureCard
+              id="mi-estancia-historial"
+              open={openSection === "historial"}
+              onToggle={() =>
+                setOpenSection((prev) => (prev === "historial" ? "" : "historial"))
+              }
+              accentClassName="bg-violet-500"
+              className="border-violet-200 bg-gradient-to-br from-violet-50 via-white to-sky-50"
+              summary={
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
                     <div className="inline-flex rounded-full border border-violet-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-violet-700">
@@ -506,7 +510,8 @@ export default function MiEstancia() {
                     Total: {historialEstancias.length}
                   </span>
                 </div>
-
+              }
+            >
                 {historialEstancias.length === 0 ? (
                   <div className="rounded-2xl border border-slate-300 bg-white">
                     <div className="card-body">
@@ -577,8 +582,7 @@ export default function MiEstancia() {
                     })}
                   </div>
                 )}
-              </div>
-            </div>
+            </ResponsiveDisclosureCard>
           </div>
         </div>
       </section>

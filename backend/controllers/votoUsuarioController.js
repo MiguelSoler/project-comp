@@ -234,6 +234,24 @@ const listVotosRecibidosUsuario = async (req, res) => {
         p.direccion,
         p.activo AS piso_activo,
 
+        convivencia.fecha_inicio AS convivencia_fecha_inicio,
+        convivencia.fecha_fin AS convivencia_fecha_fin,
+
+        EXISTS (
+          SELECT 1
+          FROM usuario_habitacion uh_target_current
+          JOIN habitacion h_target_current ON h_target_current.id = uh_target_current.habitacion_id
+          JOIN usuario_habitacion uh_votante_current ON uh_votante_current.usuario_id = vu.votante_id
+          JOIN habitacion h_votante_current ON h_votante_current.id = uh_votante_current.habitacion_id
+          WHERE uh_target_current.usuario_id = vu.votado_id
+            AND uh_target_current.fecha_salida IS NULL
+            AND uh_target_current.estado = 'active'
+            AND uh_votante_current.fecha_salida IS NULL
+            AND uh_votante_current.estado = 'active'
+            AND h_target_current.piso_id = vu.piso_id
+            AND h_votante_current.piso_id = vu.piso_id
+        ) AS is_current_cohabitant,
+
         EXISTS (
           SELECT 1
           FROM usuario_habitacion uh_requester
@@ -252,6 +270,27 @@ const listVotosRecibidosUsuario = async (req, res) => {
       FROM voto_usuario vu
       JOIN usuario u ON u.id = vu.votante_id
       JOIN piso p ON p.id = vu.piso_id
+      LEFT JOIN LATERAL (
+        SELECT
+          GREATEST(uh_votante.fecha_entrada, uh_votado.fecha_entrada) AS fecha_inicio,
+          CASE
+            WHEN uh_votante.fecha_salida IS NULL AND uh_votado.fecha_salida IS NULL THEN NULL
+            WHEN uh_votante.fecha_salida IS NULL THEN uh_votado.fecha_salida
+            WHEN uh_votado.fecha_salida IS NULL THEN uh_votante.fecha_salida
+            ELSE LEAST(uh_votante.fecha_salida, uh_votado.fecha_salida)
+          END AS fecha_fin
+        FROM usuario_habitacion uh_votante
+        JOIN habitacion h_votante ON h_votante.id = uh_votante.habitacion_id
+        JOIN usuario_habitacion uh_votado ON uh_votado.usuario_id = vu.votado_id
+        JOIN habitacion h_votado ON h_votado.id = uh_votado.habitacion_id
+        WHERE uh_votante.usuario_id = vu.votante_id
+          AND h_votante.piso_id = vu.piso_id
+          AND h_votado.piso_id = vu.piso_id
+          AND uh_votante.fecha_entrada <= COALESCE(uh_votado.fecha_salida, 'infinity'::timestamptz)
+          AND uh_votado.fecha_entrada <= COALESCE(uh_votante.fecha_salida, 'infinity'::timestamptz)
+        ORDER BY GREATEST(uh_votante.fecha_entrada, uh_votado.fecha_entrada) DESC
+        LIMIT 1
+      ) convivencia ON true
       WHERE ${where.join(" AND ")}
       ORDER BY ${orderBy}
       LIMIT $${i++} OFFSET $${i++}
@@ -266,6 +305,15 @@ const listVotosRecibidosUsuario = async (req, res) => {
       .map(({ total_count, ...row }) => ({
         ...row,
         can_view_profile: Boolean(row.can_view_profile),
+        is_current_cohabitant: Boolean(row.is_current_cohabitant),
+        convivencia_fecha_inicio: row.convivencia_fecha_inicio,
+        convivencia_fecha_fin: row.convivencia_fecha_fin,
+        fecha_inicio_convivencia: row.convivencia_fecha_inicio,
+        fecha_fin_convivencia: row.convivencia_fecha_fin,
+        convivencia: {
+          fecha_inicio: row.convivencia_fecha_inicio,
+          fecha_fin: row.convivencia_fecha_fin,
+        },
         votante: {
           id: row.votante_id,
           nombre: row.votante_nombre,
