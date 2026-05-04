@@ -319,7 +319,7 @@ export default function DashboardManager() {
         variant="plain"
         contentClassName="space-y-4"
         actions={
-          <div className="responsive-actions">
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
             <button
               type="button"
               className="btn btn-secondary btn-sm"

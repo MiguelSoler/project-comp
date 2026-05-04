@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import PageShell from "../../components/layout/PageShell.jsx";
+import MetricSummaryCard from "../../components/ui/MetricSummaryCard.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import ResponsiveDisclosureCard from "../../components/ui/ResponsiveDisclosureCard.jsx";
 import { getApiErrorMessage } from "../../services/apiClient.js";
 import { getHabitacionById } from "../../services/habitacionService.js";
 
@@ -67,73 +69,41 @@ function getMetricVoteItems(reputacionActual, metricKey) {
   return Array.isArray(items) ? items : [];
 }
 
+function getOccupantToneClasses({ sourceMode, hasVisibleVotes }) {
+  if (sourceMode === "historico_global") {
+    return {
+      wrapper:
+        "border-amber-300 bg-gradient-to-br from-amber-50 via-white to-orange-50",
+      accent: "bg-amber-500",
+      title: "text-amber-800",
+      softBox: "border-amber-200 bg-amber-50",
+    };
+  }
+
+  if (!hasVisibleVotes) {
+    return {
+      wrapper:
+        "border-slate-300 bg-gradient-to-br from-slate-50 via-white to-blue-50",
+      accent: "bg-slate-400",
+      title: "text-slate-800",
+      softBox: "border-slate-200 bg-slate-50",
+    };
+  }
+
+  return {
+    wrapper:
+      "border-sky-300 bg-gradient-to-br from-sky-50 via-white to-violet-50",
+    accent: "bg-sky-500",
+    title: "text-sky-800",
+    softBox: "border-sky-200 bg-sky-50",
+  };
+}
+
 function Feature({ label, value }) {
   return (
     <div className="flex items-center justify-between gap-3 border-b border-ui-border py-2 last:border-b-0">
       <span className="text-sm text-ui-text-secondary">{label}</span>
       <span className="text-sm font-medium text-ui-text">{value}</span>
-    </div>
-  );
-}
-
-function getMetricTooltip(title) {
-  const normalized = String(title || "").toLowerCase();
-
-  if (normalized.includes("limpieza")) {
-    return "Media de valoraciones sobre limpieza y cuidado de los espacios compartidos.";
-  }
-  if (normalized.includes("ruido")) {
-    return "Media de valoraciones sobre respeto del descanso y nivel de ruido.";
-  }
-  if (normalized.includes("pago")) {
-    return "Media de valoraciones sobre puntualidad en pagos y gastos compartidos.";
-  }
-  if (normalized.includes("convivientes")) {
-    return "Número de personas con estancia activa en el piso en este momento.";
-  }
-  if (normalized.includes("habitacion") || normalized.includes("habitación")) {
-    return "Dato asociado a la habitación que estás consultando.";
-  }
-
-  return null;
-}
-
-function MetricCard({
-  title,
-  value,
-  tone = "neutral",
-  strongBorder = false,
-  helperText = null,
-}) {
-  const toneClasses =
-    tone === "success"
-      ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-      : tone === "warning"
-        ? "border-amber-300 bg-amber-50 text-amber-700"
-        : tone === "info"
-          ? "border-sky-300 bg-sky-50 text-sky-700"
-          : tone === "violet"
-            ? strongBorder
-              ? "border-fuchsia-400 bg-fuchsia-50 text-fuchsia-600 border-4"
-              : "border-violet-300 bg-violet-50 text-violet-700"
-            : "border-slate-200 bg-slate-50 text-slate-700";
-  const tooltip = helperText || getMetricTooltip(title);
-
-  return (
-    <div
-      className={`rounded-xl p-4 ${toneClasses}`}
-      tabIndex={tooltip ? 0 : undefined}
-      title={tooltip || undefined}
-      aria-label={tooltip ? `${title}: ${tooltip}` : undefined}
-    >
-      <p className="text-xs font-medium uppercase tracking-wide">{title}</p>
-      <p className="mt-2 text-2xl font-bold text-ui-text">{value}</p>
-
-      {helperText ? (
-        <p className="mt-2 text-xs text-ui-text-secondary">
-          {helperText}
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -306,18 +276,10 @@ function GallerySourceBadge({ source }) {
 
 function SourceModeBadge({ sourceMode }) {
   if (sourceMode === "historico_global") {
-    return (
-      <span className="badge badge-warning">
-        Reputación histórica
-      </span>
-    );
+    return <span className="badge badge-warning">Reputación histórica</span>;
   }
 
-  return (
-    <span className="badge badge-success">
-      Reputación actual
-    </span>
-  );
+  return <span className="badge badge-success">Reputación actual</span>;
 }
 
 export default function HabitacionDetail() {
@@ -338,6 +300,7 @@ export default function HabitacionDetail() {
   const [singleModalImage, setSingleModalImage] = useState(null);
   const [modalGalleryIndex, setModalGalleryIndex] = useState(0);
   const [showManagerPhone, setShowManagerPhone] = useState(false);
+  const [openOccupantId, setOpenOccupantId] = useState(null);
 
   function openSingleImage(url, label = "Foto") {
     if (!url) return;
@@ -371,6 +334,8 @@ export default function HabitacionDetail() {
 
   useEffect(() => {
     setShowManagerPhone(false);
+    setOpenOccupantId(null);
+
     let cancelled = false;
 
     async function load() {
@@ -387,7 +352,9 @@ export default function HabitacionDetail() {
         setFotosPiso(Array.isArray(res?.fotos_piso) ? res.fotos_piso : []);
         setManager(res?.manager || null);
         setConvivenciaActual(res?.convivencia_actual || null);
-        setOcupantesActuales(Array.isArray(res?.ocupantes_actuales) ? res.ocupantes_actuales : []);
+        setOcupantesActuales(
+          Array.isArray(res?.ocupantes_actuales) ? res.ocupantes_actuales : []
+        );
       } catch (err) {
         if (cancelled) return;
 
@@ -517,7 +484,8 @@ export default function HabitacionDetail() {
 
   const convivenciaLimpieza = formatMetric(
     hasConvivenciaVisibleVotes
-      ? (convivenciaActual?.medias?.limpieza ?? convivenciaActual?.media_limpieza)
+      ? (convivenciaActual?.medias?.limpieza ??
+          convivenciaActual?.media_limpieza)
       : null
   );
 
@@ -529,10 +497,8 @@ export default function HabitacionDetail() {
 
   const convivenciaPagos = formatMetric(
     hasConvivenciaVisibleVotes
-      ? (
-          convivenciaActual?.medias?.puntualidad_pagos ??
-          convivenciaActual?.media_puntualidad_pagos
-        )
+      ? (convivenciaActual?.medias?.puntualidad_pagos ??
+          convivenciaActual?.media_puntualidad_pagos)
       : null
   );
 
@@ -555,14 +521,21 @@ export default function HabitacionDetail() {
       title={habitacion ? habitacion.titulo : "Habitación"}
       subtitle={
         habitacion
-          ? `${habitacion.ciudad || ""}${habitacion.codigo_postal ? ` · ${habitacion.codigo_postal}` : ""}`
+          ? `${habitacion.ciudad || ""}${
+              habitacion.codigo_postal ? ` · ${habitacion.codigo_postal}` : ""
+            }`
           : "Detalle"
       }
       variant="plain"
       actions={
-        <Link className="btn btn-secondary btn-sm" to="/habitaciones">
-          Volver
-        </Link>
+        <div className="w-full sm:w-auto">
+          <Link
+            className="btn btn-secondary btn-sm w-full sm:w-auto"
+            to="/habitaciones"
+          >
+            Volver
+          </Link>
+        </div>
       }
     >
       {errorMsg ? (
@@ -580,15 +553,15 @@ export default function HabitacionDetail() {
 
       {loading ? (
         <div className="space-y-6">
-          <div className="grid gap-6 lg:grid-cols-12">
+          <div className="grid gap-4 lg:grid-cols-12 lg:gap-6">
             <div className="space-y-4 lg:col-span-8">
-              <div className="skeleton aspect-[4/3] w-full" />
+              <div className="skeleton aspect-[16/10] w-full sm:aspect-[4/3]" />
 
-              <div className="flex gap-3 overflow-hidden">
+              <div className="-mx-3 flex gap-2 overflow-x-auto px-3 sm:mx-0 sm:gap-3 sm:px-0">
                 {Array.from({ length: 5 }).map((_, index) => (
                   <div
                     key={index}
-                    className="skeleton h-24 min-w-[110px] flex-1 rounded-xl"
+                    className="skeleton h-20 min-w-[88px] rounded-xl sm:h-24 sm:min-w-[110px]"
                   />
                 ))}
               </div>
@@ -614,15 +587,15 @@ export default function HabitacionDetail() {
           </div>
 
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-2 sm:gap-3 xl:grid-cols-5">
               {Array.from({ length: 5 }).map((_, index) => (
-                <div key={index} className="skeleton h-28 rounded-xl" />
+                <div key={index} className="skeleton h-24 rounded-2xl sm:h-28" />
               ))}
             </div>
 
             <div className="skeleton h-24 rounded-xl" />
 
-            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
               {Array.from({ length: 2 }).map((_, index) => (
                 <div key={index} className="card">
                   <div className="card-body space-y-4">
@@ -634,7 +607,7 @@ export default function HabitacionDetail() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                       <div className="skeleton h-32 rounded-lg" />
                       <div className="skeleton h-32 rounded-lg" />
                       <div className="skeleton h-32 rounded-lg" />
@@ -666,7 +639,7 @@ export default function HabitacionDetail() {
                       onClick={() => openGalleryModal(activeGalleryIndex)}
                     >
                       <img
-                        className="aspect-square w-full object-cover sm:aspect-[4/3]"
+                        className="aspect-[16/10] w-full object-cover sm:aspect-[4/3]"
                         src={currentGalleryImage.url}
                         alt={currentGalleryImage.alt}
                         loading="lazy"
@@ -705,49 +678,51 @@ export default function HabitacionDetail() {
                   </div>
 
                   {galleryImages.length > 1 ? (
-                    <div className="flex gap-3 overflow-x-auto pb-1">
-                      {galleryImages.map((image, index) => {
-                        const isActive = index === activeGalleryIndex;
+                    <div className="-mx-3 overflow-x-auto px-3 pb-1 sm:mx-0 sm:px-0">
+                      <div className="flex gap-2 sm:gap-3">
+                        {galleryImages.map((image, index) => {
+                          const isActive = index === activeGalleryIndex;
 
-                        return (
-                          <button
-                            key={image.key}
-                            type="button"
-                            className={`relative min-w-[110px] overflow-hidden rounded-xl border transition-all ${
-                              isActive
-                                ? "border-brand-primary ring-2 ring-blue-200"
-                                : "border-ui-border hover:border-sky-300"
-                            }`}
-                            onClick={() => setActiveGalleryIndex(index)}
-                            aria-label={image.label}
-                            title={image.label}
-                          >
-                            <img
-                              src={image.url}
-                              alt={image.alt}
-                              className="h-24 w-[110px] object-cover"
-                              loading="lazy"
-                            />
+                          return (
+                            <button
+                              key={image.key}
+                              type="button"
+                              className={`relative min-w-[88px] overflow-hidden rounded-xl border transition-all sm:min-w-[110px] ${
+                                isActive
+                                  ? "border-brand-primary ring-2 ring-blue-200"
+                                  : "border-ui-border hover:border-sky-300"
+                              }`}
+                              onClick={() => setActiveGalleryIndex(index)}
+                              aria-label={image.label}
+                              title={image.label}
+                            >
+                              <img
+                                src={image.url}
+                                alt={image.alt}
+                                className="h-20 w-[88px] object-cover sm:h-24 sm:w-[110px]"
+                                loading="lazy"
+                              />
 
-                            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-2 py-2 text-left">
-                              <span
-                                className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-                                  image.source === "piso"
-                                    ? "bg-emerald-100 text-emerald-700"
-                                    : "bg-sky-100 text-sky-700"
-                                }`}
-                              >
-                                {image.source === "piso" ? "Piso" : "Habitación"}
-                              </span>
-                            </div>
-                          </button>
-                        );
-                      })}
+                              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/65 to-transparent px-2 py-2 text-left">
+                                <span
+                                  className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
+                                    image.source === "piso"
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : "bg-sky-100 text-sky-700"
+                                  }`}
+                                >
+                                  {image.source === "piso" ? "Piso" : "Habitación"}
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   ) : null}
                 </div>
               ) : (
-                <div className="skeleton aspect-square w-full sm:aspect-[4/3]" />
+                <div className="skeleton aspect-[16/10] w-full sm:aspect-[4/3]" />
               )}
 
               <div className="card">
@@ -755,7 +730,11 @@ export default function HabitacionDetail() {
                   <div className="flex items-center justify-between gap-2">
                     <h3 className="text-base font-semibold">Descripción</h3>
 
-                    <span className={isDisponible ? "badge badge-success" : "badge badge-neutral"}>
+                    <span
+                      className={
+                        isDisponible ? "badge badge-success" : "badge badge-neutral"
+                      }
+                    >
                       {isDisponible ? "Disponible" : "No disponible"}
                     </span>
                   </div>
@@ -785,7 +764,7 @@ export default function HabitacionDetail() {
               ) : null}
             </div>
 
-            <aside className="order-first space-y-4 lg:order-none lg:col-span-4">
+            <aside className="space-y-4 lg:col-span-4">
               <div className="card">
                 <div className="card-body space-y-3">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between lg:flex-col lg:items-stretch xl:flex-row xl:items-end">
@@ -797,7 +776,11 @@ export default function HabitacionDetail() {
                       <p className="text-xs text-ui-text-secondary">al mes</p>
                     </div>
 
-                    <span className={isDisponible ? "badge badge-success" : "badge badge-neutral"}>
+                    <span
+                      className={
+                        isDisponible ? "badge badge-success" : "badge badge-neutral"
+                      }
+                    >
                       {isDisponible ? "Disponible" : "Ocupada"}
                     </span>
                   </div>
@@ -807,9 +790,15 @@ export default function HabitacionDetail() {
                       label="Tamaño"
                       value={habitacion.tamano_m2 ? `${habitacion.tamano_m2} m²` : "—"}
                     />
-                    <Feature label="Amueblada" value={habitacion.amueblada ? "Sí" : "No"} />
+                    <Feature
+                      label="Amueblada"
+                      value={habitacion.amueblada ? "Sí" : "No"}
+                    />
                     <Feature label="Baño" value={habitacion.bano ? "Sí" : "No"} />
-                    <Feature label="Balcón" value={habitacion.balcon ? "Sí" : "No"} />
+                    <Feature
+                      label="Balcón"
+                      value={habitacion.balcon ? "Sí" : "No"}
+                    />
                   </div>
                 </div>
               </div>
@@ -884,7 +873,8 @@ export default function HabitacionDetail() {
                 Convivencia visible del piso
               </h3>
               <p className="mt-1 text-sm text-ui-text-secondary">
-                Esta sección muestra la información de convivencia disponible en este momento.
+                Esta sección muestra la información de convivencia disponible en este
+                momento.
               </p>
             </div>
 
@@ -894,36 +884,51 @@ export default function HabitacionDetail() {
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-              <MetricCard
-                title="Media global"
+            <div className="grid grid-cols-3 gap-1.5 min-[520px]:grid-cols-5 sm:gap-3">
+              <MetricSummaryCard
+                label="Media global"
                 value={convivenciaMediaGlobal}
                 tone="violet"
-                strongBorder
-                helperText={!hasConvivenciaVisibleVotes ? "Sin valoraciones visibles" : null}
+                bodyClassName="p-2 sm:p-4"
+                labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                description="Media global visible del piso."
               />
-              <MetricCard
-                title="Limpieza media"
+              <MetricSummaryCard
+                label="Limpieza"
                 value={convivenciaLimpieza}
-                tone="success"
-                helperText={!hasConvivenciaVisibleVotes ? "Sin valoraciones visibles" : null}
+                tone="emerald"
+                bodyClassName="p-2 sm:p-4"
+                labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                description="Media visible de limpieza."
               />
-              <MetricCard
-                title="Ruido medio"
+              <MetricSummaryCard
+                label="Ruido"
                 value={convivenciaRuido}
-                tone="warning"
-                helperText={!hasConvivenciaVisibleVotes ? "Sin valoraciones visibles" : null}
+                tone="amber"
+                bodyClassName="p-2 sm:p-4"
+                labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                description="Media visible de ruido."
               />
-              <MetricCard
-                title="Pagos medios"
+              <MetricSummaryCard
+                label="Pagos"
                 value={convivenciaPagos}
-                tone="info"
-                helperText={!hasConvivenciaVisibleVotes ? "Sin valoraciones visibles" : null}
+                tone="sky"
+                bodyClassName="p-2 sm:p-4"
+                labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                description="Media visible de puntualidad en pagos."
               />
-              <MetricCard
-                title="Convivientes actuales"
+              <MetricSummaryCard
+                label="Activos"
                 value={convivenciaConvivientesActuales}
-                tone="violet"
+                tone="default"
+                bodyClassName="p-2 sm:p-4"
+                labelClassName="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-xs"
+                valueClassName="mt-1 text-lg font-bold text-ui-text sm:mt-2 sm:text-2xl"
+                description="Número de convivientes activos en este momento."
               />
             </div>
 
@@ -932,7 +937,7 @@ export default function HabitacionDetail() {
                 Resumen general visible del grupo
               </p>
 
-              <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-3">
                 <p className="text-sm text-ui-text-secondary">
                   Media global visible del piso:{" "}
                   <span className="font-semibold text-ui-text">
@@ -965,14 +970,19 @@ export default function HabitacionDetail() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+              <div className="space-y-4">
                 {ocupantesActuales.map((ocupante) => {
                   const reputacionActual = ocupante.reputacion_actual || null;
-                  const reputacionSource = reputacionActual?.origen_metricas || "actual";
+                  const reputacionSource =
+                    reputacionActual?.origen_metricas || "actual";
                   const totalVisibleVotes = Number(
                     reputacionActual?.total_votos ?? ocupante.total_votos ?? 0
                   );
                   const hasVisibleOccupantVotes = totalVisibleVotes > 0;
+                  const occupantTone = getOccupantToneClasses({
+                    sourceMode: reputacionSource,
+                    hasVisibleVotes: hasVisibleOccupantVotes,
+                  });
 
                   const limpiezaVotes = getMetricVoteItems(
                     reputacionActual,
@@ -990,12 +1000,19 @@ export default function HabitacionDetail() {
                   );
 
                   return (
-                    <article
+                    <ResponsiveDisclosureCard
                       key={ocupante.id}
-                      className="card"
-                    >
-                      <div className="card-body space-y-4">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      id={`ocupante-${ocupante.id}`}
+                      open={openOccupantId === ocupante.id}
+                      onToggle={() =>
+                        setOpenOccupantId((prev) =>
+                          prev === ocupante.id ? null : ocupante.id
+                        )
+                      }
+                      accentClassName={occupantTone.accent}
+                      className={occupantTone.wrapper}
+                      summary={
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div className="flex items-center gap-4">
                             <PersonAvatar
                               entity={ocupante}
@@ -1021,7 +1038,7 @@ export default function HabitacionDetail() {
                             </div>
                           </div>
 
-                          <div className="flex flex-wrap items-center justify-end gap-2">
+                          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                             <SourceModeBadge sourceMode={reputacionSource} />
 
                             <span className="badge badge-info">
@@ -1029,70 +1046,75 @@ export default function HabitacionDetail() {
                             </span>
                           </div>
                         </div>
-
-                        {reputacionSource === "historico_global" ? (
-                          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                            <p className="text-sm text-amber-800">
-                              Este usuario no tiene votos actuales en la convivencia de este piso.
-                              Se muestra como referencia su reputación histórica.
-                            </p>
-                          </div>
-                        ) : !hasVisibleOccupantVotes ? (
-                          <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
-                            <p className="text-sm text-ui-text-secondary">
-                              Este conviviente todavía no ha recibido votos visibles.
-                            </p>
-                          </div>
-                        ) : null}
-
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                          <ConvivienteMetricPanel
-                            title="Limpieza"
-                            value={formatMetric(
-                              hasVisibleOccupantVotes
-                                ? (reputacionActual?.medias?.limpieza ?? ocupante.media_limpieza)
-                                : null
-                            )}
-                            tone="success"
-                            items={limpiezaVotes}
-                            onOpen={openSingleImage}
-                            sourceMode={reputacionSource}
-                            hasVisibleVotes={hasVisibleOccupantVotes}
-                          />
-
-                          <ConvivienteMetricPanel
-                            title="Ruido"
-                            value={formatMetric(
-                              hasVisibleOccupantVotes
-                                ? (reputacionActual?.medias?.ruido ?? ocupante.media_ruido)
-                                : null
-                            )}
-                            tone="warning"
-                            items={ruidoVotes}
-                            onOpen={openSingleImage}
-                            sourceMode={reputacionSource}
-                            hasVisibleVotes={hasVisibleOccupantVotes}
-                          />
-
-                          <ConvivienteMetricPanel
-                            title="Puntualid. pagos"
-                            value={formatMetric(
-                              hasVisibleOccupantVotes
-                                ? (
-                                    reputacionActual?.medias?.puntualidad_pagos ??
-                                    ocupante.media_puntualidad_pagos
-                                  )
-                                : null
-                            )}
-                            tone="info"
-                            items={pagosVotes}
-                            onOpen={openSingleImage}
-                            sourceMode={reputacionSource}
-                            hasVisibleVotes={hasVisibleOccupantVotes}
-                          />
+                      }
+                    >
+                      {reputacionSource === "historico_global" ? (
+                        <div
+                          className={`rounded-2xl border p-4 ${occupantTone.softBox}`}
+                        >
+                          <p className="text-sm text-amber-800">
+                            Este usuario no tiene votos actuales en la convivencia de
+                            este piso. Se muestra como referencia su reputación
+                            histórica.
+                          </p>
                         </div>
+                      ) : !hasVisibleOccupantVotes ? (
+                        <div
+                          className={`rounded-2xl border p-4 ${occupantTone.softBox}`}
+                        >
+                          <p className="text-sm text-ui-text-secondary">
+                            Este conviviente todavía no ha recibido votos visibles.
+                          </p>
+                        </div>
+                      ) : null}
+
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <ConvivienteMetricPanel
+                          title="Limpieza"
+                          value={formatMetric(
+                            hasVisibleOccupantVotes
+                              ? (reputacionActual?.medias?.limpieza ??
+                                  ocupante.media_limpieza)
+                              : null
+                          )}
+                          tone="success"
+                          items={limpiezaVotes}
+                          onOpen={openSingleImage}
+                          sourceMode={reputacionSource}
+                          hasVisibleVotes={hasVisibleOccupantVotes}
+                        />
+
+                        <ConvivienteMetricPanel
+                          title="Ruido"
+                          value={formatMetric(
+                            hasVisibleOccupantVotes
+                              ? (reputacionActual?.medias?.ruido ??
+                                  ocupante.media_ruido)
+                              : null
+                          )}
+                          tone="warning"
+                          items={ruidoVotes}
+                          onOpen={openSingleImage}
+                          sourceMode={reputacionSource}
+                          hasVisibleVotes={hasVisibleOccupantVotes}
+                        />
+
+                        <ConvivienteMetricPanel
+                          title="Puntualid. pagos"
+                          value={formatMetric(
+                            hasVisibleOccupantVotes
+                              ? (reputacionActual?.medias?.puntualidad_pagos ??
+                                  ocupante.media_puntualidad_pagos)
+                              : null
+                          )}
+                          tone="info"
+                          items={pagosVotes}
+                          onOpen={openSingleImage}
+                          sourceMode={reputacionSource}
+                          hasVisibleVotes={hasVisibleOccupantVotes}
+                        />
                       </div>
-                    </article>
+                    </ResponsiveDisclosureCard>
                   );
                 })}
               </div>
@@ -1113,10 +1135,10 @@ export default function HabitacionDetail() {
       >
         {modalMode === "gallery" && currentModalGalleryImage ? (
           <div className="space-y-4">
-            <div className="mx-auto w-full max-w-[940px] space-y-4">
+            <div className="mx-auto w-full max-w-[900px] space-y-4">
               <div className="relative">
                 <img
-                  className="max-h-[82vh] w-full rounded-lg object-contain"
+                  className="max-h-[70vh] w-full rounded-lg object-contain sm:max-h-[82vh]"
                   src={currentModalGalleryImage.url}
                   alt={currentModalGalleryImage.alt}
                 />
@@ -1129,7 +1151,7 @@ export default function HabitacionDetail() {
                   <>
                     <button
                       type="button"
-                      className="absolute left-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-2.5 py-1.5 text-base font-semibold text-ui-text shadow sm:left-3 sm:px-3 sm:py-2 sm:text-lg"
                       onClick={showPrevModalGalleryImage}
                       aria-label="Foto anterior"
                     >
@@ -1138,7 +1160,7 @@ export default function HabitacionDetail() {
 
                     <button
                       type="button"
-                      className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-3 py-2 text-lg font-semibold text-ui-text shadow"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full border border-ui-border bg-white/90 px-2.5 py-1.5 text-base font-semibold text-ui-text shadow sm:right-3 sm:px-3 sm:py-2 sm:text-lg"
                       onClick={showNextModalGalleryImage}
                       aria-label="Foto siguiente"
                     >
@@ -1149,31 +1171,33 @@ export default function HabitacionDetail() {
               </div>
 
               {galleryImages.length > 1 ? (
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {galleryImages.map((image, index) => {
-                    const isActive = index === modalGalleryIndex;
+                <div className="-mx-1 overflow-x-auto px-1 pb-1">
+                  <div className="flex gap-2">
+                    {galleryImages.map((image, index) => {
+                      const isActive = index === modalGalleryIndex;
 
-                    return (
-                      <button
-                        key={`modal-${image.key}`}
-                        type="button"
-                        className={`relative min-w-[92px] overflow-hidden rounded-lg border transition-all ${
-                          isActive
-                            ? "border-brand-primary ring-2 ring-blue-200"
-                            : "border-ui-border hover:border-sky-300"
-                        }`}
-                        onClick={() => setModalGalleryIndex(index)}
-                        aria-label={image.label}
-                        title={image.label}
-                      >
-                        <img
-                          src={image.url}
-                          alt={image.alt}
-                          className="h-20 w-[92px] object-cover"
-                        />
-                      </button>
-                    );
-                  })}
+                      return (
+                        <button
+                          key={`modal-${image.key}`}
+                          type="button"
+                          className={`relative min-w-[84px] overflow-hidden rounded-lg border transition-all sm:min-w-[92px] ${
+                            isActive
+                              ? "border-brand-primary ring-2 ring-blue-200"
+                              : "border-ui-border hover:border-sky-300"
+                          }`}
+                          onClick={() => setModalGalleryIndex(index)}
+                          aria-label={image.label}
+                          title={image.label}
+                        >
+                          <img
+                            src={image.url}
+                            alt={image.alt}
+                            className="h-16 w-[84px] object-cover sm:h-20 sm:w-[92px]"
+                          />
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : null}
 
@@ -1185,7 +1209,7 @@ export default function HabitacionDetail() {
         ) : singleModalImage ? (
           <div className="mx-auto w-full max-w-[860px]">
             <img
-              className="max-h-[82vh] w-full rounded-md object-contain"
+              className="max-h-[70vh] w-full rounded-md object-contain sm:max-h-[82vh]"
               src={singleModalImage.url}
               alt={singleModalImage.label || "Foto ampliada"}
             />

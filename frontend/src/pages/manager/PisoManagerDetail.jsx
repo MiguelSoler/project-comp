@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
+import ResponsiveDisclosureCard from "../../components/ui/ResponsiveDisclosureCard.jsx";
 import { getApiErrorMessage } from "../../services/apiClient.js";
 import {
   addAdminPisoFoto,
@@ -61,7 +62,7 @@ function formatDate(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
 
-  return new Intl.DateTimeFormat("es-ES", {
+  return new Intl.NumberFormat("es-ES", {
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
@@ -164,6 +165,116 @@ function MiniVoteList({ items = [], onOpen }) {
   );
 }
 
+function CompactMetricCard({ title, value, tone = "default" }) {
+  const toneClasses =
+    tone === "violet"
+      ? "border-violet-300 bg-violet-50"
+      : tone === "success"
+        ? "border-emerald-300 bg-emerald-50"
+        : tone === "warning"
+          ? "border-amber-300 bg-amber-50"
+          : tone === "info"
+            ? "border-sky-300 bg-sky-50"
+            : "border-slate-300 bg-slate-50";
+
+  const labelClasses =
+    tone === "violet"
+      ? "text-violet-700"
+      : tone === "success"
+        ? "text-emerald-700"
+        : tone === "warning"
+          ? "text-amber-700"
+          : tone === "info"
+            ? "text-sky-700"
+            : "text-ui-text-secondary";
+
+  return (
+    <div className={`min-w-[148px] rounded-xl border p-3 ${toneClasses}`}>
+      <p className={`text-[11px] font-medium uppercase tracking-wide ${labelClasses}`}>
+        {title}
+      </p>
+      <p className="mt-1 text-lg font-bold text-ui-text sm:text-2xl">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function ConvivienteMetricPanel({
+  title,
+  value,
+  tone = "neutral",
+  items = [],
+  onOpen,
+}) {
+  const toneClasses =
+    tone === "success"
+      ? "border-emerald-200 bg-emerald-50"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-50"
+        : tone === "info"
+          ? "border-sky-200 bg-sky-50"
+          : "border-slate-200 bg-slate-50";
+
+  const labelClasses =
+    tone === "success"
+      ? "text-emerald-700"
+      : tone === "warning"
+        ? "text-amber-700"
+        : tone === "info"
+          ? "text-sky-700"
+          : "text-slate-700";
+
+  return (
+    <div className={`rounded-lg border p-3 ${toneClasses}`}>
+      <p className={`text-xs font-medium uppercase tracking-wide ${labelClasses}`}>
+        {title}
+      </p>
+
+      <p className="mt-1 text-lg font-semibold text-ui-text">
+        {value}
+      </p>
+
+      <MiniVoteList items={items} onOpen={onOpen} />
+    </div>
+  );
+}
+
+function getHabitacionAccordionTone(habitacion) {
+  if (!habitacion?.activo) {
+    return {
+      accent: "bg-slate-400",
+      wrapper: "border-slate-300 bg-gradient-to-br from-slate-50 via-white to-slate-100",
+    };
+  }
+
+  if (habitacion?.disponible) {
+    return {
+      accent: "bg-emerald-500",
+      wrapper: "border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-sky-50",
+    };
+  }
+
+  return {
+    accent: "bg-amber-500",
+    wrapper: "border-amber-200 bg-gradient-to-br from-amber-50 via-white to-orange-50",
+  };
+}
+
+function getConvivienteAccordionTone(totalVotos) {
+  if (Number(totalVotos || 0) > 0) {
+    return {
+      accent: "bg-violet-500",
+      wrapper: "border-violet-200 bg-gradient-to-br from-violet-50 via-white to-sky-50",
+    };
+  }
+
+  return {
+    accent: "bg-slate-400",
+    wrapper: "border-slate-300 bg-gradient-to-br from-slate-50 via-white to-blue-50",
+  };
+}
+
 export default function PisoManagerDetail() {
   const { pisoId } = useParams();
   const navigate = useNavigate();
@@ -199,6 +310,8 @@ export default function PisoManagerDetail() {
 
   const [openHabitacionMenuId, setOpenHabitacionMenuId] = useState(null);
   const [habitacionCardFeedback, setHabitacionCardFeedback] = useState({});
+  const [openHabitacionAccordionId, setOpenHabitacionAccordionId] = useState(null);
+  const [openConvivienteAccordionId, setOpenConvivienteAccordionId] = useState(null);
 
   const [isPisoPhotoModalOpen, setIsPisoPhotoModalOpen] = useState(false);
   const [selectedPisoPhotoIndex, setSelectedPisoPhotoIndex] = useState(0);
@@ -307,6 +420,8 @@ export default function PisoManagerDetail() {
     setActiveTab(nextTab);
     setOpenPisoPhotoMenuId(null);
     setOpenHabitacionMenuId(null);
+    setOpenHabitacionAccordionId(null);
+    setOpenConvivienteAccordionId(null);
 
     if (nextTab !== "fotos") {
       setEditingPisoPhotoOrderId(null);
@@ -581,22 +696,22 @@ export default function PisoManagerDetail() {
   async function handleConfirmDeactivateHabitacion() {
     const habitacion = habitacionToDeactivate;
     if (!habitacion) return;
-    
+
     try {
       setChangingId(habitacion.id);
       setError("");
       setSuccess("");
       setCreateHabitacionSuccess("");
-    
+
       setHabitacionCardFeedback((prev) => {
         const next = { ...prev };
         delete next[habitacion.id];
         return next;
       });
-    
+
       const data = await deactivateAdminHabitacion(habitacion.id);
       const updatedHabitacion = data?.habitacion;
-    
+
       setHabitaciones((prev) =>
         prev.map((item) =>
           item.id === habitacion.id
@@ -604,15 +719,15 @@ export default function PisoManagerDetail() {
             : item
         )
       );
-    
+
       setPiso((prev) => {
         if (!prev) return prev;
-      
+
         const wasActive = Boolean(habitacion.activo);
         const wasAvailableAndActive = Boolean(
           habitacion.activo && habitacion.disponible
         );
-      
+
         return {
           ...prev,
           habitaciones_activas: wasActive
@@ -623,7 +738,7 @@ export default function PisoManagerDetail() {
             : Number(prev.habitaciones_disponibles ?? 0),
         };
       });
-    
+
       setHabitacionCardFeedback((prev) => ({
         ...prev,
         [habitacion.id]: {
@@ -631,14 +746,14 @@ export default function PisoManagerDetail() {
           message: "Habitación desactivada correctamente.",
         },
       }));
-    
+
       setHabitacionToDeactivate(null);
     } catch (err) {
       const message =
         err?.error === "ROOM_OCCUPIED"
           ? "No puedes desactivar esta habitación mientras esté ocupada."
           : getApiErrorMessage(err, "No se pudo desactivar la habitación.");
-    
+
       setHabitacionCardFeedback((prev) => ({
         ...prev,
         [habitacion.id]: {
@@ -646,7 +761,7 @@ export default function PisoManagerDetail() {
           message,
         },
       }));
-    
+
       setError(message);
       setHabitacionToDeactivate(null);
     } finally {
@@ -879,6 +994,481 @@ export default function PisoManagerDetail() {
     setIsConvivientePhotoModalOpen(false);
   }
 
+  function renderConvivienteContent(conviviente) {
+    const avatarUrl = buildImageUrl(conviviente.foto_perfil_url);
+    const reputacionActual = conviviente.reputacion_actual || null;
+
+    const limpiezaVotes = getMetricVoteItems(reputacionActual, "limpieza");
+    const ruidoVotes = getMetricVoteItems(reputacionActual, "ruido");
+    const pagosVotes = getMetricVoteItems(
+      reputacionActual,
+      "puntualidad_pagos"
+    );
+
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center gap-4">
+          {avatarUrl ? (
+            <button
+              type="button"
+              className="block"
+              onClick={() =>
+                openConvivientePhotoModal(
+                  avatarUrl,
+                  [conviviente.nombre, conviviente.apellidos]
+                    .filter(Boolean)
+                    .join(" ") || "Conviviente"
+                )
+              }
+              aria-label="Ver foto de perfil"
+            >
+              <img
+                src={avatarUrl}
+                alt={
+                  [conviviente.nombre, conviviente.apellidos]
+                    .filter(Boolean)
+                    .join(" ") || "Conviviente"
+                }
+                className="h-16 w-16 rounded-full border border-ui-border object-cover"
+              />
+            </button>
+          ) : (
+            <div className="flex h-16 w-16 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary">
+              {getInitials(conviviente)}
+            </div>
+          )}
+
+          <div className="min-w-0">
+            <p className="text-lg font-semibold text-ui-text">
+              {[conviviente.nombre, conviviente.apellidos]
+                .filter(Boolean)
+                .join(" ") || "Sin nombre"}
+            </p>
+            <p className="mt-1 text-sm text-ui-text-secondary">
+              Habitación #{conviviente.habitacion_id}
+              {conviviente.habitacion_titulo
+                ? ` · ${conviviente.habitacion_titulo}`
+                : ""}
+            </p>
+            <p className="mt-1 text-xs text-ui-text-secondary">
+              Entrada: {formatDate(conviviente.fecha_entrada)}
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <ConvivienteMetricPanel
+            title="Limpieza"
+            value={formatMetric(reputacionActual?.medias?.limpieza)}
+            tone="success"
+            items={limpiezaVotes}
+            onOpen={openConvivientePhotoModal}
+          />
+
+          <ConvivienteMetricPanel
+            title="Ruido"
+            value={formatMetric(reputacionActual?.medias?.ruido)}
+            tone="warning"
+            items={ruidoVotes}
+            onOpen={openConvivientePhotoModal}
+          />
+
+          <ConvivienteMetricPanel
+            title="Puntualid. pagos"
+            value={formatMetric(reputacionActual?.medias?.puntualidad_pagos)}
+            tone="info"
+            items={pagosVotes}
+            onOpen={openConvivientePhotoModal}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  function renderDesktopHabitacionCard(habitacion) {
+    const roomCover = buildImageUrl(habitacion.cover_foto_habitacion_url);
+    const isInactive = !habitacion.activo;
+
+    return (
+      <article
+        key={habitacion.id}
+        className="card card-hover relative flex h-full flex-col"
+      >
+        <button
+          type="button"
+          className="absolute right-[10px] top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300 bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.35)] transition-all hover:from-sky-500 hover:via-blue-600 hover:to-indigo-700 hover:shadow-[0_0_0_4px_rgba(59,130,246,0.4)]"
+          onClick={(event) => toggleHabitacionMenu(habitacion.id, event)}
+          aria-label="Más acciones"
+        >
+          <span className="flex items-center justify-center gap-0.5">
+            <span className="h-1 w-1 rounded-full bg-white" />
+            <span className="h-1 w-1 rounded-full bg-white" />
+            <span className="h-1 w-1 rounded-full bg-white" />
+          </span>
+        </button>
+
+        {openHabitacionMenuId === habitacion.id ? (
+          <div
+            className="absolute right-3 top-12 z-30 min-w-[180px] rounded-lg border border-ui-border bg-white p-2 shadow-modal"
+            onClick={(event) => event.stopPropagation()}
+          >
+            {habitacion.activo ? (
+              <button
+                type="button"
+                className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-red-100"
+                onClick={(event) =>
+                  requestDeactivateHabitacion(habitacion, event)
+                }
+              >
+                Desactivar habitación
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-green-100"
+                onClick={(event) =>
+                  handleReactivateHabitacion(habitacion, event)
+                }
+              >
+                Reactivar habitación
+              </button>
+            )}
+          </div>
+        ) : null}
+
+        <div className="card-body flex flex-1 flex-col">
+          <div
+            role="button"
+            tabIndex={0}
+            className={`flex flex-1 flex-col gap-3 ${
+              isInactive ? "opacity-25" : ""
+            }`}
+            onClick={() => openHabitacionDetail(habitacion.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                openHabitacionDetail(habitacion.id);
+              }
+            }}
+          >
+            {roomCover ? (
+              <img
+                src={roomCover}
+                alt={habitacion.titulo || `Habitación ${habitacion.id}`}
+                className="aspect-[4/3] w-full rounded-md object-cover"
+              />
+            ) : (
+              <div className="skeleton aspect-[4/3] w-full rounded-md" />
+            )}
+
+            <div className="flex items-start justify-between gap-2">
+              <h4 className="min-h-[56px] text-base font-semibold text-ui-text">
+                {habitacion.titulo || "Sin título"}
+              </h4>
+
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span
+                  className={
+                    habitacion.activo
+                      ? "badge badge-success"
+                      : "badge badge-neutral"
+                  }
+                >
+                  {habitacion.activo ? "Activa" : "Inactiva"}
+                </span>
+
+                <span
+                  className={
+                    habitacion.disponible
+                      ? "badge badge-info"
+                      : "badge badge-warning"
+                  }
+                >
+                  {habitacion.disponible ? "Disponible" : "No disponible"}
+                </span>
+              </div>
+            </div>
+
+            <p className="text-sm text-ui-text-secondary">
+              <span className="font-medium text-ui-text">
+                {formatEur(habitacion.precio_mensual)}
+              </span>{" "}
+              / mes
+              {habitacion.tamano_m2 ? ` · ${habitacion.tamano_m2} m²` : ""}
+            </p>
+
+            <p className="text-xs text-ui-text-secondary">
+              {habitacion.amueblada ? "Amueblada · " : ""}
+              {habitacion.bano ? "Baño · " : ""}
+              {habitacion.balcon ? "Balcón" : ""}
+            </p>
+          </div>
+
+          {habitacionCardFeedback[habitacion.id] ? (
+            <div
+              className={`mt-4 ${
+                habitacionCardFeedback[habitacion.id].type === "success"
+                  ? "alert-success"
+                  : "alert-error"
+              }`}
+            >
+              {habitacionCardFeedback[habitacion.id].message}
+            </div>
+          ) : null}
+        </div>
+      </article>
+    );
+  }
+
+  function renderMobileHabitacionAccordion(habitacion) {
+    const tone = getHabitacionAccordionTone(habitacion);
+    const roomCover = buildImageUrl(habitacion.cover_foto_habitacion_url);
+    const feedback = habitacionCardFeedback[habitacion.id];
+
+    return (
+      <ResponsiveDisclosureCard
+        key={habitacion.id}
+        id={`habitacion-${habitacion.id}`}
+        open={openHabitacionAccordionId === habitacion.id}
+        onToggle={() =>
+          setOpenHabitacionAccordionId((prev) =>
+            prev === habitacion.id ? null : habitacion.id
+          )
+        }
+        accentClassName={tone.accent}
+        className={tone.wrapper}
+        summary={
+          <div className={`flex items-center gap-3 ${!habitacion.activo ? "opacity-40" : ""}`}>
+            {roomCover ? (
+              <img
+                src={roomCover}
+                alt={habitacion.titulo || `Habitación ${habitacion.id}`}
+                className="h-16 w-16 rounded-xl object-cover"
+              />
+            ) : (
+              <div className="skeleton h-16 w-16 rounded-xl" />
+            )}
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span
+                  className={
+                    habitacion.activo
+                      ? "badge badge-success"
+                      : "badge badge-neutral"
+                  }
+                >
+                  {habitacion.activo ? "Activa" : "Inactiva"}
+                </span>
+
+                <span
+                  className={
+                    habitacion.disponible
+                      ? "badge badge-info"
+                      : "badge badge-warning"
+                  }
+                >
+                  {habitacion.disponible ? "Disponible" : "No disponible"}
+                </span>
+              </div>
+
+              <h4 className="mt-2 line-clamp-2 text-base font-semibold text-ui-text">
+                {habitacion.titulo || "Sin título"}
+              </h4>
+
+              <p className="mt-1 text-sm text-ui-text-secondary">
+                <span className="font-medium text-ui-text">
+                  {formatEur(habitacion.precio_mensual)}
+                </span>{" "}
+                / mes
+                {habitacion.tamano_m2 ? ` · ${habitacion.tamano_m2} m²` : ""}
+              </p>
+            </div>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <p className="text-xs text-ui-text-secondary">
+            {habitacion.amueblada ? "Amueblada · " : ""}
+            {habitacion.bano ? "Baño · " : ""}
+            {habitacion.balcon ? "Balcón" : ""}
+          </p>
+
+          <p className="text-sm text-ui-text-secondary">
+            {habitacion.descripcion || "Sin descripción."}
+          </p>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => openHabitacionDetail(habitacion.id)}
+            >
+              Abrir detalle
+            </button>
+
+            {habitacion.activo ? (
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={(event) => requestDeactivateHabitacion(habitacion, event)}
+                disabled={changingId === habitacion.id}
+              >
+                {changingId === habitacion.id ? "Desactivando..." : "Desactivar"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-sm border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                onClick={(event) => handleReactivateHabitacion(habitacion, event)}
+                disabled={changingId === habitacion.id}
+              >
+                {changingId === habitacion.id ? "Reactivando..." : "Reactivar"}
+              </button>
+            )}
+          </div>
+
+          {feedback ? (
+            <div className={feedback.type === "success" ? "alert-success" : "alert-error"}>
+              {feedback.message}
+            </div>
+          ) : null}
+        </div>
+      </ResponsiveDisclosureCard>
+    );
+  }
+
+  function renderDesktopConvivienteCard(conviviente) {
+    const reputacionActual = conviviente.reputacion_actual || null;
+
+    return (
+      <article key={conviviente.id} className="card">
+        <div className="card-body space-y-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex items-center gap-4">
+              {buildImageUrl(conviviente.foto_perfil_url) ? (
+                <button
+                  type="button"
+                  className="block"
+                  onClick={() =>
+                    openConvivientePhotoModal(
+                      buildImageUrl(conviviente.foto_perfil_url),
+                      [conviviente.nombre, conviviente.apellidos]
+                        .filter(Boolean)
+                        .join(" ") || "Conviviente"
+                    )
+                  }
+                  aria-label="Ver foto de perfil"
+                >
+                  <img
+                    src={buildImageUrl(conviviente.foto_perfil_url)}
+                    alt={
+                      [conviviente.nombre, conviviente.apellidos]
+                        .filter(Boolean)
+                        .join(" ") || "Conviviente"
+                    }
+                    className="h-16 w-16 rounded-full border border-ui-border object-cover"
+                  />
+                </button>
+              ) : (
+                <div className="flex h-16 w-16 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary">
+                  {getInitials(conviviente)}
+                </div>
+              )}
+
+              <div className="min-w-0">
+                <p className="text-lg font-semibold text-ui-text">
+                  {[conviviente.nombre, conviviente.apellidos]
+                    .filter(Boolean)
+                    .join(" ") || "Sin nombre"}
+                </p>
+                <p className="mt-1 text-sm text-ui-text-secondary">
+                  Habitación #{conviviente.habitacion_id}
+                  {conviviente.habitacion_titulo
+                    ? ` · ${conviviente.habitacion_titulo}`
+                    : ""}
+                </p>
+                <p className="mt-1 text-xs text-ui-text-secondary">
+                  Entrada: {formatDate(conviviente.fecha_entrada)}
+                </p>
+              </div>
+            </div>
+
+            <span className="badge badge-info">
+              Total votos: {reputacionActual?.total_votos ?? 0}
+            </span>
+          </div>
+
+          {renderConvivienteContent(conviviente)}
+        </div>
+      </article>
+    );
+  }
+
+  function renderMobileConvivienteAccordion(conviviente) {
+    const reputacionActual = conviviente.reputacion_actual || null;
+    const totalVotos = reputacionActual?.total_votos ?? 0;
+    const tone = getConvivienteAccordionTone(totalVotos);
+    const avatarUrl = buildImageUrl(conviviente.foto_perfil_url);
+
+    return (
+      <ResponsiveDisclosureCard
+        key={conviviente.id}
+        id={`conviviente-${conviviente.id}`}
+        open={openConvivienteAccordionId === conviviente.id}
+        onToggle={() =>
+          setOpenConvivienteAccordionId((prev) =>
+            prev === conviviente.id ? null : conviviente.id
+          )
+        }
+        accentClassName={tone.accent}
+        className={tone.wrapper}
+        summary={
+          <div className="flex items-center gap-3">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={
+                  [conviviente.nombre, conviviente.apellidos]
+                    .filter(Boolean)
+                    .join(" ") || "Conviviente"
+                }
+                className="h-14 w-14 rounded-full border border-ui-border object-cover"
+              />
+            ) : (
+              <div className="flex h-14 w-14 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary">
+                {getInitials(conviviente)}
+              </div>
+            )}
+
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="badge badge-info">
+                  Total votos: {totalVotos}
+                </span>
+              </div>
+
+              <p className="mt-2 text-base font-semibold text-ui-text">
+                {[conviviente.nombre, conviviente.apellidos]
+                  .filter(Boolean)
+                  .join(" ") || "Sin nombre"}
+              </p>
+
+              <p className="mt-1 text-sm text-ui-text-secondary">
+                Habitación #{conviviente.habitacion_id}
+                {conviviente.habitacion_titulo
+                  ? ` · ${conviviente.habitacion_titulo}`
+                  : ""}
+              </p>
+            </div>
+          </div>
+        }
+      >
+        {renderConvivienteContent(conviviente)}
+      </ResponsiveDisclosureCard>
+    );
+  }
+
   const cover = buildImageUrl(piso?.cover_foto_piso_url);
   const habitacionCount = Number(piso?.habitaciones_total ?? habitaciones.length);
   const fotoCount = fotosPiso.length;
@@ -943,11 +1533,11 @@ export default function PisoManagerDetail() {
                     <img
                       src={cover}
                       alt={piso.direccion || `Piso ${piso.id}`}
-                      className="aspect-[16/6] w-full rounded-lg object-cover"
+                      className="aspect-[16/8] w-full rounded-lg object-cover sm:aspect-[16/6]"
                     />
                   </button>
                 ) : (
-                  <div className="skeleton aspect-[16/6] w-full rounded-lg" />
+                  <div className="skeleton aspect-[16/8] w-full rounded-lg sm:aspect-[16/6]" />
                 )}
 
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -977,17 +1567,38 @@ export default function PisoManagerDetail() {
               </div>
             </div>
 
-            <div className="space-y-0">
+            <div className="space-y-4 md:space-y-0">
+              <div className="md:hidden">
+                <label className="label" htmlFor="piso-manager-tab-mobile">
+                  Sección
+                </label>
+                <select
+                  id="piso-manager-tab-mobile"
+                  className="select"
+                  value={activeTab}
+                  onChange={(event) => handleSelectTab(event.target.value)}
+                >
+                  <option value="habitaciones">
+                    Habitaciones del piso ({habitacionCount})
+                  </option>
+                  <option value="fotos">Fotos del piso ({fotoCount})</option>
+                  <option value="convivencia">
+                    Convivencia ({convivientesActuales.length})
+                  </option>
+                  <option value="editar">Editar piso</option>
+                </select>
+              </div>
+
               <div
                 role="tablist"
                 aria-label="Secciones del detalle del piso"
-                className="grid grid-cols-1 gap-2 md:grid-cols-4"
+                className="hidden gap-2 md:grid md:grid-cols-4"
               >
                 <button
                   type="button"
                   role="tab"
                   aria-selected={activeTab === "habitaciones"}
-                  className={`flex items-center justify-between rounded-t-xl rounded-b-lg border px-4 py-3 text-left transition-all duration-200 ${
+                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
                     activeTab === "habitaciones"
                       ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
                       : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
@@ -1010,7 +1621,7 @@ export default function PisoManagerDetail() {
                   type="button"
                   role="tab"
                   aria-selected={activeTab === "fotos"}
-                  className={`flex items-center justify-between rounded-t-xl rounded-b-lg border px-4 py-3 text-left transition-all duration-200 ${
+                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
                     activeTab === "fotos"
                       ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
                       : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
@@ -1033,7 +1644,7 @@ export default function PisoManagerDetail() {
                   type="button"
                   role="tab"
                   aria-selected={activeTab === "convivencia"}
-                  className={`flex items-center justify-between rounded-t-xl rounded-b-lg border px-4 py-3 text-left transition-all duration-200 ${
+                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
                     activeTab === "convivencia"
                       ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
                       : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
@@ -1056,7 +1667,7 @@ export default function PisoManagerDetail() {
                   type="button"
                   role="tab"
                   aria-selected={activeTab === "editar"}
-                  className={`flex items-center justify-between rounded-t-xl rounded-b-lg border px-4 py-3 text-left transition-all duration-200 ${
+                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
                     activeTab === "editar"
                       ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
                       : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
@@ -1077,12 +1688,12 @@ export default function PisoManagerDetail() {
               </div>
 
               <div
-                className={`border border-slate-300 bg-white p-4 md:p-5 ${
+                className={`rounded-2xl border border-slate-300 bg-white p-4 md:p-5 ${
                   activeTab === "habitaciones"
-                    ? "rounded-b-2xl rounded-tr-2xl rounded-tl-none"
+                    ? "md:rounded-b-2xl md:rounded-tr-2xl md:rounded-tl-none"
                     : activeTab === "editar"
-                      ? "rounded-b-2xl rounded-tl-2xl rounded-tr-none"
-                      : "rounded-b-2xl rounded-tl-2xl rounded-tr-2xl"
+                      ? "md:rounded-b-2xl md:rounded-tl-2xl md:rounded-tr-none"
+                      : "md:rounded-b-2xl md:rounded-tl-2xl md:rounded-tr-2xl"
                 }`}
               >
                 {activeTab === "editar" ? (
@@ -1170,7 +1781,7 @@ export default function PisoManagerDetail() {
                         </div>
                       </div>
 
-                      <div className="flex items-center justify-end gap-2">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
                         <button
                           type="button"
                           className="btn border border-rose-300 bg-rose-100 text-rose-800 hover:bg-rose-200"
@@ -1204,7 +1815,7 @@ export default function PisoManagerDetail() {
 
                 {activeTab === "fotos" ? (
                   <section className="space-y-4">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
                         Fotos del piso
                       </h3>
@@ -1235,7 +1846,7 @@ export default function PisoManagerDetail() {
 
                         <form
                           className="space-y-4"
-                          onSubmit={(e) => e.preventDefault()}
+                          onSubmit={(event) => event.preventDefault()}
                         >
                           <label
                             htmlFor="foto-piso"
@@ -1255,8 +1866,7 @@ export default function PisoManagerDetail() {
                                   : "Haz clic o arrastra una foto aquí"}
                               </p>
                               <p className="text-xs text-ui-text-secondary">
-                                JPG, PNG u otros formatos de imagen · máximo 8
-                                MB
+                                JPG, PNG u otros formatos de imagen · máximo 8 MB
                               </p>
                             </div>
                           </label>
@@ -1392,15 +2002,12 @@ export default function PisoManagerDetail() {
                                     />
                                   </div>
 
-                                  <div className="flex items-center justify-end gap-2">
+                                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
                                     <button
                                       type="button"
                                       className="btn btn-secondary btn-sm"
                                       onClick={(event) =>
-                                        closePisoPhotoOrderEditor(
-                                          foto.id,
-                                          event
-                                        )
+                                        closePisoPhotoOrderEditor(foto.id, event)
                                       }
                                       disabled={
                                         updatingPisoPhotoId === foto.id ||
@@ -1466,19 +2073,27 @@ export default function PisoManagerDetail() {
 
                     {loadingConvivencia ? (
                       <div className="space-y-4">
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-                          {Array.from({ length: 5 }).map((_, index) => (
-                            <div
-                              key={index}
-                              className="rounded-xl border border-slate-300 bg-slate-50 p-4"
-                            >
-                              <div className="skeleton h-4 w-2/3" />
-                              <div className="mt-3 skeleton h-8 w-1/2" />
-                            </div>
+                        <div className="responsive-scroll">
+                          <div className="flex gap-3 md:grid md:grid-cols-5 md:gap-4">
+                            {Array.from({ length: 5 }).map((_, index) => (
+                              <div
+                                key={index}
+                                className="min-w-[148px] rounded-xl border border-slate-300 bg-slate-50 p-4"
+                              >
+                                <div className="skeleton h-4 w-2/3" />
+                                <div className="mt-3 skeleton h-8 w-1/2" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="space-y-3 md:hidden">
+                          {Array.from({ length: 2 }).map((_, index) => (
+                            <div key={index} className="skeleton h-24 rounded-2xl" />
                           ))}
                         </div>
 
-                        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                        <div className="hidden grid-cols-1 gap-4 xl:grid-cols-2 md:grid">
                           {Array.from({ length: 2 }).map((_, index) => (
                             <div key={index} className="card">
                               <div className="card-body space-y-4">
@@ -1502,65 +2117,40 @@ export default function PisoManagerDetail() {
                       </div>
                     ) : (
                       <>
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
-                          
-                          <div className="rounded-xl border-4 border-fuchsia-400 bg-fuchsia-50">
-                            <div className="card-body">
-                              <p className="text-xs font-medium uppercase tracking-wide text-fuchsia-600">
-                                Media global
-                              </p>
-                              <p className="mt-2 text-2xl font-bold text-ui-text">
-                                {formatMetric(convivenciaResumen?.media_global)}
-                              </p>
-                            </div>
-                          </div>                          
+                        <div className="responsive-scroll">
+                          <div className="flex gap-3 md:grid md:grid-cols-5 md:gap-4">
+                            <CompactMetricCard
+                              title="Media global"
+                              value={formatMetric(convivenciaResumen?.media_global)}
+                              tone="violet"
+                            />
 
-                          <div className="rounded-xl border border-emerald-300 bg-emerald-50">
-                            <div className="card-body">
-                              <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
-                                Limpieza media
-                              </p>
-                              <p className="mt-2 text-2xl font-bold text-ui-text">
-                                {formatMetric(convivenciaResumen?.medias?.limpieza)}
-                              </p>
-                            </div>
-                          </div>
+                            <CompactMetricCard
+                              title="Limpieza media"
+                              value={formatMetric(convivenciaResumen?.medias?.limpieza)}
+                              tone="success"
+                            />
 
-                          <div className="rounded-xl border border-amber-300 bg-amber-50">
-                            <div className="card-body">
-                              <p className="text-xs font-medium uppercase tracking-wide text-amber-600">
-                                Ruido medio
-                              </p>
-                              <p className="mt-2 text-2xl font-bold text-ui-text">
-                                {formatMetric(convivenciaResumen?.medias?.ruido)}
-                              </p>
-                            </div>
-                          </div>
+                            <CompactMetricCard
+                              title="Ruido medio"
+                              value={formatMetric(convivenciaResumen?.medias?.ruido)}
+                              tone="warning"
+                            />
 
-                          <div className="rounded-xl border border-sky-300 bg-sky-50">
-                            <div className="card-body">
-                              <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
-                                Pagos medios
-                              </p>
-                              <p className="mt-2 text-2xl font-bold text-ui-text">
-                                {formatMetric(
-                                  convivenciaResumen?.medias?.puntualidad_pagos
-                                )}
-                              </p>
-                            </div>
-                          </div>
+                            <CompactMetricCard
+                              title="Pagos medios"
+                              value={formatMetric(
+                                convivenciaResumen?.medias?.puntualidad_pagos
+                              )}
+                              tone="info"
+                            />
 
-                          <div className="rounded-xl border border-violet-300 bg-violet-50">
-                            <div className="card-body">
-                              <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
-                                Convivientes actuales
-                              </p>
-                              <p className="mt-2 text-2xl font-bold text-ui-text">
-                                {convivenciaResumen?.convivientes_actuales ?? 0}
-                              </p>
-                            </div>
+                            <CompactMetricCard
+                              title="Convivientes actuales"
+                              value={convivenciaResumen?.convivientes_actuales ?? 0}
+                              tone="violet"
+                            />
                           </div>
-                          
                         </div>
 
                         <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
@@ -1568,7 +2158,7 @@ export default function PisoManagerDetail() {
                             Resumen general visible del grupo
                           </p>
 
-                          <div className="mt-3 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-4">
+                          <div className="mt-3 grid grid-cols-1 gap-2 md:flex md:flex-wrap md:items-center md:gap-4">
                             <p className="text-sm text-ui-text-secondary">
                               Media global actual del piso:{" "}
                               <span className="font-semibold text-ui-text">
@@ -1595,131 +2185,19 @@ export default function PisoManagerDetail() {
                             </div>
                           </div>
                         ) : (
-                          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                            {convivientesActuales.map((conviviente) => {
-                              const avatarUrl = buildImageUrl(
-                                conviviente.foto_perfil_url
-                              );
-                              const reputacionActual =
-                                conviviente.reputacion_actual || null;
+                          <>
+                            <div className="space-y-3 md:hidden">
+                              {convivientesActuales.map((conviviente) =>
+                                renderMobileConvivienteAccordion(conviviente)
+                              )}
+                            </div>
 
-                              const limpiezaVotes = getMetricVoteItems(
-                                reputacionActual,
-                                "limpieza"
-                              );
-                              const ruidoVotes = getMetricVoteItems(
-                                reputacionActual,
-                                "ruido"
-                              );
-                              const pagosVotes = getMetricVoteItems(
-                                reputacionActual,
-                                "puntualidad_pagos"
-                              );
-
-                              return (
-                                <article
-                                  key={conviviente.id}
-                                  className="card"
-                                >
-                                  <div className="card-body space-y-4">
-                                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                                      <div className="flex items-center gap-4">
-                                        {avatarUrl ? (
-                                          <button
-                                            type="button"
-                                            className="block"
-                                            onClick={() =>
-                                              openConvivientePhotoModal(
-                                                avatarUrl,
-                                                [conviviente.nombre, conviviente.apellidos]
-                                                  .filter(Boolean)
-                                                  .join(" ") || "Conviviente"
-                                              )
-                                            }
-                                            aria-label="Ver foto de perfil"
-                                          >
-                                            <img
-                                              src={avatarUrl}
-                                              alt={
-                                                [conviviente.nombre, conviviente.apellidos]
-                                                  .filter(Boolean)
-                                                  .join(" ") || "Conviviente"
-                                              }
-                                              className="h-16 w-16 rounded-full border border-ui-border object-cover"
-                                            />
-                                          </button>
-                                        ) : (
-                                          <div className="flex h-16 w-16 items-center justify-center rounded-full border border-ui-border bg-slate-100 text-sm font-semibold text-ui-text-secondary">
-                                            {getInitials(conviviente)}
-                                          </div>
-                                        )}
-
-                                        <div className="min-w-0">
-                                          <p className="text-lg font-semibold text-ui-text">
-                                            {[conviviente.nombre, conviviente.apellidos]
-                                              .filter(Boolean)
-                                              .join(" ") || "Sin nombre"}
-                                          </p>
-                                          <p className="mt-1 text-sm text-ui-text-secondary">
-                                            Habitación #{conviviente.habitacion_id}
-                                            {conviviente.habitacion_titulo
-                                              ? ` · ${conviviente.habitacion_titulo}`
-                                              : ""}
-                                          </p>
-                                          <p className="mt-1 text-xs text-ui-text-secondary">
-                                            Entrada: {formatDate(conviviente.fecha_entrada)}
-                                          </p>
-                                        </div>
-                                      </div>
-
-                                      <span className="badge badge-info">
-                                        Total votos:{" "}
-                                        {reputacionActual?.total_votos ?? 0}
-                                      </span>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
-                                        <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">
-                                          Limpieza
-                                        </p>
-                                        <p className="mt-1 text-lg font-semibold text-ui-text">
-                                          {formatMetric(
-                                            reputacionActual?.medias?.limpieza
-                                          )}
-                                        </p>
-                                        <MiniVoteList items={limpiezaVotes} onOpen={openConvivientePhotoModal}/>
-                                      </div>
-
-                                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                                        <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
-                                          Ruido
-                                        </p>
-                                        <p className="mt-1 text-lg font-semibold text-ui-text">
-                                          {formatMetric(
-                                            reputacionActual?.medias?.ruido
-                                          )}
-                                        </p>
-                                        <MiniVoteList items={ruidoVotes} onOpen={openConvivientePhotoModal}/>
-                                      </div>
-
-                                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
-                                        <p className="text-xs font-medium uppercase tracking-wide text-sky-700">
-                                          Puntualid. pagos
-                                        </p>
-                                        <p className="mt-1 text-lg font-semibold text-ui-text">
-                                          {formatMetric(
-                                            reputacionActual?.medias?.puntualidad_pagos
-                                          )}
-                                        </p>
-                                        <MiniVoteList items={pagosVotes} onOpen={openConvivientePhotoModal}/>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </article>
-                              );
-                            })}
-                          </div>
+                            <div className="hidden grid-cols-1 gap-4 xl:grid-cols-2 md:grid">
+                              {convivientesActuales.map((conviviente) =>
+                                renderDesktopConvivienteCard(conviviente)
+                              )}
+                            </div>
+                          </>
                         )}
                       </>
                     )}
@@ -1728,7 +2206,7 @@ export default function PisoManagerDetail() {
 
                 {activeTab === "habitaciones" ? (
                   <section className="space-y-4">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
                         Habitaciones del piso
                       </h3>
@@ -1737,38 +2215,23 @@ export default function PisoManagerDetail() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      <div className="rounded-xl border border-amber-300 bg-amber-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-amber-600">
-                            Habitaciones totales
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            {piso.habitaciones_total ?? 0}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-emerald-300 bg-emerald-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
-                            Habitaciones activas
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            {piso.habitaciones_activas ?? 0}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-sky-300 bg-sky-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
-                            Habitaciones disponibles
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            {piso.habitaciones_disponibles ?? 0}
-                          </p>
-                        </div>
+                    <div className="responsive-scroll">
+                      <div className="flex gap-3 md:grid md:grid-cols-3 md:gap-4">
+                        <CompactMetricCard
+                          title="Habitaciones totales"
+                          value={piso.habitaciones_total ?? 0}
+                          tone="warning"
+                        />
+                        <CompactMetricCard
+                          title="Habitaciones activas"
+                          value={piso.habitaciones_activas ?? 0}
+                          tone="success"
+                        />
+                        <CompactMetricCard
+                          title="Habitaciones disponibles"
+                          value={piso.habitaciones_disponibles ?? 0}
+                          tone="info"
+                        />
                       </div>
                     </div>
 
@@ -1791,213 +2254,197 @@ export default function PisoManagerDetail() {
                         </div>
                       ) : null}
 
-                      <div
-                        className={`overflow-hidden transition-all duration-500 ease-out ${
-                          isCreateHabitacionOpen
-                            ? "mt-4 max-h-[660px] translate-y-0 opacity-100"
-                            : "max-h-0 -translate-y-3 opacity-0 pointer-events-none"
-                        }`}
-                      >
-                        <div className="card">
-                          <div className="card-body space-y-6">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <h4 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
-                                  Nueva habitación
-                                </h4>
-                                <p className="mt-1 text-sm text-ui-text-secondary">
-                                  Completa los datos para crear una nueva
-                                  habitación en este piso.
-                                </p>
+                      {isCreateHabitacionOpen ? (
+                        <div className="mt-4">
+                          <div className="card">
+                            <div className="card-body space-y-6">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <h4 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+                                    Nueva habitación
+                                  </h4>
+                                  <p className="mt-1 text-sm text-ui-text-secondary">
+                                    Completa los datos para crear una nueva
+                                    habitación en este piso.
+                                  </p>
+                                </div>
                               </div>
+
+                              <form
+                                className="space-y-4"
+                                onSubmit={handleCreateHabitacion}
+                              >
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                  <div className="md:col-span-2">
+                                    <label className="label" htmlFor="new-titulo">
+                                      Título
+                                    </label>
+                                    <input
+                                      id="new-titulo"
+                                      name="titulo"
+                                      type="text"
+                                      className="input"
+                                      value={habitacionForm.titulo}
+                                      onChange={handleHabitacionFormChange}
+                                      disabled={creatingHabitacion}
+                                      placeholder="Ej. Habitación luminosa con escritorio"
+                                    />
+                                  </div>
+
+                                  <div className="md:col-span-2">
+                                    <label className="label" htmlFor="new-descripcion">
+                                      Descripción
+                                    </label>
+                                    <textarea
+                                      id="new-descripcion"
+                                      name="descripcion"
+                                      className="textarea"
+                                      value={habitacionForm.descripcion}
+                                      onChange={handleHabitacionFormChange}
+                                      disabled={creatingHabitacion}
+                                      placeholder="Describe brevemente la habitación"
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label
+                                      className="label"
+                                      htmlFor="new-precio_mensual"
+                                    >
+                                      Precio mensual
+                                    </label>
+                                    <input
+                                      id="new-precio_mensual"
+                                      name="precio_mensual"
+                                      type="number"
+                                      min="0"
+                                      className="input"
+                                      value={habitacionForm.precio_mensual}
+                                      onChange={handleHabitacionFormChange}
+                                      disabled={creatingHabitacion}
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="label" htmlFor="new-tamano_m2">
+                                      Tamaño (m²)
+                                    </label>
+                                    <input
+                                      id="new-tamano_m2"
+                                      name="tamano_m2"
+                                      type="number"
+                                      min="1"
+                                      className="input"
+                                      value={habitacionForm.tamano_m2}
+                                      onChange={handleHabitacionFormChange}
+                                      disabled={creatingHabitacion}
+                                    />
+                                  </div>
+
+                                  <div>
+                                    <label className="label" htmlFor="new-disponible">
+                                      Disponibilidad
+                                    </label>
+                                    <select
+                                      id="new-disponible"
+                                      name="disponible"
+                                      className="select"
+                                      value={habitacionForm.disponible}
+                                      onChange={handleHabitacionFormChange}
+                                      disabled={creatingHabitacion}
+                                    >
+                                      <option value="true">Disponible</option>
+                                      <option value="false">No disponible</option>
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <label className="label" htmlFor="new-amueblada">
+                                      Amueblada
+                                    </label>
+                                    <select
+                                      id="new-amueblada"
+                                      name="amueblada"
+                                      className="select"
+                                      value={habitacionForm.amueblada}
+                                      onChange={handleHabitacionFormChange}
+                                      disabled={creatingHabitacion}
+                                    >
+                                      <option value="true">Sí</option>
+                                      <option value="false">No</option>
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <label className="label" htmlFor="new-bano">
+                                      Baño
+                                    </label>
+                                    <select
+                                      id="new-bano"
+                                      name="bano"
+                                      className="select"
+                                      value={habitacionForm.bano}
+                                      onChange={handleHabitacionFormChange}
+                                      disabled={creatingHabitacion}
+                                    >
+                                      <option value="true">Sí</option>
+                                      <option value="false">No</option>
+                                    </select>
+                                  </div>
+
+                                  <div>
+                                    <label className="label" htmlFor="new-balcon">
+                                      Balcón
+                                    </label>
+                                    <select
+                                      id="new-balcon"
+                                      name="balcon"
+                                      className="select"
+                                      value={habitacionForm.balcon}
+                                      onChange={handleHabitacionFormChange}
+                                      disabled={creatingHabitacion}
+                                    >
+                                      <option value="true">Sí</option>
+                                      <option value="false">No</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                                  <button
+                                    type="button"
+                                    className="btn border border-rose-300 bg-rose-100 text-rose-800 hover:bg-rose-200"
+                                    onClick={closeCreateHabitacionForm}
+                                    disabled={creatingHabitacion}
+                                  >
+                                    Cancelar
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                    onClick={resetHabitacionForm}
+                                    disabled={creatingHabitacion}
+                                  >
+                                    Limpiar
+                                  </button>
+
+                                  <button
+                                    type="submit"
+                                    className="btn btn-primary"
+                                    disabled={creatingHabitacion}
+                                    aria-busy={creatingHabitacion}
+                                  >
+                                    {creatingHabitacion
+                                      ? "Creando..."
+                                      : "Crear habitación"}
+                                  </button>
+                                </div>
+                              </form>
                             </div>
-
-                            <form
-                              className="space-y-4"
-                              onSubmit={handleCreateHabitacion}
-                            >
-                              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                                <div className="md:col-span-2">
-                                  <label className="label" htmlFor="new-titulo">
-                                    Título
-                                  </label>
-                                  <input
-                                    id="new-titulo"
-                                    name="titulo"
-                                    type="text"
-                                    className="input"
-                                    value={habitacionForm.titulo}
-                                    onChange={handleHabitacionFormChange}
-                                    disabled={creatingHabitacion}
-                                    placeholder="Ej. Habitación luminosa con escritorio"
-                                  />
-                                </div>
-
-                                <div className="md:col-span-2">
-                                  <label
-                                    className="label"
-                                    htmlFor="new-descripcion"
-                                  >
-                                    Descripción
-                                  </label>
-                                  <textarea
-                                    id="new-descripcion"
-                                    name="descripcion"
-                                    className="textarea"
-                                    value={habitacionForm.descripcion}
-                                    onChange={handleHabitacionFormChange}
-                                    disabled={creatingHabitacion}
-                                    placeholder="Describe brevemente la habitación"
-                                  />
-                                </div>
-
-                                <div>
-                                  <label
-                                    className="label"
-                                    htmlFor="new-precio_mensual"
-                                  >
-                                    Precio mensual
-                                  </label>
-                                  <input
-                                    id="new-precio_mensual"
-                                    name="precio_mensual"
-                                    type="number"
-                                    min="0"
-                                    className="input"
-                                    value={habitacionForm.precio_mensual}
-                                    onChange={handleHabitacionFormChange}
-                                    disabled={creatingHabitacion}
-                                  />
-                                </div>
-
-                                <div>
-                                  <label
-                                    className="label"
-                                    htmlFor="new-tamano_m2"
-                                  >
-                                    Tamaño (m²)
-                                  </label>
-                                  <input
-                                    id="new-tamano_m2"
-                                    name="tamano_m2"
-                                    type="number"
-                                    min="1"
-                                    className="input"
-                                    value={habitacionForm.tamano_m2}
-                                    onChange={handleHabitacionFormChange}
-                                    disabled={creatingHabitacion}
-                                  />
-                                </div>
-
-                                <div>
-                                  <label
-                                    className="label"
-                                    htmlFor="new-disponible"
-                                  >
-                                    Disponibilidad
-                                  </label>
-                                  <select
-                                    id="new-disponible"
-                                    name="disponible"
-                                    className="select"
-                                    value={habitacionForm.disponible}
-                                    onChange={handleHabitacionFormChange}
-                                    disabled={creatingHabitacion}
-                                  >
-                                    <option value="true">Disponible</option>
-                                    <option value="false">No disponible</option>
-                                  </select>
-                                </div>
-
-                                <div>
-                                  <label
-                                    className="label"
-                                    htmlFor="new-amueblada"
-                                  >
-                                    Amueblada
-                                  </label>
-                                  <select
-                                    id="new-amueblada"
-                                    name="amueblada"
-                                    className="select"
-                                    value={habitacionForm.amueblada}
-                                    onChange={handleHabitacionFormChange}
-                                    disabled={creatingHabitacion}
-                                  >
-                                    <option value="true">Sí</option>
-                                    <option value="false">No</option>
-                                  </select>
-                                </div>
-
-                                <div>
-                                  <label className="label" htmlFor="new-bano">
-                                    Baño
-                                  </label>
-                                  <select
-                                    id="new-bano"
-                                    name="bano"
-                                    className="select"
-                                    value={habitacionForm.bano}
-                                    onChange={handleHabitacionFormChange}
-                                    disabled={creatingHabitacion}
-                                  >
-                                    <option value="true">Sí</option>
-                                    <option value="false">No</option>
-                                  </select>
-                                </div>
-
-                                <div>
-                                  <label className="label" htmlFor="new-balcon">
-                                    Balcón
-                                  </label>
-                                  <select
-                                    id="new-balcon"
-                                    name="balcon"
-                                    className="select"
-                                    value={habitacionForm.balcon}
-                                    onChange={handleHabitacionFormChange}
-                                    disabled={creatingHabitacion}
-                                  >
-                                    <option value="true">Sí</option>
-                                    <option value="false">No</option>
-                                  </select>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  type="button"
-                                  className="btn border border-rose-300 bg-rose-100 text-rose-800 hover:bg-rose-200"
-                                  onClick={closeCreateHabitacionForm}
-                                  disabled={creatingHabitacion}
-                                >
-                                  Cancelar
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
-                                  onClick={resetHabitacionForm}
-                                  disabled={creatingHabitacion}
-                                >
-                                  Limpiar
-                                </button>
-
-                                <button
-                                  type="submit"
-                                  className="btn btn-primary"
-                                  disabled={creatingHabitacion}
-                                  aria-busy={creatingHabitacion}
-                                >
-                                  {creatingHabitacion
-                                    ? "Creando..."
-                                    : "Crear habitación"}
-                                </button>
-                              </div>
-                            </form>
                           </div>
                         </div>
-                      </div>
+                      ) : null}
                     </div>
 
                     {habitaciones.length === 0 ? (
@@ -2009,170 +2456,19 @@ export default function PisoManagerDetail() {
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {habitaciones.map((habitacion) => {
-                          const roomCover = buildImageUrl(
-                            habitacion.cover_foto_habitacion_url
-                          );
-                          const isInactive = !habitacion.activo;
+                      <>
+                        <div className="space-y-3 md:hidden">
+                          {habitaciones.map((habitacion) =>
+                            renderMobileHabitacionAccordion(habitacion)
+                          )}
+                        </div>
 
-                          return (
-                            <article
-                              key={habitacion.id}
-                              className="card card-hover relative flex h-full flex-col"
-                            >
-                              <button
-                                type="button"
-                                className="absolute right-[10px] top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300 bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.35)] transition-all hover:from-sky-500 hover:via-blue-600 hover:to-indigo-700 hover:shadow-[0_0_0_4px_rgba(59,130,246,0.4)]"
-                                onClick={(event) =>
-                                  toggleHabitacionMenu(habitacion.id, event)
-                                }
-                                aria-label="Más acciones"
-                              >
-                                <span className="flex items-center justify-center gap-0.5">
-                                  <span className="h-1 w-1 rounded-full bg-white" />
-                                  <span className="h-1 w-1 rounded-full bg-white" />
-                                  <span className="h-1 w-1 rounded-full bg-white" />
-                                </span>
-                              </button>
-
-                              {openHabitacionMenuId === habitacion.id ? (
-                                <div
-                                  className="absolute right-3 top-12 z-30 min-w-[180px] rounded-lg border border-ui-border bg-white p-2 shadow-modal"
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  {habitacion.activo ? (
-                                    <button
-                                      type="button"
-                                      className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-red-100"
-                                      onClick={(event) =>
-                                        requestDeactivateHabitacion(
-                                          habitacion,
-                                          event
-                                        )
-                                      }
-                                    >
-                                      Desactivar habitación
-                                    </button>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-green-100"
-                                      onClick={(event) =>
-                                        handleReactivateHabitacion(
-                                          habitacion,
-                                          event
-                                        )
-                                      }
-                                    >
-                                      Reactivar habitación
-                                    </button>
-                                  )}
-                                </div>
-                              ) : null}
-
-                              <div className="card-body flex flex-1 flex-col">
-                                <div
-                                  role="button"
-                                  tabIndex={0}
-                                  className={`flex flex-1 flex-col gap-3 ${
-                                    isInactive ? "opacity-25" : ""
-                                  }`}
-                                  onClick={() =>
-                                    openHabitacionDetail(habitacion.id)
-                                  }
-                                  onKeyDown={(event) => {
-                                    if (
-                                      event.key === "Enter" ||
-                                      event.key === " "
-                                    ) {
-                                      event.preventDefault();
-                                      openHabitacionDetail(habitacion.id);
-                                    }
-                                  }}
-                                >
-                                  {roomCover ? (
-                                    <img
-                                      src={roomCover}
-                                      alt={
-                                        habitacion.titulo ||
-                                        `Habitación ${habitacion.id}`
-                                      }
-                                      className="aspect-[4/3] w-full rounded-md object-cover"
-                                    />
-                                  ) : (
-                                    <div className="skeleton aspect-[4/3] w-full rounded-md" />
-                                  )}
-
-                                  <div className="flex items-start justify-between gap-2">
-                                    <h4 className="min-h-[56px] text-base font-semibold text-ui-text">
-                                      {habitacion.titulo || "Sin título"}
-                                    </h4>
-
-                                    <div className="flex flex-wrap items-center justify-end gap-2">
-                                      <span
-                                        className={
-                                          habitacion.activo
-                                            ? "badge badge-success"
-                                            : "badge badge-neutral"
-                                        }
-                                      >
-                                        {habitacion.activo
-                                          ? "Activa"
-                                          : "Inactiva"}
-                                      </span>
-
-                                      <span
-                                        className={
-                                          habitacion.disponible
-                                            ? "badge badge-info"
-                                            : "badge badge-warning"
-                                        }
-                                      >
-                                        {habitacion.disponible
-                                          ? "Disponible"
-                                          : "No disponible"}
-                                      </span>
-                                    </div>
-                                  </div>
-
-                                  <p className="text-sm text-ui-text-secondary">
-                                    <span className="font-medium text-ui-text">
-                                      {formatEur(habitacion.precio_mensual)}
-                                    </span>{" "}
-                                    / mes
-                                    {habitacion.tamano_m2
-                                      ? ` · ${habitacion.tamano_m2} m²`
-                                      : ""}
-                                  </p>
-
-                                  <p className="text-xs text-ui-text-secondary">
-                                    {habitacion.amueblada ? "Amueblada · " : ""}
-                                    {habitacion.bano ? "Baño · " : ""}
-                                    {habitacion.balcon ? "Balcón" : ""}
-                                  </p>
-                                </div>
-
-                                {habitacionCardFeedback[habitacion.id] ? (
-                                  <div
-                                    className={`mt-4 ${
-                                      habitacionCardFeedback[habitacion.id]
-                                        .type === "success"
-                                        ? "alert-success"
-                                        : "alert-error"
-                                    }`}
-                                  >
-                                    {
-                                      habitacionCardFeedback[habitacion.id]
-                                        .message
-                                    }
-                                  </div>
-                                ) : null}
-                              </div>
-                            </article>
-                          );
-                        })}
-                      </div>
+                        <div className="hidden grid-cols-1 gap-4 md:grid md:grid-cols-2 xl:grid-cols-3">
+                          {habitaciones.map((habitacion) =>
+                            renderDesktopHabitacionCard(habitacion)
+                          )}
+                        </div>
+                      </>
                     )}
                   </section>
                 ) : null}

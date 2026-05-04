@@ -1,6 +1,7 @@
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import useAuth from "../../hooks/useAuth.js";
+import roomRateLogo from "../../assets/branding/roomrate-logo.png";
 
 const baseLink =
   "inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium transition-colors duration-150";
@@ -80,9 +81,17 @@ export default function Navbar() {
           <div className="flex min-w-0 items-center gap-3">
             <Link
               to="/"
-              className="truncate text-base font-semibold text-ui-text transition-colors duration-150 hover:text-brand-primary"
+              className="flex min-w-0 items-center gap-3 transition-opacity duration-150 hover:opacity-90"
             >
-              Project Comp
+              <img
+                src={roomRateLogo}
+                alt="RoomRate"
+                className="h-10 w-auto shrink-0"
+              />
+          
+              <span className="truncate font-heading text-xl font-bold tracking-tight text-ui-text">
+                RoomRate
+              </span>
             </Link>
           </div>
 
