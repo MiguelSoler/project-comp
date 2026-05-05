@@ -41,6 +41,141 @@ const EMPTY_PASSWORD_FORM = {
   confirm_password: "",
 };
 
+function ProfileIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M20 21a8 8 0 0 0-16 0" />
+      <circle cx="12" cy="8" r="4" />
+    </svg>
+  );
+}
+
+function StayIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5 9.5V21h14V9.5" />
+      <path d="M9 21v-6h6v6" />
+    </svg>
+  );
+}
+
+function ReputationIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.2 6.4 20.2l1.1-6.2L3 9.6l6.2-.9L12 3Z" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ open = false }) {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className={`h-5 w-5 transition-transform duration-200 ${
+        open ? "rotate-180" : ""
+      }`}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function MobileSectionTab({
+  icon,
+  label,
+  badge,
+  isActive,
+  onClick,
+}) {
+  return (
+    <button
+      type="button"
+      className={`flex min-w-[132px] shrink-0 flex-col items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-center transition-all ${
+        isActive
+          ? "border-brand-primary bg-blue-50 text-brand-primary shadow-sm"
+          : "border-slate-200 bg-white text-ui-text hover:border-brand-primary hover:bg-blue-50/60"
+      }`}
+      onClick={onClick}
+      aria-pressed={isActive}
+    >
+      <div className="flex items-center gap-2">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm">
+          {icon}
+        </span>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+            isActive
+              ? "bg-blue-100 text-brand-primary"
+              : "bg-slate-100 text-ui-text-secondary"
+          }`}
+        >
+          {badge}
+        </span>
+      </div>
+
+      <span className="text-xs font-semibold leading-tight">{label}</span>
+    </button>
+  );
+}
+
+function CompactMetricCard({ title, value, tone = "default" }) {
+  const toneClasses =
+    tone === "success"
+      ? "border-emerald-200 bg-emerald-50"
+      : tone === "warning"
+        ? "border-amber-200 bg-amber-50"
+        : tone === "info"
+          ? "border-sky-200 bg-sky-50"
+          : tone === "violet"
+            ? "border-violet-200 bg-violet-50"
+            : "border-slate-200 bg-slate-50";
+
+  return (
+    <div className={`rounded-xl border px-2 py-2.5 sm:px-3 sm:py-3 ${toneClasses}`}>
+      <p className="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-[11px]">
+        {title}
+      </p>
+      <p className="mt-1 truncate text-sm font-bold text-ui-text sm:text-lg">
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function buildImageUrl(url) {
   if (!url) return "";
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -254,6 +389,7 @@ export default function UsuarioAdminDetail() {
   const [votesTotalPages, setVotesTotalPages] = useState(1);
 
   const [cohabitants, setCohabitants] = useState([]);
+  const [openVoteId, setOpenVoteId] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(true);
@@ -335,6 +471,10 @@ export default function UsuarioAdminDetail() {
   useEffect(() => {
     setVotesPage(1);
   }, [usuarioId]);
+
+  useEffect(() => {
+    setOpenVoteId(null);
+  }, [votesPage, usuarioId]);
 
   useEffect(() => {
     let isMounted = true;
@@ -764,6 +904,992 @@ export default function UsuarioAdminDetail() {
     }
   }
 
+  function renderPerfilSection() {
+    return (
+      <section className="space-y-6">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <CompactMetricCard
+            title="Rol"
+            value={formatRoleLabel(usuario.rol)}
+            tone="warning"
+          />
+          <CompactMetricCard
+            title="Estado"
+            value={usuario.activo ? "Activo" : "Inactivo"}
+            tone="success"
+          />
+          <CompactMetricCard
+            title="Registro"
+            value={formatDate(usuario.fecha_registro)}
+            tone="info"
+          />
+        </div>
+
+        <div>
+          <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+            Editar usuario
+          </h3>
+          <p className="mt-1 text-sm text-ui-text-secondary">
+            Actualiza los datos principales del usuario.
+          </p>
+        </div>
+
+        {editFeedback ? (
+          <div className={editFeedback.type === "success" ? "alert-success" : "alert-error"}>
+            {editFeedback.message}
+          </div>
+        ) : null}
+
+        <form className="space-y-4" onSubmit={handleSubmitUser}>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <label className="label" htmlFor="usuario-nombre">
+                Nombre
+              </label>
+              <input
+                id="usuario-nombre"
+                name="nombre"
+                type="text"
+                className="input"
+                value={userForm.nombre}
+                onChange={handleUserFormChange}
+                disabled={savingUser}
+              />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="usuario-apellidos">
+                Apellidos
+              </label>
+              <input
+                id="usuario-apellidos"
+                name="apellidos"
+                type="text"
+                className="input"
+                value={userForm.apellidos}
+                onChange={handleUserFormChange}
+                disabled={savingUser}
+              />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="usuario-email">
+                Email
+              </label>
+              <input
+                id="usuario-email"
+                name="email"
+                type="email"
+                className="input"
+                value={userForm.email}
+                onChange={handleUserFormChange}
+                disabled={savingUser}
+              />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="usuario-telefono">
+                Teléfono
+              </label>
+              <input
+                id="usuario-telefono"
+                name="telefono"
+                type="text"
+                className="input"
+                value={userForm.telefono}
+                onChange={handleUserFormChange}
+                disabled={savingUser}
+              />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="usuario-rol">
+                Rol
+              </label>
+              <select
+                id="usuario-rol"
+                name="rol"
+                className="select"
+                value={userForm.rol}
+                onChange={handleUserFormChange}
+                disabled={savingUser}
+              >
+                <option value="user">Inquilino</option>
+                <option value="advertiser">Anunciante</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label" htmlFor="usuario-activo">
+                Estado
+              </label>
+              <select
+                id="usuario-activo"
+                name="activo"
+                className="select"
+                value={userForm.activo}
+                onChange={handleUserFormChange}
+                disabled={savingUser}
+              >
+                <option value="true">Activo</option>
+                <option value="false">Inactivo</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <button
+              type="button"
+              className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
+              onClick={resetUserForm}
+              disabled={savingUser}
+            >
+              Restablecer
+            </button>
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={savingUser}
+              aria-busy={savingUser}
+            >
+              {savingUser ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </div>
+        </form>
+
+        <div className="card">
+          <div className="card-body space-y-4">
+            <div>
+              <h4 className="text-base font-semibold text-ui-text">
+                Foto de perfil
+              </h4>
+              <p className="mt-1 text-sm text-ui-text-secondary">
+                Cambia o elimina la foto de perfil del usuario.
+              </p>
+            </div>
+
+            {photoFeedback ? (
+              <div className={photoFeedback.type === "success" ? "alert-success" : "alert-error"}>
+                {photoFeedback.message}
+              </div>
+            ) : null}
+
+            <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
+              <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-4">
+                  <Avatar
+                    entity={usuario}
+                    sizeClassName="h-16 w-16"
+                    textClassName="text-lg"
+                    onOpen={openPhotoModal}
+                  />
+
+                  <div className="text-sm text-ui-text-secondary">
+                    {selectedPhotoFile
+                      ? `Nueva foto seleccionada: ${selectedPhotoFile.name}`
+                      : usuario.foto_perfil_url
+                        ? "Haz clic en la foto para verla ampliada."
+                        : "Este usuario todavía no tiene foto de perfil."}
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <label
+                    htmlFor="usuario-foto"
+                    className="btn btn-secondary btn-sm cursor-pointer"
+                  >
+                    Seleccionar foto
+                  </label>
+
+                  {selectedPhotoFile ? (
+                    <>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={handleUploadPhoto}
+                        disabled={uploadingPhoto || deletingPhoto}
+                      >
+                        {uploadingPhoto ? "Subiendo..." : "Subir foto"}
+                      </button>
+
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setSelectedPhotoFile(null)}
+                        disabled={uploadingPhoto || deletingPhoto}
+                      >
+                        Quitar selección
+                      </button>
+                    </>
+                  ) : null}
+
+                  {usuario.foto_perfil_url ? (
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={openDeletePhotoModal}
+                      disabled={uploadingPhoto || deletingPhoto}
+                    >
+                      Eliminar foto
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            <input
+              id="usuario-foto"
+              name="foto"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handlePhotoChange}
+              disabled={uploadingPhoto || deletingPhoto}
+            />
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-body space-y-4">
+            <div>
+              <h4 className="text-base font-semibold text-ui-text">
+                Restablecer contraseña
+              </h4>
+              <p className="mt-1 text-sm text-ui-text-secondary">
+                Define una nueva contraseña para este usuario.
+              </p>
+            </div>
+
+            {passwordFeedback ? (
+              <div className={passwordFeedback.type === "success" ? "alert-success" : "alert-error"}>
+                {passwordFeedback.message}
+              </div>
+            ) : null}
+
+            <form className="space-y-4" onSubmit={handleResetPassword}>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="new-password">
+                    Nueva contraseña
+                  </label>
+                  <input
+                    id="new-password"
+                    name="password"
+                    type="password"
+                    className="input"
+                    value={passwordForm.password}
+                    onChange={handlePasswordFormChange}
+                    disabled={resettingPassword}
+                  />
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="confirm-password">
+                    Confirmar contraseña
+                  </label>
+                  <input
+                    id="confirm-password"
+                    name="confirm_password"
+                    type="password"
+                    className="input"
+                    value={passwordForm.confirm_password}
+                    onChange={handlePasswordFormChange}
+                    disabled={resettingPassword}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={resetPasswordForm}
+                  disabled={resettingPassword}
+                >
+                  Limpiar
+                </button>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-sm"
+                  disabled={resettingPassword}
+                  aria-busy={resettingPassword}
+                >
+                  {resettingPassword ? "Restableciendo..." : "Restablecer contraseña"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  function renderEstanciaSection() {
+    return (
+      <section className="space-y-6">
+        <div>
+          <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+            Gestión de estancia
+          </h3>
+          <p className="mt-1 text-sm text-ui-text-secondary">
+            Asigna o expulsa al usuario de su habitación actual.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <CompactMetricCard
+            title="Habitación"
+            value={stay ? stay.habitacion_titulo || "Sin título" : "Sin asignar"}
+            tone="violet"
+          />
+          <CompactMetricCard
+            title="Piso"
+            value={stay?.piso_id ? `#${stay.piso_id}` : "Sin piso"}
+            tone="info"
+          />
+          <CompactMetricCard
+            title="Entrada"
+            value={formatDate(stay?.fecha_entrada)}
+            tone="success"
+          />
+        </div>
+
+        <div className="card">
+          <div className="card-body space-y-4">
+            <div>
+              <h4 className="text-base font-semibold text-ui-text">
+                Estancia actual
+              </h4>
+            </div>
+
+            {stay ? (
+              <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                      Habitación
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-ui-text">
+                      {stay.habitacion_titulo || "Sin título"} · #{stay.habitacion_id ?? "—"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                      Piso
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-ui-text">
+                      {stay.direccion || "Sin dirección"} · #{stay.piso_id ?? "—"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                      Ciudad
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-ui-text">
+                      {stay.ciudad || "—"}
+                    </p>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
+                      Fecha de entrada
+                    </p>
+                    <p className="mt-1 text-sm font-semibold text-ui-text">
+                      {formatDateTime(stay.fecha_entrada)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-slate-300 bg-slate-50">
+                <div className="card-body">
+                  <p className="text-sm text-ui-text-secondary">
+                    Este usuario no tiene ninguna estancia activa en este momento.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <div className="card">
+            <div className="card-body space-y-4">
+              <div>
+                <h4 className="text-base font-semibold text-ui-text">
+                  Asignar habitación
+                </h4>
+                <p className="mt-1 text-sm text-ui-text-secondary">
+                  Si el usuario ya tiene estancia activa, primero debes expulsarlo de la habitación actual.
+                </p>
+              </div>
+
+              {assignFeedback ? (
+                <div className={assignFeedback.type === "success" ? "alert-success" : "alert-error"}>
+                  {assignFeedback.message}
+                </div>
+              ) : null}
+
+              {stay ? (
+                <div className="alert-info">
+                  Este usuario ya tiene una estancia activa. Para moverlo a otra habitación, primero debes expulsarlo.
+                </div>
+              ) : null}
+
+              <form className="space-y-4" onSubmit={handleAssignRoom}>
+                <div>
+                  <label className="label" htmlFor="assign-habitacion-id">
+                    ID de habitación
+                  </label>
+                  <input
+                    id="assign-habitacion-id"
+                    name="habitacion_id"
+                    type="number"
+                    min="1"
+                    className="input"
+                    value={assignForm.habitacion_id}
+                    onChange={handleAssignFormChange}
+                    disabled={savingStayAction || Boolean(stay)}
+                    placeholder="Ej. 12"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end">
+                  <button
+                    type="submit"
+                    className="btn btn-primary btn-sm"
+                    disabled={savingStayAction || Boolean(stay)}
+                    aria-busy={savingStayAction}
+                  >
+                    {savingStayAction ? "Guardando..." : "Asignar habitación"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div className="card">
+            <div className="card-body space-y-4">
+              <div>
+                <h4 className="text-base font-semibold text-ui-text">
+                  Expulsar de la habitación
+                </h4>
+                <p className="mt-1 text-sm text-ui-text-secondary">
+                  Finaliza la estancia activa del usuario.
+                </p>
+              </div>
+
+              {kickFeedback ? (
+                <div className={kickFeedback.type === "success" ? "alert-success" : "alert-error"}>
+                  {kickFeedback.message}
+                </div>
+              ) : null}
+
+              {stay?.id ? (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
+                  <p className="text-sm text-red-800">
+                    Habitación actual:{" "}
+                    <span className="font-semibold">
+                      {stay.habitacion_titulo || "Sin título"} · #{stay.habitacion_id ?? "—"}
+                    </span>
+                  </p>
+
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={openKickModal}
+                      disabled={savingStayAction}
+                    >
+                      Expulsar usuario
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-slate-300 bg-slate-50">
+                  <div className="card-body">
+                    <p className="text-sm text-ui-text-secondary">
+                      No hay ninguna estancia activa que expulsar.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-body space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="text-base font-semibold text-ui-text">
+                  Convivientes actuales
+                </h4>
+                <p className="mt-1 text-sm text-ui-text-secondary">
+                  Usuarios que comparten piso con este usuario.
+                </p>
+              </div>
+
+              {stay?.piso_id ? (
+                <span className="text-xs text-ui-text-secondary">
+                  Piso #{stay.piso_id}
+                </span>
+              ) : null}
+            </div>
+
+            {cohabitantsError ? (
+              <div className="alert-error">{cohabitantsError}</div>
+            ) : null}
+
+            {!stay?.piso_id ? (
+              <div className="rounded-xl border border-slate-300 bg-slate-50">
+                <div className="card-body">
+                  <p className="text-sm text-ui-text-secondary">
+                    No hay convivientes que mostrar porque el usuario no tiene estancia activa.
+                  </p>
+                </div>
+              </div>
+            ) : loadingCohabitants ? (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                {Array.from({ length: 2 }).map((_, index) => (
+                  <div
+                    key={index}
+                    className="rounded-xl border border-slate-300 bg-slate-50 p-4"
+                  >
+                    <div className="skeleton h-5 w-2/3" />
+                    <div className="mt-2 skeleton h-4 w-1/2" />
+                  </div>
+                ))}
+              </div>
+            ) : cohabitants.length === 0 ? (
+              <div className="rounded-xl border border-slate-300 bg-slate-50">
+                <div className="card-body">
+                  <p className="text-sm text-ui-text-secondary">
+                    No hay otros convivientes activos en este piso.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {cohabitants.map((item) => (
+                  <article
+                    key={item.usuario_habitacion_id}
+                    role="button"
+                    tabIndex={0}
+                    className="rounded-xl border border-slate-300 bg-slate-50 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
+                    onClick={() => navigate(`/admin/usuario/${item.id}`)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        navigate(`/admin/usuario/${item.id}`);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar
+                        entity={item}
+                        sizeClassName="h-12 w-12"
+                        textClassName="text-sm"
+                        onOpen={openPhotoModal}
+                      />
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-ui-text">
+                          {formatDisplayName(item)}
+                        </p>
+                        <p className="mt-1 text-sm text-ui-text-secondary">
+                          Habitación #{item.habitacion_id}
+                        </p>
+                        <p className="mt-1 text-xs text-ui-text-secondary">
+                          Entrada: {formatDate(item.fecha_entrada)}
+                        </p>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  function renderVoteDesktopCard(vote, isCurrentCohabitant) {
+    return (
+      <article
+        key={vote.id}
+        role="button"
+        tabIndex={0}
+        className="card card-hover cursor-pointer"
+        onClick={() => {
+          if (vote?.votante?.id) {
+            navigate(`/admin/usuario/${vote.votante.id}`);
+          }
+        }}
+        onKeyDown={(event) => {
+          if ((event.key === "Enter" || event.key === " ") && vote?.votante?.id) {
+            event.preventDefault();
+            navigate(`/admin/usuario/${vote.votante.id}`);
+          }
+        }}
+      >
+        <div className="card-body space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <Avatar
+                entity={vote.votante}
+                sizeClassName="h-12 w-12"
+                textClassName="text-sm"
+                onOpen={openPhotoModal}
+              />
+
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-ui-text">
+                  {vote.votante
+                    ? formatDisplayName(vote.votante)
+                    : `Voto #${vote.id}`}
+                </p>
+                <p className="mt-1 text-xs text-ui-text-secondary">
+                  Emitido: {formatDate(vote.created_at)}
+                </p>
+                <p className="mt-1 text-xs text-ui-text-secondary">
+                  Actualizado: {formatDate(vote.updated_at)}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col items-end gap-2">
+              {isCurrentCohabitant ? (
+                <span className="badge badge-success">Conviviente actual</span>
+              ) : (
+                <span className="badge badge-neutral">Histórico</span>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-ui-text-secondary">
+            Piso #{vote.piso?.id ?? vote.piso_id ?? "—"} ·{" "}
+            {vote.piso?.direccion || "Sin dirección"}
+          </p>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-center">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700">
+                Limpieza
+              </p>
+              <p className="mt-2 text-lg font-bold text-ui-text">
+                {vote.limpieza ?? "—"}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-center">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-amber-700">
+                Ruido
+              </p>
+              <p className="mt-2 text-lg font-bold text-ui-text">
+                {vote.ruido ?? "—"}
+              </p>
+            </div>
+
+            <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-center">
+              <p className="text-[11px] font-medium uppercase tracking-wide text-sky-700">
+                Pagos
+              </p>
+              <p className="mt-2 text-lg font-bold text-ui-text">
+                {vote.puntualidad_pagos ?? "—"}
+              </p>
+            </div>
+          </div>
+
+          <p className="text-xs text-ui-text-secondary">
+            Cambios realizados: {vote.num_cambios ?? 0}
+          </p>
+        </div>
+      </article>
+    );
+  }
+
+  function renderVoteMobileCard(vote, isCurrentCohabitant) {
+    const isOpen = openVoteId === vote.id;
+
+    return (
+      <article
+        key={vote.id}
+        className="overflow-hidden rounded-2xl border border-slate-300 bg-white shadow-sm"
+      >
+        <div
+          role="button"
+          tabIndex={0}
+          className="p-4"
+          onClick={() => setOpenVoteId((prev) => (prev === vote.id ? null : vote.id))}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setOpenVoteId((prev) => (prev === vote.id ? null : vote.id));
+            }
+          }}
+          aria-expanded={isOpen}
+        >
+          <div className="flex items-start gap-3">
+            <Avatar
+              entity={vote.votante}
+              sizeClassName="h-12 w-12"
+              textClassName="text-sm"
+              onOpen={openPhotoModal}
+            />
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-ui-text">
+                    {vote.votante
+                      ? formatDisplayName(vote.votante)
+                      : `Voto #${vote.id}`}
+                  </p>
+                  <p className="mt-1 text-xs text-ui-text-secondary">
+                    {formatDate(vote.created_at)}
+                  </p>
+                </div>
+
+                <div className="flex shrink-0 items-center gap-2">
+                  {isCurrentCohabitant ? (
+                    <span className="badge badge-success">Actual</span>
+                  ) : (
+                    <span className="badge badge-neutral">Hist.</span>
+                  )}
+                  <ChevronIcon open={isOpen} />
+                </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <CompactMetricCard
+                  title="Limp."
+                  value={vote.limpieza ?? "—"}
+                  tone="success"
+                />
+                <CompactMetricCard
+                  title="Ruido"
+                  value={vote.ruido ?? "—"}
+                  tone="warning"
+                />
+                <CompactMetricCard
+                  title="Pagos"
+                  value={vote.puntualidad_pagos ?? "—"}
+                  tone="info"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {isOpen ? (
+          <div className="border-t border-slate-200 bg-slate-50 px-4 py-4">
+            <div className="space-y-3">
+              <p className="text-xs text-ui-text-secondary">
+                Piso #{vote.piso?.id ?? vote.piso_id ?? "—"} ·{" "}
+                {vote.piso?.direccion || "Sin dirección"}
+              </p>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-ui-text-secondary">
+                    Emitido
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-ui-text">
+                    {formatDate(vote.created_at)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-ui-text-secondary">
+                    Actualizado
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-ui-text">
+                    {formatDate(vote.updated_at)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white p-3">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-ui-text-secondary">
+                  Cambios realizados
+                </p>
+                <p className="mt-1 text-sm font-semibold text-ui-text">
+                  {vote.num_cambios ?? 0}
+                </p>
+              </div>
+
+              {vote?.votante?.id ? (
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => navigate(`/admin/usuario/${vote.votante.id}`)}
+                  >
+                    Ver perfil del votante
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </article>
+    );
+  }
+
+  function renderReputacionSection() {
+    return (
+      <section className="space-y-6">
+        <div>
+          <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+            Reputación del usuario
+          </h3>
+          <p className="mt-1 text-sm text-ui-text-secondary">
+            Aquí se muestra el histórico completo de votos recibidos, incluidos compañeros anteriores.
+          </p>
+        </div>
+
+        <div className="alert-info">
+          La reputación es histórica: aunque el usuario ya no conviva con esas personas o actualmente no tenga estancia activa, sus votos recibidos siguen apareciendo aquí.
+        </div>
+
+        {summaryError ? <div className="alert-error">{summaryError}</div> : null}
+        {votesError ? <div className="alert-error">{votesError}</div> : null}
+
+        {loadingSummary ? (
+          <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div
+                key={index}
+                className="rounded-xl border border-slate-300 bg-slate-50 p-3"
+              >
+                <div className="skeleton h-4 w-1/2" />
+                <div className="mt-3 skeleton h-7 w-1/3" />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-4 gap-2 sm:gap-3">
+            <CompactMetricCard
+              title="Limpieza"
+              value={formatMetric(summaryMetrics.limpieza)}
+              tone="success"
+            />
+            <CompactMetricCard
+              title="Ruido"
+              value={formatMetric(summaryMetrics.ruido)}
+              tone="warning"
+            />
+            <CompactMetricCard
+              title="Pagos"
+              value={formatMetric(summaryMetrics.pagos)}
+              tone="info"
+            />
+            <CompactMetricCard
+              title="Votos"
+              value={summaryMetrics.total}
+              tone="violet"
+            />
+          </div>
+        )}
+
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <h4 className="text-base font-semibold text-ui-text">
+              Histórico de votos recibidos
+            </h4>
+            <span className="text-xs text-ui-text-secondary">
+              Total: {votesTotal}
+            </span>
+          </div>
+
+          {loadingVotes ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <div key={index} className="card">
+                  <div className="card-body space-y-3">
+                    <div className="skeleton h-5 w-2/3" />
+                    <div className="skeleton h-4 w-1/2" />
+                    <div className="skeleton h-4 w-1/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : sortedReceivedVotes.length === 0 ? (
+            <div className="card">
+              <div className="card-body">
+                <p className="text-sm text-ui-text-secondary">
+                  Este usuario todavía no ha recibido votos.
+                </p>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3 md:hidden">
+                {sortedReceivedVotes.map((vote) => {
+                  const isCurrentCohabitant = currentCohabitantIds.has(
+                    Number(vote?.votante?.id)
+                  );
+
+                  return renderVoteMobileCard(vote, isCurrentCohabitant);
+                })}
+              </div>
+
+              <div className="hidden grid-cols-1 gap-4 md:grid md:grid-cols-2 xl:grid-cols-3">
+                {sortedReceivedVotes.map((vote) => {
+                  const isCurrentCohabitant = currentCohabitantIds.has(
+                    Number(vote?.votante?.id)
+                  );
+
+                  return renderVoteDesktopCard(vote, isCurrentCohabitant);
+                })}
+              </div>
+
+              <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-ui-text-secondary">
+                  Página <span className="font-medium text-ui-text">{votesPage}</span> de{" "}
+                  <span className="font-medium text-ui-text">{votesTotalPages}</span>
+                </p>
+
+                <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={!hasPrevVotes || loadingVotes}
+                    onClick={() => setVotesPage((prev) => prev - 1)}
+                  >
+                    Anterior
+                  </button>
+
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={!hasNextVotes || loadingVotes}
+                    onClick={() => setVotesPage((prev) => prev + 1)}
+                  >
+                    Siguiente
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      </section>
+    );
+  }
+
+  function renderActiveTabContent() {
+    if (activeTab === "perfil") return renderPerfilSection();
+    if (activeTab === "estancia") return renderEstanciaSection();
+    return renderReputacionSection();
+  }
+
   return (
     <>
       <PageShell
@@ -849,983 +1975,128 @@ export default function UsuarioAdminDetail() {
               </div>
             </div>
 
-            <div className="space-y-0">
-              <div
-                role="tablist"
-                aria-label="Secciones del detalle del usuario"
-                className="grid grid-cols-1 gap-2 md:grid-cols-3"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === "perfil"}
-                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
-                    activeTab === "perfil"
-                      ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
-                      : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
-                  }`}
-                  onClick={() => handleSelectTab("perfil")}
-                >
-                  <span className="font-semibold">Perfil</span>
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                      activeTab === "perfil"
-                        ? "bg-blue-100 text-brand-primary"
-                        : "bg-slate-100 text-ui-text-secondary"
-                    }`}
-                  >
-                    Editar
-                  </span>
-                </button>
+            <div className="space-y-4 lg:hidden">
+              <div className="sticky top-3 z-20 -mx-3 overflow-x-auto px-3">
+                <div className="flex min-w-max gap-2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
+                  <MobileSectionTab
+                    icon={<ProfileIcon />}
+                    label="Perfil"
+                    badge="Editar"
+                    isActive={activeTab === "perfil"}
+                    onClick={() => handleSelectTab("perfil")}
+                  />
 
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === "estancia"}
-                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
-                    activeTab === "estancia"
-                      ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
-                      : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
-                  }`}
-                  onClick={() => handleSelectTab("estancia")}
-                >
-                  <span className="font-semibold">Estancia</span>
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                      activeTab === "estancia"
-                        ? "bg-blue-100 text-brand-primary"
-                        : "bg-slate-100 text-ui-text-secondary"
-                    }`}
-                  >
-                    Gestión
-                  </span>
-                </button>
+                  <MobileSectionTab
+                    icon={<StayIcon />}
+                    label="Estancia"
+                    badge="Gest."
+                    isActive={activeTab === "estancia"}
+                    onClick={() => handleSelectTab("estancia")}
+                  />
 
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === "reputacion"}
-                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
-                    activeTab === "reputacion"
-                      ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
-                      : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
-                  }`}
-                  onClick={() => handleSelectTab("reputacion")}
-                >
-                  <span className="font-semibold">Reputación</span>
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                      activeTab === "reputacion"
-                        ? "bg-blue-100 text-brand-primary"
-                        : "bg-slate-100 text-ui-text-secondary"
-                    }`}
-                  >
-                    Histórico
-                  </span>
-                </button>
+                  <MobileSectionTab
+                    icon={<ReputationIcon />}
+                    label="Reputación"
+                    badge="Hist."
+                    isActive={activeTab === "reputacion"}
+                    onClick={() => handleSelectTab("reputacion")}
+                  />
+                </div>
               </div>
 
-              <div
-                className={`border border-slate-300 bg-white p-4 md:p-5 ${
-                  activeTab === "perfil"
-                    ? "rounded-b-2xl rounded-tr-2xl rounded-tl-none"
-                    : activeTab === "estancia"
-                      ? "rounded-b-2xl rounded-tl-2xl rounded-tr-2xl"
-                      : "rounded-b-2xl rounded-tl-2xl rounded-tr-none"
-                }`}
-              >
-                {activeTab === "perfil" ? (
-                  <section className="space-y-6">
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      <div className="rounded-xl border border-amber-300 bg-amber-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-amber-600">
-                            Rol
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            {formatRoleLabel(usuario.rol)}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-emerald-300 bg-emerald-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
-                            Estado
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            {usuario.activo ? "Activo" : "Inactivo"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-sky-300 bg-sky-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
-                            Registro
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            {formatDate(usuario.fecha_registro)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
-                        Editar usuario
-                      </h3>
-                      <p className="mt-1 text-sm text-ui-text-secondary">
-                        Actualiza los datos principales del usuario.
-                      </p>
-                    </div>
-
-                    {editFeedback ? (
-                      <div className={editFeedback.type === "success" ? "alert-success" : "alert-error"}>
-                        {editFeedback.message}
-                      </div>
-                    ) : null}
-
-                    <form className="space-y-4" onSubmit={handleSubmitUser}>
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div>
-                          <label className="label" htmlFor="usuario-nombre">
-                            Nombre
-                          </label>
-                          <input
-                            id="usuario-nombre"
-                            name="nombre"
-                            type="text"
-                            className="input"
-                            value={userForm.nombre}
-                            onChange={handleUserFormChange}
-                            disabled={savingUser}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="usuario-apellidos">
-                            Apellidos
-                          </label>
-                          <input
-                            id="usuario-apellidos"
-                            name="apellidos"
-                            type="text"
-                            className="input"
-                            value={userForm.apellidos}
-                            onChange={handleUserFormChange}
-                            disabled={savingUser}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="usuario-email">
-                            Email
-                          </label>
-                          <input
-                            id="usuario-email"
-                            name="email"
-                            type="email"
-                            className="input"
-                            value={userForm.email}
-                            onChange={handleUserFormChange}
-                            disabled={savingUser}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="usuario-telefono">
-                            Teléfono
-                          </label>
-                          <input
-                            id="usuario-telefono"
-                            name="telefono"
-                            type="text"
-                            className="input"
-                            value={userForm.telefono}
-                            onChange={handleUserFormChange}
-                            disabled={savingUser}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="usuario-rol">
-                            Rol
-                          </label>
-                          <select
-                            id="usuario-rol"
-                            name="rol"
-                            className="select"
-                            value={userForm.rol}
-                            onChange={handleUserFormChange}
-                            disabled={savingUser}
-                          >
-                            <option value="user">Inquilino</option>
-                            <option value="advertiser">Anunciante</option>
-                            <option value="admin">Admin</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="usuario-activo">
-                            Estado
-                          </label>
-                          <select
-                            id="usuario-activo"
-                            name="activo"
-                            className="select"
-                            value={userForm.activo}
-                            onChange={handleUserFormChange}
-                            disabled={savingUser}
-                          >
-                            <option value="true">Activo</option>
-                            <option value="false">Inactivo</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
-                          onClick={resetUserForm}
-                          disabled={savingUser}
-                        >
-                          Restablecer
-                        </button>
-
-                        <button
-                          type="submit"
-                          className="btn btn-primary"
-                          disabled={savingUser}
-                          aria-busy={savingUser}
-                        >
-                          {savingUser ? "Guardando..." : "Guardar cambios"}
-                        </button>
-                      </div>
-                    </form>
-
-                    <div className="card">
-                      <div className="card-body space-y-4">
-                        <div>
-                          <h4 className="text-base font-semibold text-ui-text">
-                            Foto de perfil
-                          </h4>
-                          <p className="mt-1 text-sm text-ui-text-secondary">
-                            Cambia o elimina la foto de perfil del usuario.
-                          </p>
-                        </div>
-
-                        {photoFeedback ? (
-                          <div className={photoFeedback.type === "success" ? "alert-success" : "alert-error"}>
-                            {photoFeedback.message}
-                          </div>
-                        ) : null}
-
-                        <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
-                          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                            <div className="flex items-center gap-4">
-                              <Avatar
-                                entity={usuario}
-                                sizeClassName="h-16 w-16"
-                                textClassName="text-lg"
-                                onOpen={openPhotoModal}
-                              />
-
-                              <div className="text-sm text-ui-text-secondary">
-                                {selectedPhotoFile
-                                  ? `Nueva foto seleccionada: ${selectedPhotoFile.name}`
-                                  : usuario.foto_perfil_url
-                                    ? "Haz clic en la foto para verla ampliada."
-                                    : "Este usuario todavía no tiene foto de perfil."}
-                              </div>
-                            </div>
-
-                            <div className="flex flex-wrap items-center gap-2">
-                              <label
-                                htmlFor="usuario-foto"
-                                className="btn btn-secondary btn-sm cursor-pointer"
-                              >
-                                Seleccionar foto
-                              </label>
-
-                              {selectedPhotoFile ? (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="btn btn-primary btn-sm"
-                                    onClick={handleUploadPhoto}
-                                    disabled={uploadingPhoto || deletingPhoto}
-                                  >
-                                    {uploadingPhoto ? "Subiendo..." : "Subir foto"}
-                                  </button>
-
-                                  <button
-                                    type="button"
-                                    className="btn btn-secondary btn-sm"
-                                    onClick={() => setSelectedPhotoFile(null)}
-                                    disabled={uploadingPhoto || deletingPhoto}
-                                  >
-                                    Quitar selección
-                                  </button>
-                                </>
-                              ) : null}
-
-                              {usuario.foto_perfil_url ? (
-                                <button
-                                  type="button"
-                                  className="btn btn-danger btn-sm"
-                                  onClick={openDeletePhotoModal}
-                                  disabled={uploadingPhoto || deletingPhoto}
-                                >
-                                  Eliminar foto
-                                </button>
-                              ) : null}
-                            </div>
-                          </div>
-                        </div>
-
-                        <input
-                          id="usuario-foto"
-                          name="foto"
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handlePhotoChange}
-                          disabled={uploadingPhoto || deletingPhoto}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="card">
-                      <div className="card-body space-y-4">
-                        <div>
-                          <h4 className="text-base font-semibold text-ui-text">
-                            Restablecer contraseña
-                          </h4>
-                          <p className="mt-1 text-sm text-ui-text-secondary">
-                            Define una nueva contraseña para este usuario.
-                          </p>
-                        </div>
-
-                        {passwordFeedback ? (
-                          <div className={passwordFeedback.type === "success" ? "alert-success" : "alert-error"}>
-                            {passwordFeedback.message}
-                          </div>
-                        ) : null}
-
-                        <form className="space-y-4" onSubmit={handleResetPassword}>
-                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                            <div>
-                              <label className="label" htmlFor="new-password">
-                                Nueva contraseña
-                              </label>
-                              <input
-                                id="new-password"
-                                name="password"
-                                type="password"
-                                className="input"
-                                value={passwordForm.password}
-                                onChange={handlePasswordFormChange}
-                                disabled={resettingPassword}
-                              />
-                            </div>
-
-                            <div>
-                              <label className="label" htmlFor="confirm-password">
-                                Confirmar contraseña
-                              </label>
-                              <input
-                                id="confirm-password"
-                                name="confirm_password"
-                                type="password"
-                                className="input"
-                                value={passwordForm.confirm_password}
-                                onChange={handlePasswordFormChange}
-                                disabled={resettingPassword}
-                              />
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              className="btn btn-secondary btn-sm"
-                              onClick={resetPasswordForm}
-                              disabled={resettingPassword}
-                            >
-                              Limpiar
-                            </button>
-
-                            <button
-                              type="submit"
-                              className="btn btn-primary btn-sm"
-                              disabled={resettingPassword}
-                              aria-busy={resettingPassword}
-                            >
-                              {resettingPassword ? "Restableciendo..." : "Restablecer contraseña"}
-                            </button>
-                          </div>
-                        </form>
-                      </div>
-                    </div>
-                  </section>
-                ) : null}
-
-                {activeTab === "estancia" ? (
-                  <section className="space-y-6">
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
-                        Gestión de estancia
-                      </h3>
-                      <p className="mt-1 text-sm text-ui-text-secondary">
-                        Asigna o expulsa al usuario de su habitación actual.
-                      </p>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      <div className="rounded-xl border border-violet-300 bg-violet-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
-                            Habitación actual
-                          </p>
-                          <p className="mt-2 text-xl font-bold text-ui-text">
-                            {stay ? stay.habitacion_titulo || "Sin título" : "Sin asignar"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-sky-300 bg-sky-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
-                            Piso actual
-                          </p>
-                          <p className="mt-2 text-xl font-bold text-ui-text">
-                            {stay?.piso_id ? `#${stay.piso_id}` : "Sin piso"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="rounded-xl border border-emerald-300 bg-emerald-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
-                            Entrada
-                          </p>
-                          <p className="mt-2 text-xl font-bold text-ui-text">
-                            {formatDate(stay?.fecha_entrada)}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="card">
-                      <div className="card-body space-y-4">
-                        <div>
-                          <h4 className="text-base font-semibold text-ui-text">
-                            Estancia actual
-                          </h4>
-                        </div>
-
-                        {stay ? (
-                          <div className="rounded-xl border border-slate-300 bg-slate-50 p-4">
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                              <div>
-                                <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-                                  Habitación
-                                </p>
-                                <p className="mt-1 text-sm font-semibold text-ui-text">
-                                  {stay.habitacion_titulo || "Sin título"} · #{stay.habitacion_id ?? "—"}
-                                </p>
-                              </div>
-
-                              <div>
-                                <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-                                  Piso
-                                </p>
-                                <p className="mt-1 text-sm font-semibold text-ui-text">
-                                  {stay.direccion || "Sin dirección"} · #{stay.piso_id ?? "—"}
-                                </p>
-                              </div>
-
-                              <div>
-                                <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-                                  Ciudad
-                                </p>
-                                <p className="mt-1 text-sm font-semibold text-ui-text">
-                                  {stay.ciudad || "—"}
-                                </p>
-                              </div>
-
-                              <div>
-                                <p className="text-xs font-medium uppercase tracking-wide text-ui-text-secondary">
-                                  Fecha de entrada
-                                </p>
-                                <p className="mt-1 text-sm font-semibold text-ui-text">
-                                  {formatDateTime(stay.fecha_entrada)}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="rounded-xl border border-slate-300 bg-slate-50">
-                            <div className="card-body">
-                              <p className="text-sm text-ui-text-secondary">
-                                Este usuario no tiene ninguna estancia activa en este momento.
-                              </p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                      <div className="card">
-                        <div className="card-body space-y-4">
-                          <div>
-                            <h4 className="text-base font-semibold text-ui-text">
-                              Asignar habitación
-                            </h4>
-                            <p className="mt-1 text-sm text-ui-text-secondary">
-                              Si el usuario ya tiene estancia activa, primero debes expulsarlo de la habitación actual.
-                            </p>
-                          </div>
-
-                          {assignFeedback ? (
-                            <div className={assignFeedback.type === "success" ? "alert-success" : "alert-error"}>
-                              {assignFeedback.message}
-                            </div>
-                          ) : null}
-
-                          {stay ? (
-                            <div className="alert-info">
-                              Este usuario ya tiene una estancia activa. Para moverlo a otra habitación, primero debes expulsarlo.
-                            </div>
-                          ) : null}
-
-                          <form className="space-y-4" onSubmit={handleAssignRoom}>
-                            <div>
-                              <label className="label" htmlFor="assign-habitacion-id">
-                                ID de habitación
-                              </label>
-                              <input
-                                id="assign-habitacion-id"
-                                name="habitacion_id"
-                                type="number"
-                                min="1"
-                                className="input"
-                                value={assignForm.habitacion_id}
-                                onChange={handleAssignFormChange}
-                                disabled={savingStayAction || Boolean(stay)}
-                                placeholder="Ej. 12"
-                              />
-                            </div>
-
-                            <div className="flex items-center justify-end">
-                              <button
-                                type="submit"
-                                className="btn btn-primary btn-sm"
-                                disabled={savingStayAction || Boolean(stay)}
-                                aria-busy={savingStayAction}
-                              >
-                                {savingStayAction ? "Guardando..." : "Asignar habitación"}
-                              </button>
-                            </div>
-                          </form>
-                        </div>
-                      </div>
-
-                      <div className="card">
-                        <div className="card-body space-y-4">
-                          <div>
-                            <h4 className="text-base font-semibold text-ui-text">
-                              Expulsar de la habitación
-                            </h4>
-                            <p className="mt-1 text-sm text-ui-text-secondary">
-                              Finaliza la estancia activa del usuario.
-                            </p>
-                          </div>
-
-                          {kickFeedback ? (
-                            <div className={kickFeedback.type === "success" ? "alert-success" : "alert-error"}>
-                              {kickFeedback.message}
-                            </div>
-                          ) : null}
-
-                          {stay?.id ? (
-                            <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                              <p className="text-sm text-red-800">
-                                Habitación actual:{" "}
-                                <span className="font-semibold">
-                                  {stay.habitacion_titulo || "Sin título"} · #{stay.habitacion_id ?? "—"}
-                                </span>
-                              </p>
-
-                              <div className="mt-4 flex justify-end">
-                                <button
-                                  type="button"
-                                  className="btn btn-danger btn-sm"
-                                  onClick={openKickModal}
-                                  disabled={savingStayAction}
-                                >
-                                  Expulsar usuario
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="rounded-xl border border-slate-300 bg-slate-50">
-                              <div className="card-body">
-                                <p className="text-sm text-ui-text-secondary">
-                                  No hay ninguna estancia activa que expulsar.
-                                </p>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="card">
-                      <div className="card-body space-y-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <h4 className="text-base font-semibold text-ui-text">
-                              Convivientes actuales
-                            </h4>
-                            <p className="mt-1 text-sm text-ui-text-secondary">
-                              Usuarios que comparten piso con este usuario.
-                            </p>
-                          </div>
-
-                          {stay?.piso_id ? (
-                            <span className="text-xs text-ui-text-secondary">
-                              Piso #{stay.piso_id}
-                            </span>
-                          ) : null}
-                        </div>
-
-                        {cohabitantsError ? (
-                          <div className="alert-error">{cohabitantsError}</div>
-                        ) : null}
-
-                        {!stay?.piso_id ? (
-                          <div className="rounded-xl border border-slate-300 bg-slate-50">
-                            <div className="card-body">
-                              <p className="text-sm text-ui-text-secondary">
-                                No hay convivientes que mostrar porque el usuario no tiene estancia activa.
-                              </p>
-                            </div>
-                          </div>
-                        ) : loadingCohabitants ? (
-                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                            {Array.from({ length: 2 }).map((_, index) => (
-                              <div
-                                key={index}
-                                className="rounded-xl border border-slate-300 bg-slate-50 p-4"
-                              >
-                                <div className="skeleton h-5 w-2/3" />
-                                <div className="mt-2 skeleton h-4 w-1/2" />
-                              </div>
-                            ))}
-                          </div>
-                        ) : cohabitants.length === 0 ? (
-                          <div className="rounded-xl border border-slate-300 bg-slate-50">
-                            <div className="card-body">
-                              <p className="text-sm text-ui-text-secondary">
-                                No hay otros convivientes activos en este piso.
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                            {cohabitants.map((item) => (
-                              <article
-                                key={item.usuario_habitacion_id}
-                                role="button"
-                                tabIndex={0}
-                                className="rounded-xl border border-slate-300 bg-slate-50 p-4 transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:shadow-md"
-                                onClick={() => navigate(`/admin/usuario/${item.id}`)}
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter" || event.key === " ") {
-                                    event.preventDefault();
-                                    navigate(`/admin/usuario/${item.id}`);
-                                  }
-                                }}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <Avatar
-                                    entity={item}
-                                    sizeClassName="h-12 w-12"
-                                    textClassName="text-sm"
-                                    onOpen={openPhotoModal}
-                                  />
-
-                                  <div className="min-w-0">
-                                    <p className="truncate text-sm font-semibold text-ui-text">
-                                      {formatDisplayName(item)}
-                                    </p>
-                                    <p className="mt-1 text-sm text-ui-text-secondary">
-                                      Habitación #{item.habitacion_id}
-                                    </p>
-                                    <p className="mt-1 text-xs text-ui-text-secondary">
-                                      Entrada: {formatDate(item.fecha_entrada)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </article>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </section>
-                ) : null}
-
-                {activeTab === "reputacion" ? (
-                  <section className="space-y-6">
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
-                        Reputación del usuario
-                      </h3>
-                      <p className="mt-1 text-sm text-ui-text-secondary">
-                        Aquí se muestra el histórico completo de votos recibidos, incluidos compañeros anteriores.
-                      </p>
-                    </div>
-
-                    <div className="alert-info">
-                      La reputación es histórica: aunque el usuario ya no conviva con esas personas o actualmente no tenga estancia activa, sus votos recibidos siguen apareciendo aquí.
-                    </div>
-
-                    {summaryError ? <div className="alert-error">{summaryError}</div> : null}
-                    {votesError ? <div className="alert-error">{votesError}</div> : null}
-
-                    {loadingSummary ? (
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        {Array.from({ length: 4 }).map((_, index) => (
-                          <div
-                            key={index}
-                            className="rounded-xl border border-slate-300 bg-slate-50 p-4"
-                          >
-                            <div className="skeleton h-4 w-1/2" />
-                            <div className="mt-3 skeleton h-8 w-1/3" />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-                        <div className="rounded-xl border border-emerald-300 bg-emerald-50">
-                          <div className="card-body">
-                            <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
-                              Limpieza
-                            </p>
-                            <p className="mt-2 text-3xl font-bold text-ui-text">
-                              {formatMetric(summaryMetrics.limpieza)}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="rounded-xl border border-amber-300 bg-amber-50">
-                          <div className="card-body">
-                            <p className="text-xs font-medium uppercase tracking-wide text-amber-600">
-                              Ruido
-                            </p>
-                            <p className="mt-2 text-3xl font-bold text-ui-text">
-                              {formatMetric(summaryMetrics.ruido)}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="rounded-xl border border-sky-300 bg-sky-50">
-                          <div className="card-body">
-                            <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
-                              Puntualidad pagos
-                            </p>
-                            <p className="mt-2 text-3xl font-bold text-ui-text">
-                              {formatMetric(summaryMetrics.pagos)}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="rounded-xl border border-violet-300 bg-violet-50">
-                          <div className="card-body">
-                            <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
-                              Total votos
-                            </p>
-                            <p className="mt-2 text-3xl font-bold text-ui-text">
-                              {summaryMetrics.total}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <h4 className="text-base font-semibold text-ui-text">
-                          Histórico de votos recibidos
-                        </h4>
-                        <span className="text-xs text-ui-text-secondary">
-                          Total: {votesTotal}
-                        </span>
-                      </div>
-
-                      {loadingVotes ? (
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                          {Array.from({ length: 3 }).map((_, index) => (
-                            <div key={index} className="card">
-                              <div className="card-body space-y-3">
-                                <div className="skeleton h-5 w-2/3" />
-                                <div className="skeleton h-4 w-1/2" />
-                                <div className="skeleton h-4 w-1/3" />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : sortedReceivedVotes.length === 0 ? (
-                        <div className="card">
-                          <div className="card-body">
-                            <p className="text-sm text-ui-text-secondary">
-                              Este usuario todavía no ha recibido votos.
-                            </p>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                            {sortedReceivedVotes.map((vote) => {
-                              const isCurrentCohabitant = currentCohabitantIds.has(
-                                Number(vote?.votante?.id)
-                              );
-
-                              return (
-                                <article
-                                  key={vote.id}
-                                  role="button"
-                                  tabIndex={0}
-                                  className="card card-hover cursor-pointer"
-                                  onClick={() => {
-                                    if (vote?.votante?.id) {
-                                      navigate(`/admin/usuario/${vote.votante.id}`);
-                                    }
-                                  }}
-                                  onKeyDown={(event) => {
-                                    if ((event.key === "Enter" || event.key === " ") && vote?.votante?.id) {
-                                      event.preventDefault();
-                                      navigate(`/admin/usuario/${vote.votante.id}`);
-                                    }
-                                  }}
-                                >
-                                  <div className="card-body space-y-4">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="flex items-center gap-3 min-w-0">
-                                        <Avatar
-                                          entity={vote.votante}
-                                          sizeClassName="h-12 w-12"
-                                          textClassName="text-sm"
-                                          onOpen={openPhotoModal}
-                                        />
-
-                                        <div className="min-w-0">
-                                          <p className="truncate text-sm font-semibold text-ui-text">
-                                            {vote.votante
-                                              ? formatDisplayName(vote.votante)
-                                              : `Voto #${vote.id}`}
-                                          </p>
-                                          <p className="mt-1 text-xs text-ui-text-secondary">
-                                            Emitido: {formatDate(vote.created_at)}
-                                          </p>
-                                          <p className="mt-1 text-xs text-ui-text-secondary">
-                                            Actualizado: {formatDate(vote.updated_at)}
-                                          </p>
-                                        </div>
-                                      </div>
-
-                                      <div className="flex flex-col items-end gap-2">
-                                        {isCurrentCohabitant ? (
-                                          <span className="badge badge-success">
-                                            Conviviente actual
-                                          </span>
-                                        ) : (
-                                          <span className="badge badge-neutral">
-                                            Histórico
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-
-                                    <p className="text-xs text-ui-text-secondary">
-                                      Piso #{vote.piso?.id ?? vote.piso_id ?? "—"} ·{" "}
-                                      {vote.piso?.direccion || "Sin dirección"}
-                                    </p>
-
-                                    <div className="grid grid-cols-3 gap-3">
-                                      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-center">
-                                        <p className="text-[11px] font-medium uppercase tracking-wide text-emerald-700">
-                                          Limpieza
-                                        </p>
-                                        <p className="mt-2 text-lg font-bold text-ui-text">
-                                          {vote.limpieza ?? "—"}
-                                        </p>
-                                      </div>
-
-                                      <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-center">
-                                        <p className="text-[11px] font-medium uppercase tracking-wide text-amber-700">
-                                          Ruido
-                                        </p>
-                                        <p className="mt-2 text-lg font-bold text-ui-text">
-                                          {vote.ruido ?? "—"}
-                                        </p>
-                                      </div>
-
-                                      <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-center">
-                                        <p className="text-[11px] font-medium uppercase tracking-wide text-sky-700">
-                                          Pagos
-                                        </p>
-                                        <p className="mt-2 text-lg font-bold text-ui-text">
-                                          {vote.puntualidad_pagos ?? "—"}
-                                        </p>
-                                      </div>
-                                    </div>
-
-                                    <p className="text-xs text-ui-text-secondary">
-                                      Cambios realizados: {vote.num_cambios ?? 0}
-                                    </p>
-                                  </div>
-                                </article>
-                              );
-                            })}
-                          </div>
-
-                          <div className="flex items-center justify-between gap-3 pt-2">
-                            <p className="text-xs text-ui-text-secondary">
-                              Página <span className="font-medium text-ui-text">{votesPage}</span> de{" "}
-                              <span className="font-medium text-ui-text">{votesTotalPages}</span>
-                            </p>
-
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                disabled={!hasPrevVotes || loadingVotes}
-                                onClick={() => setVotesPage((prev) => prev - 1)}
-                              >
-                                Anterior
-                              </button>
-
-                              <button
-                                type="button"
-                                className="btn btn-secondary btn-sm"
-                                disabled={!hasNextVotes || loadingVotes}
-                                onClick={() => setVotesPage((prev) => prev + 1)}
-                              >
-                                Siguiente
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </section>
-                ) : null}
+              <div className="rounded-2xl border border-slate-300 bg-white p-4">
+                {renderActiveTabContent()}
+              </div>
+            </div>
+
+            <div className="hidden lg:block">
+              <div className="space-y-0">
+                <div
+                  role="tablist"
+                  aria-label="Secciones del detalle del usuario"
+                  className="grid grid-cols-3 gap-2"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "perfil"}
+                    className={`flex items-center justify-between rounded-t-xl rounded-b-lg border px-4 py-3 text-left transition-all duration-200 ${
+                      activeTab === "perfil"
+                        ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
+                        : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
+                    }`}
+                    onClick={() => handleSelectTab("perfil")}
+                  >
+                    <span className="font-semibold">Perfil</span>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        activeTab === "perfil"
+                          ? "bg-blue-100 text-brand-primary"
+                          : "bg-slate-100 text-ui-text-secondary"
+                      }`}
+                    >
+                      Editar
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "estancia"}
+                    className={`flex items-center justify-between rounded-t-xl rounded-b-lg border px-4 py-3 text-left transition-all duration-200 ${
+                      activeTab === "estancia"
+                        ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
+                        : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
+                    }`}
+                    onClick={() => handleSelectTab("estancia")}
+                  >
+                    <span className="font-semibold">Estancia</span>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        activeTab === "estancia"
+                          ? "bg-blue-100 text-brand-primary"
+                          : "bg-slate-100 text-ui-text-secondary"
+                      }`}
+                    >
+                      Gestión
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "reputacion"}
+                    className={`flex items-center justify-between rounded-t-xl rounded-b-lg border px-4 py-3 text-left transition-all duration-200 ${
+                      activeTab === "reputacion"
+                        ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
+                        : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
+                    }`}
+                    onClick={() => handleSelectTab("reputacion")}
+                  >
+                    <span className="font-semibold">Reputación</span>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        activeTab === "reputacion"
+                          ? "bg-blue-100 text-brand-primary"
+                          : "bg-slate-100 text-ui-text-secondary"
+                      }`}
+                    >
+                      Histórico
+                    </span>
+                  </button>
+                </div>
+
+                <div
+                  className={`border border-slate-300 bg-white p-5 ${
+                    activeTab === "perfil"
+                      ? "rounded-b-2xl rounded-tr-2xl rounded-tl-none"
+                      : activeTab === "estancia"
+                        ? "rounded-b-2xl rounded-tl-2xl rounded-tr-2xl"
+                        : "rounded-b-2xl rounded-tl-2xl rounded-tr-none"
+                  }`}
+                >
+                  {renderActiveTabContent()}
+                </div>
               </div>
             </div>
           </>

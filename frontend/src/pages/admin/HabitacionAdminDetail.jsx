@@ -29,6 +29,120 @@ const EMPTY_UPLOAD_FORM = {
   orden: "",
 };
 
+function EditIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M12 20h9" />
+      <path d="m16.5 3.5 4 4L8 20l-5 1 1-5 12.5-12.5Z" />
+    </svg>
+  );
+}
+
+function PhotosIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <circle cx="9" cy="10" r="1.5" />
+      <path d="m21 16-4.5-4.5L8 20" />
+    </svg>
+  );
+}
+
+function MoreMenuButton({ onClick }) {
+  return (
+    <button
+      type="button"
+      className="absolute right-[10px] top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300 bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.35)] transition-all hover:from-sky-500 hover:via-blue-600 hover:to-indigo-700 hover:shadow-[0_0_0_4px_rgba(59,130,246,0.4)]"
+      onClick={onClick}
+      aria-label="Más acciones"
+    >
+      <span className="flex items-center justify-center gap-0.5">
+        <span className="h-1 w-1 rounded-full bg-white" />
+        <span className="h-1 w-1 rounded-full bg-white" />
+        <span className="h-1 w-1 rounded-full bg-white" />
+      </span>
+    </button>
+  );
+}
+
+function MobileSectionTab({
+  icon,
+  label,
+  badge,
+  isActive,
+  onClick,
+}) {
+  return (
+    <button
+      type="button"
+      className={`flex min-w-[132px] shrink-0 flex-col items-center justify-center gap-2 rounded-2xl border px-4 py-3 text-center transition-all ${
+        isActive
+          ? "border-brand-primary bg-blue-50 text-brand-primary shadow-sm"
+          : "border-slate-200 bg-white text-ui-text hover:border-brand-primary hover:bg-blue-50/60"
+      }`}
+      onClick={onClick}
+      aria-pressed={isActive}
+    >
+      <div className="flex items-center gap-2">
+        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm">
+          {icon}
+        </span>
+        <span
+          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+            isActive
+              ? "bg-blue-100 text-brand-primary"
+              : "bg-slate-100 text-ui-text-secondary"
+          }`}
+        >
+          {badge}
+        </span>
+      </div>
+
+      <span className="text-xs font-semibold leading-tight">{label}</span>
+    </button>
+  );
+}
+
+function CompactMetricCard({ title, value, tone = "default" }) {
+  const toneClasses =
+    tone === "warning"
+      ? "border-amber-200 bg-amber-50"
+      : tone === "info"
+        ? "border-sky-200 bg-sky-50"
+        : tone === "violet"
+          ? "border-violet-200 bg-violet-50"
+          : "border-slate-200 bg-slate-50";
+
+  return (
+    <div className={`rounded-xl border px-2 py-2.5 sm:px-3 sm:py-3 ${toneClasses}`}>
+      <p className="text-[10px] font-medium uppercase leading-tight tracking-wide text-ui-text-secondary sm:text-[11px]">
+        {title}
+      </p>
+      <p className="mt-1 truncate text-sm font-bold text-ui-text sm:text-lg">
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function buildImageUrl(url) {
   if (!url) return "";
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -442,6 +556,446 @@ export default function HabitacionAdminDetail() {
 
   const fotoCount = fotos.length;
 
+  function renderEditarSection() {
+    return (
+      <section className="space-y-4">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+          <CompactMetricCard
+            title="Precio"
+            value={formatEur(habitacion.precio_mensual)}
+            tone="warning"
+          />
+          <CompactMetricCard
+            title="Tamaño"
+            value={habitacion.tamano_m2 ? `${habitacion.tamano_m2} m²` : "—"}
+            tone="info"
+          />
+          <CompactMetricCard
+            title="Piso"
+            value={`#${habitacion.piso_id}`}
+            tone="violet"
+          />
+        </div>
+
+        <div>
+          <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+            Editar habitación
+          </h3>
+          <p className="mt-1 text-sm text-ui-text-secondary">
+            Actualiza los datos principales de la habitación.
+          </p>
+        </div>
+
+        {editFeedback ? (
+          <div
+            className={
+              editFeedback.type === "success" ? "alert-success" : "alert-error"
+            }
+          >
+            {editFeedback.message}
+          </div>
+        ) : null}
+
+        <form className="space-y-4" onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="label" htmlFor="titulo">
+                Título
+              </label>
+              <input
+                id="titulo"
+                name="titulo"
+                type="text"
+                className="input"
+                value={form.titulo}
+                onChange={handleChange}
+                disabled={saving}
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="label" htmlFor="descripcion">
+                Descripción
+              </label>
+              <textarea
+                id="descripcion"
+                name="descripcion"
+                className="textarea"
+                value={form.descripcion}
+                onChange={handleChange}
+                disabled={saving}
+              />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="precio_mensual">
+                Precio mensual
+              </label>
+              <input
+                id="precio_mensual"
+                name="precio_mensual"
+                type="number"
+                min="0"
+                className="input"
+                value={form.precio_mensual}
+                onChange={handleChange}
+                disabled={saving}
+              />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="tamano_m2">
+                Tamaño (m²)
+              </label>
+              <input
+                id="tamano_m2"
+                name="tamano_m2"
+                type="number"
+                min="1"
+                className="input"
+                value={form.tamano_m2}
+                onChange={handleChange}
+                disabled={saving}
+              />
+            </div>
+
+            <div>
+              <label className="label" htmlFor="disponible">
+                Disponibilidad
+              </label>
+              <select
+                id="disponible"
+                name="disponible"
+                className="select"
+                value={form.disponible}
+                onChange={handleChange}
+                disabled={saving}
+              >
+                <option value="true">Disponible</option>
+                <option value="false">No disponible</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label" htmlFor="amueblada">
+                Amueblada
+              </label>
+              <select
+                id="amueblada"
+                name="amueblada"
+                className="select"
+                value={form.amueblada}
+                onChange={handleChange}
+                disabled={saving}
+              >
+                <option value="true">Sí</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label" htmlFor="bano">
+                Baño
+              </label>
+              <select
+                id="bano"
+                name="bano"
+                className="select"
+                value={form.bano}
+                onChange={handleChange}
+                disabled={saving}
+              >
+                <option value="true">Sí</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="label" htmlFor="balcon">
+                Balcón
+              </label>
+              <select
+                id="balcon"
+                name="balcon"
+                className="select"
+                value={form.balcon}
+                onChange={handleChange}
+                disabled={saving}
+              >
+                <option value="true">Sí</option>
+                <option value="false">No</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <button
+              type="button"
+              className="btn border border-rose-300 bg-rose-100 text-rose-800 hover:bg-rose-200"
+              onClick={() => handleSelectTab("fotos")}
+              disabled={saving}
+            >
+              Cancelar
+            </button>
+
+            <button
+              type="button"
+              className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
+              onClick={resetForm}
+              disabled={saving}
+            >
+              Restablecer
+            </button>
+
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={saving}
+              aria-busy={saving}
+            >
+              {saving ? "Guardando..." : "Guardar cambios"}
+            </button>
+          </div>
+        </form>
+      </section>
+    );
+  }
+
+  function renderFotosSection() {
+    return (
+      <section className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
+            Fotos de la habitación
+          </h3>
+          <span className="text-xs text-ui-text-secondary">
+            Total: {fotos.length}
+          </span>
+        </div>
+
+        {photoSectionFeedback ? (
+          <div
+            className={
+              photoSectionFeedback.type === "success"
+                ? "alert-success"
+                : "alert-error"
+            }
+          >
+            {photoSectionFeedback.message}
+          </div>
+        ) : null}
+
+        <div className="card">
+          <div className="card-body space-y-4">
+            <div>
+              <h4 className="text-base font-semibold text-ui-text">Añadir foto</h4>
+              <p className="mt-1 text-sm text-ui-text-secondary">
+                Selecciona una imagen desde tu equipo para subirla a esta habitación.
+              </p>
+            </div>
+
+            {uploadingPhoto ? (
+              <div className="flex justify-end">
+                <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
+                  Subiendo foto...
+                </div>
+              </div>
+            ) : null}
+
+            <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
+              <label
+                htmlFor="foto"
+                onDragOver={handlePhotoDragOver}
+                onDragLeave={handlePhotoDragLeave}
+                onDrop={handlePhotoDrop}
+                className={`flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border-[3px] border-dashed px-4 py-6 text-center transition-colors ${
+                  isDraggingPhoto
+                    ? "border-emerald-300 bg-emerald-100"
+                    : "border-emerald-200 bg-emerald-50 hover:border-emerald-300 hover:bg-emerald-100"
+                }`}
+              >
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-ui-text">
+                    {uploadForm.foto
+                      ? uploadForm.foto.name
+                      : "Haz clic o arrastra una foto aquí"}
+                  </p>
+                  <p className="text-xs text-ui-text-secondary">
+                    JPG, PNG u otros formatos de imagen · máximo 8 MB
+                  </p>
+                </div>
+              </label>
+
+              <input
+                id="foto"
+                name="foto"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoFileChange}
+                disabled={uploadingPhoto}
+              />
+
+              <div className="max-w-[220px]">
+                <label className="label" htmlFor="orden">
+                  Orden (opcional)
+                </label>
+                <input
+                  id="orden"
+                  name="orden"
+                  type="number"
+                  min="0"
+                  className="input"
+                  value={uploadForm.orden}
+                  onChange={handlePhotoOrderChange}
+                  disabled={uploadingPhoto}
+                />
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {fotos.length === 0 ? (
+          <div className="card">
+            <div className="card-body">
+              <p className="text-sm text-ui-text-secondary">
+                Esta habitación todavía no tiene fotos.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {fotos.map((foto, index) => (
+              <article key={foto.id} className="card card-hover relative">
+                <MoreMenuButton
+                  onClick={(event) => togglePhotoMenu(foto.id, event)}
+                />
+
+                {openPhotoMenuId === foto.id ? (
+                  <div
+                    className="absolute right-3 top-12 z-30 min-w-[180px] rounded-lg border border-ui-border bg-white p-2 shadow-modal"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-sky-100"
+                      onClick={(event) => openPhotoOrderEditor(foto.id, event)}
+                    >
+                      Cambiar orden
+                    </button>
+
+                    <button
+                      type="button"
+                      className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-red-100"
+                      onClick={(event) => requestDeletePhoto(foto, event)}
+                    >
+                      Eliminar foto
+                    </button>
+                  </div>
+                ) : null}
+
+                <div className="card-body space-y-3">
+                  <button
+                    type="button"
+                    className="block w-full"
+                    onClick={() => openPhotoModal(index)}
+                  >
+                    <img
+                      src={buildImageUrl(foto.url)}
+                      alt={`Foto ${foto.orden}`}
+                      className="aspect-[4/3] w-full rounded-md object-cover"
+                    />
+                  </button>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs text-ui-text-secondary">
+                      ID #{foto.id}
+                    </span>
+                    <span className="text-xs text-ui-text-secondary">
+                      Orden #{foto.orden}
+                    </span>
+                  </div>
+
+                  {editingPhotoOrderId === foto.id ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="label" htmlFor={`orden-foto-${foto.id}`}>
+                          Orden
+                        </label>
+                        <input
+                          id={`orden-foto-${foto.id}`}
+                          type="number"
+                          min="0"
+                          className="input"
+                          value={photoOrderValues[foto.id] ?? ""}
+                          onChange={(event) =>
+                            handlePhotoOrderValueChange(
+                              foto.id,
+                              event.target.value
+                            )
+                          }
+                          disabled={
+                            updatingPhotoId === foto.id ||
+                            deletingPhotoId === foto.id
+                          }
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={(event) => closePhotoOrderEditor(foto.id, event)}
+                          disabled={
+                            updatingPhotoId === foto.id ||
+                            deletingPhotoId === foto.id
+                          }
+                        >
+                          Cancelar
+                        </button>
+
+                        <button
+                          type="button"
+                          className="btn btn-sm border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
+                          disabled={
+                            updatingPhotoId === foto.id ||
+                            deletingPhotoId === foto.id
+                          }
+                          onClick={() => handleSavePhotoOrder(foto)}
+                        >
+                          {updatingPhotoId === foto.id
+                            ? "Guardando..."
+                            : "Guardar orden"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {photoOrderFeedback[foto.id] ? (
+                    <div
+                      className={
+                        photoOrderFeedback[foto.id].type === "success"
+                          ? "alert-success"
+                          : "alert-error"
+                      }
+                    >
+                      {photoOrderFeedback[foto.id].message}
+                    </div>
+                  ) : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  function renderActiveTabContent() {
+    if (activeTab === "editar") return renderEditarSection();
+    return renderFotosSection();
+  }
+
   return (
     <>
       <PageShell
@@ -495,11 +1049,11 @@ export default function HabitacionAdminDetail() {
                     <img
                       src={buildImageUrl(fotos[0].url)}
                       alt={habitacion.titulo || `Habitación ${habitacion.id}`}
-                      className="aspect-[16/6] w-full rounded-lg object-cover"
+                      className="aspect-[16/10] w-full rounded-lg object-cover sm:aspect-[16/6]"
                     />
                   </button>
                 ) : (
-                  <div className="skeleton aspect-[16/6] w-full rounded-lg" />
+                  <div className="skeleton aspect-[16/10] w-full rounded-lg sm:aspect-[16/6]" />
                 )}
 
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -538,524 +1092,95 @@ export default function HabitacionAdminDetail() {
               </div>
             </div>
 
-            <div className="space-y-0">
-              <div
-                role="tablist"
-                aria-label="Secciones del detalle de la habitación"
-                className="grid grid-cols-2 gap-2"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === "editar"}
-                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
-                    activeTab === "editar"
-                      ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
-                      : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
-                  }`}
-                  onClick={() => handleSelectTab("editar")}
-                >
-                  <span className="font-semibold">Editar habitación</span>
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                      activeTab === "editar"
-                        ? "bg-blue-100 text-brand-primary"
-                        : "bg-slate-100 text-ui-text-secondary"
-                    }`}
-                  >
-                    Formulario
-                  </span>
-                </button>
+            <div className="space-y-4 lg:hidden">
+              <div className="sticky top-3 z-20 -mx-3 overflow-x-auto px-3">
+                <div className="flex min-w-max gap-2 rounded-2xl border border-slate-200 bg-white/95 p-2 shadow-sm backdrop-blur">
+                  <MobileSectionTab
+                    icon={<EditIcon />}
+                    label="Editar"
+                    badge="Form"
+                    isActive={activeTab === "editar"}
+                    onClick={() => handleSelectTab("editar")}
+                  />
 
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === "fotos"}
-                  className={`flex items-center justify-between border px-4 py-3 text-left transition-all duration-200 ${
-                    activeTab === "fotos"
-                      ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
-                      : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
-                  }`}
-                  onClick={() => handleSelectTab("fotos")}
-                >
-                  <span className="font-semibold">Fotos de la habitación</span>
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                      activeTab === "fotos"
-                        ? "bg-blue-100 text-brand-primary"
-                        : "bg-slate-100 text-ui-text-secondary"
-                    }`}
-                  >
-                    {fotoCount}
-                  </span>
-                </button>
+                  <MobileSectionTab
+                    icon={<PhotosIcon />}
+                    label="Fotos"
+                    badge={fotoCount}
+                    isActive={activeTab === "fotos"}
+                    onClick={() => handleSelectTab("fotos")}
+                  />
+                </div>
               </div>
 
-              <div
-                className={`border border-slate-300 bg-white p-4 md:p-5 ${
-                  activeTab === "editar"
-                    ? "rounded-b-2xl rounded-tr-2xl rounded-tl-none"
-                    : "rounded-b-2xl rounded-tl-2xl rounded-tr-none"
-                }`}
-              >
-                {activeTab === "editar" ? (
-                  <section className="space-y-4">
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                      <div className="rounded-lg border border-amber-300 bg-amber-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-amber-600">
-                            Precio mensual
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            {formatEur(habitacion.precio_mensual)}
-                          </p>
-                        </div>
-                      </div>
+              <div className="rounded-2xl border border-slate-300 bg-white p-4">
+                {renderActiveTabContent()}
+              </div>
+            </div>
 
-                      <div className="rounded-lg border border-sky-300 bg-sky-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
-                            Tamaño
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            {habitacion.tamano_m2 ? `${habitacion.tamano_m2} m²` : "—"}
-                          </p>
-                        </div>
-                      </div>
+            <div className="hidden lg:block">
+              <div className="space-y-0">
+                <div
+                  role="tablist"
+                  aria-label="Secciones del detalle de la habitación"
+                  className="grid grid-cols-2 gap-2"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "editar"}
+                    className={`flex items-center justify-between rounded-t-xl rounded-b-lg border px-4 py-3 text-left transition-all duration-200 ${
+                      activeTab === "editar"
+                        ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
+                        : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
+                    }`}
+                    onClick={() => handleSelectTab("editar")}
+                  >
+                    <span className="font-semibold">Editar habitación</span>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        activeTab === "editar"
+                          ? "bg-blue-100 text-brand-primary"
+                          : "bg-slate-100 text-ui-text-secondary"
+                      }`}
+                    >
+                      Formulario
+                    </span>
+                  </button>
 
-                      <div className="rounded-lg border border-violet-300 bg-violet-50">
-                        <div className="card-body">
-                          <p className="text-xs font-medium uppercase tracking-wide text-violet-600">
-                            Piso
-                          </p>
-                          <p className="mt-2 text-2xl font-bold text-ui-text">
-                            #{habitacion.piso_id}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === "fotos"}
+                    className={`flex items-center justify-between rounded-t-xl rounded-b-lg border px-4 py-3 text-left transition-all duration-200 ${
+                      activeTab === "fotos"
+                        ? "relative z-10 -mb-px rounded-t-2xl rounded-b-none border-slate-300 border-b-white bg-white text-brand-primary shadow-sm"
+                        : "cursor-pointer rounded-xl border-slate-400 bg-white text-ui-text shadow-sm hover:-translate-y-0.5 hover:border-brand-primary hover:bg-blue-50/60 hover:text-brand-primary hover:shadow-md"
+                    }`}
+                    onClick={() => handleSelectTab("fotos")}
+                  >
+                    <span className="font-semibold">Fotos de la habitación</span>
+                    <span
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                        activeTab === "fotos"
+                          ? "bg-blue-100 text-brand-primary"
+                          : "bg-slate-100 text-ui-text-secondary"
+                      }`}
+                    >
+                      {fotoCount}
+                    </span>
+                  </button>
+                </div>
 
-                    <div>
-                      <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
-                        Editar habitación
-                      </h3>
-                      <p className="mt-1 text-sm text-ui-text-secondary">
-                        Actualiza los datos principales de la habitación.
-                      </p>
-                    </div>
-
-                    {editFeedback ? (
-                      <div
-                        className={
-                          editFeedback.type === "success"
-                            ? "alert-success"
-                            : "alert-error"
-                        }
-                      >
-                        {editFeedback.message}
-                      </div>
-                    ) : null}
-
-                    <form className="space-y-4" onSubmit={handleSubmit}>
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                        <div className="md:col-span-2">
-                          <label className="label" htmlFor="titulo">
-                            Título
-                          </label>
-                          <input
-                            id="titulo"
-                            name="titulo"
-                            type="text"
-                            className="input"
-                            value={form.titulo}
-                            onChange={handleChange}
-                            disabled={saving}
-                          />
-                        </div>
-
-                        <div className="md:col-span-2">
-                          <label className="label" htmlFor="descripcion">
-                            Descripción
-                          </label>
-                          <textarea
-                            id="descripcion"
-                            name="descripcion"
-                            className="textarea"
-                            value={form.descripcion}
-                            onChange={handleChange}
-                            disabled={saving}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="precio_mensual">
-                            Precio mensual
-                          </label>
-                          <input
-                            id="precio_mensual"
-                            name="precio_mensual"
-                            type="number"
-                            min="0"
-                            className="input"
-                            value={form.precio_mensual}
-                            onChange={handleChange}
-                            disabled={saving}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="tamano_m2">
-                            Tamaño (m²)
-                          </label>
-                          <input
-                            id="tamano_m2"
-                            name="tamano_m2"
-                            type="number"
-                            min="1"
-                            className="input"
-                            value={form.tamano_m2}
-                            onChange={handleChange}
-                            disabled={saving}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="disponible">
-                            Disponibilidad
-                          </label>
-                          <select
-                            id="disponible"
-                            name="disponible"
-                            className="select"
-                            value={form.disponible}
-                            onChange={handleChange}
-                            disabled={saving}
-                          >
-                            <option value="true">Disponible</option>
-                            <option value="false">No disponible</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="amueblada">
-                            Amueblada
-                          </label>
-                          <select
-                            id="amueblada"
-                            name="amueblada"
-                            className="select"
-                            value={form.amueblada}
-                            onChange={handleChange}
-                            disabled={saving}
-                          >
-                            <option value="true">Sí</option>
-                            <option value="false">No</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="bano">
-                            Baño
-                          </label>
-                          <select
-                            id="bano"
-                            name="bano"
-                            className="select"
-                            value={form.bano}
-                            onChange={handleChange}
-                            disabled={saving}
-                          >
-                            <option value="true">Sí</option>
-                            <option value="false">No</option>
-                          </select>
-                        </div>
-
-                        <div>
-                          <label className="label" htmlFor="balcon">
-                            Balcón
-                          </label>
-                          <select
-                            id="balcon"
-                            name="balcon"
-                            className="select"
-                            value={form.balcon}
-                            onChange={handleChange}
-                            disabled={saving}
-                          >
-                            <option value="true">Sí</option>
-                            <option value="false">No</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          className="btn border border-rose-300 bg-rose-100 text-rose-800 hover:bg-rose-200"
-                          onClick={() => handleSelectTab("fotos")}
-                          disabled={saving}
-                        >
-                          Cancelar
-                        </button>
-
-                        <button
-                          type="button"
-                          className="btn border border-amber-300 bg-amber-100 text-amber-800 hover:bg-amber-200"
-                          onClick={resetForm}
-                          disabled={saving}
-                        >
-                          Restablecer
-                        </button>
-
-                        <button
-                          type="submit"
-                          className="btn btn-primary"
-                          disabled={saving}
-                          aria-busy={saving}
-                        >
-                          {saving ? "Guardando..." : "Guardar cambios"}
-                        </button>
-                      </div>
-                    </form>
-                  </section>
-                ) : null}
-
-                {activeTab === "fotos" ? (
-                  <section className="space-y-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 className="text-xl font-bold tracking-tight text-ui-text md:text-2xl">
-                        Fotos de la habitación
-                      </h3>
-                      <span className="text-xs text-ui-text-secondary">
-                        Total: {fotos.length}
-                      </span>
-                    </div>
-
-                    {photoSectionFeedback ? (
-                      <div
-                        className={
-                          photoSectionFeedback.type === "success"
-                            ? "alert-success"
-                            : "alert-error"
-                        }
-                      >
-                        {photoSectionFeedback.message}
-                      </div>
-                    ) : null}
-
-                    <div className="card">
-                      <div className="card-body space-y-4">
-                        <div>
-                          <h4 className="text-base font-semibold text-ui-text">Añadir foto</h4>
-                          <p className="mt-1 text-sm text-ui-text-secondary">
-                            Selecciona una imagen desde tu equipo para subirla a esta habitación.
-                          </p>
-                        </div>
-
-                        {uploadingPhoto ? (
-                          <div className="flex justify-end">
-                            <div className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm font-medium text-sky-800">
-                              Subiendo foto...
-                            </div>
-                          </div>
-                        ) : null}
-
-                        <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
-                          <label
-                            htmlFor="foto"
-                            onDragOver={handlePhotoDragOver}
-                            onDragLeave={handlePhotoDragLeave}
-                            onDrop={handlePhotoDrop}
-                            className={`flex min-h-[160px] cursor-pointer items-center justify-center rounded-lg border-[3px] border-dashed px-4 py-6 text-center transition-colors ${
-                              isDraggingPhoto
-                                ? "border-emerald-300 bg-emerald-100"
-                                : "border-emerald-200 bg-emerald-50 hover:border-emerald-300 hover:bg-emerald-100"
-                            }`}
-                          >
-                            <div className="space-y-2">
-                              <p className="text-sm font-medium text-ui-text">
-                                {uploadForm.foto
-                                  ? uploadForm.foto.name
-                                  : "Haz clic o arrastra una foto aquí"}
-                              </p>
-                              <p className="text-xs text-ui-text-secondary">
-                                JPG, PNG u otros formatos de imagen · máximo 8 MB
-                              </p>
-                            </div>
-                          </label>
-
-                          <input
-                            id="foto"
-                            name="foto"
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={handlePhotoFileChange}
-                            disabled={uploadingPhoto}
-                          />
-
-                          <div className="max-w-[220px]">
-                            <label className="label" htmlFor="orden">
-                              Orden (opcional)
-                            </label>
-                            <input
-                              id="orden"
-                              name="orden"
-                              type="number"
-                              min="0"
-                              className="input"
-                              value={uploadForm.orden}
-                              onChange={handlePhotoOrderChange}
-                              disabled={uploadingPhoto}
-                            />
-                          </div>
-                        </form>
-                      </div>
-                    </div>
-
-                    {fotos.length === 0 ? (
-                      <div className="card">
-                        <div className="card-body">
-                          <p className="text-sm text-ui-text-secondary">
-                            Esta habitación todavía no tiene fotos.
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-                        {fotos.map((foto, index) => (
-                          <article key={foto.id} className="card card-hover relative">
-                            <button
-                              type="button"
-                              className="absolute right-[10px] top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300 bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.35)] transition-all hover:from-sky-500 hover:via-blue-600 hover:to-indigo-700 hover:shadow-[0_0_0_4px_rgba(59,130,246,0.4)]"
-                              onClick={(event) => togglePhotoMenu(foto.id, event)}
-                              aria-label="Más acciones"
-                            >
-                              <span className="flex items-center justify-center gap-0.5">
-                                <span className="h-1 w-1 rounded-full bg-white" />
-                                <span className="h-1 w-1 rounded-full bg-white" />
-                                <span className="h-1 w-1 rounded-full bg-white" />
-                              </span>
-                            </button>
-
-                            {openPhotoMenuId === foto.id ? (
-                              <div
-                                className="absolute right-3 top-12 z-30 min-w-[180px] rounded-lg border border-ui-border bg-white p-2 shadow-modal"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <button
-                                  type="button"
-                                  className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-sky-100"
-                                  onClick={(event) => openPhotoOrderEditor(foto.id, event)}
-                                >
-                                  Cambiar orden
-                                </button>
-
-                                <button
-                                  type="button"
-                                  className="flex w-full items-center rounded-md px-3 py-2 text-left text-sm text-ui-text hover:bg-red-100"
-                                  onClick={(event) => requestDeletePhoto(foto, event)}
-                                >
-                                  Eliminar foto
-                                </button>
-                              </div>
-                            ) : null}
-
-                            <div className="card-body space-y-3">
-                              <button
-                                type="button"
-                                className="block w-full"
-                                onClick={() => openPhotoModal(index)}
-                              >
-                                <img
-                                  src={buildImageUrl(foto.url)}
-                                  alt={`Foto ${foto.orden}`}
-                                  className="aspect-[4/3] w-full rounded-md object-cover"
-                                />
-                              </button>
-
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs text-ui-text-secondary">
-                                  ID #{foto.id}
-                                </span>
-                                <span className="text-xs text-ui-text-secondary">
-                                  Orden #{foto.orden}
-                                </span>
-                              </div>
-
-                              {editingPhotoOrderId === foto.id ? (
-                                <div className="space-y-3">
-                                  <div>
-                                    <label className="label" htmlFor={`orden-foto-${foto.id}`}>
-                                      Orden
-                                    </label>
-                                    <input
-                                      id={`orden-foto-${foto.id}`}
-                                      type="number"
-                                      min="0"
-                                      className="input"
-                                      value={photoOrderValues[foto.id] ?? ""}
-                                      onChange={(event) =>
-                                        handlePhotoOrderValueChange(
-                                          foto.id,
-                                          event.target.value
-                                        )
-                                      }
-                                      disabled={
-                                        updatingPhotoId === foto.id ||
-                                        deletingPhotoId === foto.id
-                                      }
-                                    />
-                                  </div>
-
-                                  <div className="flex items-center justify-end gap-2">
-                                    <button
-                                      type="button"
-                                      className="btn btn-secondary btn-sm"
-                                      onClick={(event) => closePhotoOrderEditor(foto.id, event)}
-                                      disabled={
-                                        updatingPhotoId === foto.id ||
-                                        deletingPhotoId === foto.id
-                                      }
-                                    >
-                                      Cancelar
-                                    </button>
-
-                                    <button
-                                      type="button"
-                                      className="btn btn-sm border border-emerald-300 bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                                      disabled={
-                                        updatingPhotoId === foto.id ||
-                                        deletingPhotoId === foto.id
-                                      }
-                                      onClick={() => handleSavePhotoOrder(foto)}
-                                    >
-                                      {updatingPhotoId === foto.id
-                                        ? "Guardando..."
-                                        : "Guardar orden"}
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : null}
-
-                              {photoOrderFeedback[foto.id] ? (
-                                <div
-                                  className={
-                                    photoOrderFeedback[foto.id].type === "success"
-                                      ? "alert-success"
-                                      : "alert-error"
-                                  }
-                                >
-                                  {photoOrderFeedback[foto.id].message}
-                                </div>
-                              ) : null}
-                            </div>
-                          </article>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                ) : null}
+                <div
+                  className={`border border-slate-300 bg-white p-5 ${
+                    activeTab === "editar"
+                      ? "rounded-b-2xl rounded-tr-2xl rounded-tl-none"
+                      : "rounded-b-2xl rounded-tl-2xl rounded-tr-none"
+                  }`}
+                >
+                  {renderActiveTabContent()}
+                </div>
               </div>
             </div>
           </>

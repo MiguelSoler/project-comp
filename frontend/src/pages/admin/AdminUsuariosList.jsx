@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PageShell from "../../components/layout/PageShell.jsx";
 import Modal from "../../components/ui/Modal.jsx";
 import { getApiErrorMessage } from "../../services/apiClient.js";
@@ -10,6 +10,25 @@ import {
 } from "../../services/adminUsuarioService.js";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "";
+
+const SORT_OPTIONS = [
+  { value: "newest", label: "Más recientes" },
+  { value: "updated", label: "Actualizados" },
+  { value: "oldest", label: "Más antiguos" },
+];
+
+const ROLE_OPTIONS = [
+  { value: "all", label: "Todos" },
+  { value: "user", label: "Inquilino" },
+  { value: "advertiser", label: "Anunciante" },
+  { value: "admin", label: "Admin" },
+];
+
+const STATUS_OPTIONS = [
+  { value: "all", label: "Todos" },
+  { value: "true", label: "Activos" },
+  { value: "false", label: "Inactivos" },
+];
 
 function buildImageUrl(url) {
   if (!url) return "";
@@ -67,6 +86,10 @@ function formatRegisterDate(value) {
   }).format(date);
 }
 
+function getSortLabel(value) {
+  return SORT_OPTIONS.find((option) => option.value === value)?.label || "Ordenar";
+}
+
 export default function AdminUsuariosList() {
   const navigate = useNavigate();
 
@@ -82,6 +105,9 @@ export default function AdminUsuariosList() {
   const [activoFilter, setActivoFilter] = useState("all");
   const [sort, setSort] = useState("newest");
 
+  const [isFiltersModalOpen, setIsFiltersModalOpen] = useState(false);
+  const [isSortModalOpen, setIsSortModalOpen] = useState(false);
+
   const [openMenuUsuarioId, setOpenMenuUsuarioId] = useState(null);
   const [usuarioActionTarget, setUsuarioActionTarget] = useState(null);
   const [usuarioActionType, setUsuarioActionType] = useState("");
@@ -90,6 +116,14 @@ export default function AdminUsuariosList() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (q.trim()) count += 1;
+    if (rolFilter !== "all") count += 1;
+    if (activoFilter !== "all") count += 1;
+    return count;
+  }, [q, rolFilter, activoFilter]);
 
   useEffect(() => {
     let isMounted = true;
@@ -115,7 +149,7 @@ export default function AdminUsuariosList() {
         setTotal(Number(data?.total || 0));
       } catch (err) {
         if (!isMounted) return;
-        setError(err?.message || "No se pudieron cargar los usuarios.");
+        setError(getApiErrorMessage(err, "No se pudieron cargar los usuarios."));
         setItems([]);
         setTotalPages(1);
         setTotal(0);
@@ -234,12 +268,12 @@ export default function AdminUsuariosList() {
         variant="plain"
         contentClassName="space-y-4"
         actions={
-          <div className="flex w-full flex-col gap-2 sm:w-auto sm:items-end sm:gap-4">
+          <div className="responsive-actions">
             <Link to="/admin" className="btn btn-secondary btn-sm">
               Volver
             </Link>
 
-            <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
+            <div className="hidden sm:flex sm:items-center sm:gap-2">
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
@@ -261,103 +295,140 @@ export default function AdminUsuariosList() {
           </div>
         }
       >
+        <div className="xl:hidden sticky top-3 z-20">
+          <div className="rounded-2xl border border-sky-200 bg-white/95 p-2 shadow-sm backdrop-blur">
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm justify-between"
+                onClick={() => setIsFiltersModalOpen(true)}
+              >
+                <span>Filtros</span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    activeFilterCount > 0
+                      ? "bg-blue-100 text-brand-primary"
+                      : "bg-slate-100 text-ui-text-secondary"
+                  }`}
+                >
+                  {activeFilterCount}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm justify-between border-2 border-brand-primary font-semibold"
+                onClick={() => setIsSortModalOpen(true)}
+              >
+                <span>Ordenar</span>
+                <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-brand-primary">
+                  {getSortLabel(sort)}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
         {error ? <div className="alert-error">{error}</div> : null}
 
-        <div className="rounded-2xl border border-slate-300 bg-white p-4 md:p-5">
-          <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-lg font-semibold text-ui-text">Búsqueda y filtros</h2>
+        <div className="hidden xl:block rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 via-white to-violet-50 shadow-sm">
+          <div className="card-body space-y-4">
+            <form className="space-y-4" onSubmit={(event) => event.preventDefault()}>
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-ui-text">Búsqueda y filtros</h2>
 
-              <div className="flex w-full items-center gap-2 sm:w-auto">
                 <button
                   type="button"
-                  className="btn btn-secondary btn-sm w-full sm:w-auto"
+                  className="btn btn-secondary btn-sm"
                   onClick={handleClearFilters}
                 >
                   Limpiar filtros
                 </button>
               </div>
-            </div>
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="sm:col-span-2 xl:col-span-2">
-                <label className="label" htmlFor="admin-usuarios-q">
-                  Buscar
-                </label>
-                <input
-                  id="admin-usuarios-q"
-                  type="text"
-                  className="input"
-                  placeholder="Nombre, apellidos o email"
-                  value={q}
-                  onChange={(event) => {
-                    setQ(event.target.value);
-                    setPage(1);
-                  }}
-                />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="sm:col-span-2 xl:col-span-2">
+                  <label className="label" htmlFor="admin-usuarios-q">
+                    Buscar
+                  </label>
+                  <input
+                    id="admin-usuarios-q"
+                    type="text"
+                    className="input"
+                    placeholder="Nombre, apellidos o email"
+                    value={q}
+                    onChange={(event) => {
+                      setQ(event.target.value);
+                      setPage(1);
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="admin-usuarios-rol">
+                    Rol
+                  </label>
+                  <select
+                    id="admin-usuarios-rol"
+                    className="select"
+                    value={rolFilter}
+                    onChange={(event) => {
+                      setRolFilter(event.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <option value="all">Todos</option>
+                    <option value="user">Inquilino</option>
+                    <option value="advertiser">Anunciante</option>
+                    <option value="admin">Admin</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="label" htmlFor="admin-usuarios-activo">
+                    Estado
+                  </label>
+                  <select
+                    id="admin-usuarios-activo"
+                    className="select"
+                    value={activoFilter}
+                    onChange={(event) => {
+                      setActivoFilter(event.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <option value="all">Todos</option>
+                    <option value="true">Activos</option>
+                    <option value="false">Inactivos</option>
+                  </select>
+                </div>
               </div>
 
-              <div>
-                <label className="label" htmlFor="admin-usuarios-rol">
-                  Rol
-                </label>
-                <select
-                  id="admin-usuarios-rol"
-                  className="select"
-                  value={rolFilter}
-                  onChange={(event) => {
-                    setRolFilter(event.target.value);
-                    setPage(1);
-                  }}
-                >
-                  <option value="all">Todos</option>
-                  <option value="user">Inquilino</option>
-                  <option value="advertiser">Anunciante</option>
-                  <option value="admin">Admin</option>
-                </select>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                <div>
+                  <label
+                    className="label font-semibold text-brand-primary"
+                    htmlFor="admin-usuarios-sort"
+                  >
+                    Ordenar por
+                  </label>
+                  <select
+                    id="admin-usuarios-sort"
+                    className="select border-2 border-brand-primary bg-white font-semibold text-ui-text shadow-sm focus:border-brand-primary"
+                    value={sort}
+                    onChange={(event) => {
+                      setSort(event.target.value);
+                      setPage(1);
+                    }}
+                  >
+                    <option value="newest">Más recientes</option>
+                    <option value="updated">Actualizados</option>
+                    <option value="oldest">Más antiguos</option>
+                  </select>
+                </div>
               </div>
-
-              <div>
-                <label className="label" htmlFor="admin-usuarios-activo">
-                  Estado
-                </label>
-                <select
-                  id="admin-usuarios-activo"
-                  className="select"
-                  value={activoFilter}
-                  onChange={(event) => {
-                    setActivoFilter(event.target.value);
-                    setPage(1);
-                  }}
-                >
-                  <option value="all">Todos</option>
-                  <option value="true">Activos</option>
-                  <option value="false">Inactivos</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              <div>
-                <label className="label" htmlFor="admin-usuarios-sort">
-                  Ordenar por
-                </label>
-                <select
-                  id="admin-usuarios-sort"
-                  className="select"
-                  value={sort}
-                  onChange={(event) => {
-                    setSort(event.target.value);
-                    setPage(1);
-                  }}
-                >
-                  <option value="newest">Más recientes</option>
-                  <option value="updated">Actualizados</option>
-                  <option value="oldest">Más antiguos</option>
-                </select>
-              </div>
-            </div>
-          </form>
+            </form>
+          </div>
         </div>
 
         {loading ? (
@@ -395,7 +466,7 @@ export default function AdminUsuariosList() {
                 const isInactive = !usuario.activo;
 
                 return (
-                  <article key={usuario.id} className="card card-hover relative">
+                  <article key={usuario.id} className="card card-hover relative overflow-hidden">
                     <button
                       type="button"
                       className="absolute right-[10px] top-2 z-20 flex h-7 w-7 items-center justify-center rounded-full border border-sky-300 bg-gradient-to-br from-sky-400 via-blue-500 to-indigo-600 text-white shadow-[0_0_0_3px_rgba(96,165,250,0.35)] transition-all hover:from-sky-500 hover:via-blue-600 hover:to-indigo-700 hover:shadow-[0_0_0_4px_rgba(59,130,246,0.4)]"
@@ -454,7 +525,7 @@ export default function AdminUsuariosList() {
                         }
                       }}
                     >
-                      <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
                         <div className="flex items-center gap-4">
                           {avatarUrl ? (
                             <img
@@ -528,7 +599,8 @@ export default function AdminUsuariosList() {
             <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-ui-text-secondary">
                 Página <span className="font-medium text-ui-text">{page}</span> de{" "}
-                <span className="font-medium text-ui-text">{totalPages}</span>
+                <span className="font-medium text-ui-text">{totalPages}</span> · Total:{" "}
+                <span className="font-medium text-ui-text">{total}</span>
               </p>
 
               <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:items-center">
@@ -554,6 +626,135 @@ export default function AdminUsuariosList() {
           </>
         )}
       </PageShell>
+
+      <Modal
+        open={isFiltersModalOpen}
+        title="Filtros"
+        onClose={() => setIsFiltersModalOpen(false)}
+        size="default"
+        closeLabel="Cerrar"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="label" htmlFor="admin-usuarios-modal-q">
+              Buscar
+            </label>
+            <input
+              id="admin-usuarios-modal-q"
+              type="text"
+              className="input"
+              placeholder="Nombre, apellidos o email"
+              value={q}
+              onChange={(event) => {
+                setQ(event.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+
+          <div>
+            <label className="label" htmlFor="admin-usuarios-modal-rol">
+              Rol
+            </label>
+            <select
+              id="admin-usuarios-modal-rol"
+              className="select"
+              value={rolFilter}
+              onChange={(event) => {
+                setRolFilter(event.target.value);
+                setPage(1);
+              }}
+            >
+              {ROLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="label" htmlFor="admin-usuarios-modal-activo">
+              Estado
+            </label>
+            <select
+              id="admin-usuarios-modal-activo"
+              className="select"
+              value={activoFilter}
+              onChange={(event) => {
+                setActivoFilter(event.target.value);
+                setPage(1);
+              }}
+            >
+              {STATUS_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleClearFilters}
+            >
+              Limpiar
+            </button>
+
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => setIsFiltersModalOpen(false)}
+            >
+              Aplicar
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={isSortModalOpen}
+        title="Ordenar por"
+        onClose={() => setIsSortModalOpen(false)}
+        size="default"
+        closeLabel="Cerrar"
+      >
+        <div className="space-y-3">
+          {SORT_OPTIONS.map((option) => {
+            const isActive = sort === option.value;
+
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-all ${
+                  isActive
+                    ? "border-brand-primary bg-blue-50 text-brand-primary shadow-sm"
+                    : "border-slate-200 bg-white text-ui-text hover:border-brand-primary hover:bg-blue-50/60"
+                }`}
+                onClick={() => {
+                  setSort(option.value);
+                  setPage(1);
+                  setIsSortModalOpen(false);
+                }}
+              >
+                <span className="font-medium">{option.label}</span>
+                <span
+                  className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                    isActive
+                      ? "bg-blue-100 text-brand-primary"
+                      : "bg-slate-100 text-ui-text-secondary"
+                  }`}
+                >
+                  {isActive ? "Actual" : ""}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Modal>
 
       <Modal
         open={Boolean(usuarioActionTarget)}
